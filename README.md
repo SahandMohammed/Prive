@@ -20,6 +20,16 @@ The API runs at `http://localhost:5094`. Swagger is available at `/swagger` in D
 ```bash
 cd Api
 dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Database=prive;Username=postgres;Password=postgres"
+dotnet user-secrets set "Jwt:Key" "<Base64-encoded random value of at least 32 bytes>"
+```
+
+Generate a suitable JWT secret locally with `openssl rand -base64 48`. Never add it to `appsettings.json` or commit it.
+
+Apply the initial database schema after setting the connection string:
+
+```bash
+cd Api
+dotnet tool run dotnet-ef -- database update
 ```
 
 Run EF Core commands through the repository-local tool:
