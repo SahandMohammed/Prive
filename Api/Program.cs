@@ -1,10 +1,12 @@
 using Api.Modules.User;
 using Api.Infrastructure.Configuration;
 using Api.Infrastructure.Errors;
+using Api.Infrastructure.Http;
 using Api.Infrastructure.OpenApi;
 using Api.Modules.Auth;
 using Api.Shared.Persistence;
 using Asp.Versioning;
+using Asp.Versioning.ApiExplorer;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -13,6 +15,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
+using Microsoft.Extensions.Options;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 Log.Logger = new LoggerConfiguration()
   .WriteTo.Console()
@@ -85,6 +89,32 @@ try
         RoleClaimType = ClaimTypes.Role,
         ClockSkew = TimeSpan.FromMinutes(1)
       };
+      options.Events = new JwtBearerEvents
+      {
+        // #4: Return the standard ApiResponse envelope for JWT auth/authz failures
+        // so they are indistinguishable in shape from domain error responses.
+        OnChallenge = async context =>
+        {
+          context.HandleResponse();
+          context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+          context.Response.ContentType = "application/json";
+          await context.Response.WriteAsJsonAsync(
+            ApiResponse.Fail(
+              ErrorCodes.Common.Unauthorized,
+              "Authentication is required to access this resource.",
+              traceId: context.HttpContext.TraceIdentifier));
+        },
+        OnForbidden = async context =>
+        {
+          context.Response.StatusCode = StatusCodes.Status403Forbidden;
+          context.Response.ContentType = "application/json";
+          await context.Response.WriteAsJsonAsync(
+            ApiResponse.Fail(
+              ErrorCodes.Common.Forbidden,
+              "You do not have permission to access this resource.",
+              traceId: context.HttpContext.TraceIdentifier));
+        }
+      };
     });
   builder.Services.AddAuthorization();
 
@@ -100,11 +130,7 @@ try
   builder.Services.AddEndpointsApiExplorer();
   builder.Services.AddSwaggerGen(options =>
   {
-    options.SwaggerDoc("v1", new()
-    {
-      Title = "Prive API",
-      Version = "v1"
-    });
+    // Documents are registered dynamically by ConfigureSwaggerOptions via IApiVersionDescriptionProvider.
     options.DocumentFilter<HealthChecksDocumentFilter>();
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -117,8 +143,35 @@ try
     {
       [new OpenApiSecuritySchemeReference("Bearer", document)] = []
     });
+    // Clean schema names for generic wrappers, e.g. ApiResponse_LoginResponse.
+    options.CustomSchemaIds(type =>
+    {
+      if (!type.IsGenericType) return type.Name;
+      var baseName = type.Name.Split('`')[0];
+      var args = string.Join("_", type.GetGenericArguments().Select(t => t.Name));
+      return $"{baseName}_{args}";
+    });
   });
-  builder.Services.AddControllers();
+  // #6: Dynamically registers one Swagger document per discovered API version.
+  builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
+  builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+      options.InvalidModelStateResponseFactory = context =>
+      {
+        var traceId = context.HttpContext.TraceIdentifier;
+        var fieldErrors = context.ModelState
+          .Where(e => e.Value?.Errors.Count > 0)
+          .SelectMany(kvp => kvp.Value!.Errors.Select(err => new ApiFieldError(
+            Field: System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(kvp.Key),
+            Message: err.ErrorMessage)))
+          .ToList();
+
+        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+          ApiResponse.Fail(ErrorCodes.Common.ValidationFailed, "One or more validation errors occurred.", traceId: traceId, details: fieldErrors));
+      };
+    });
   builder.Services
     .AddApiVersioning(options =>
     {
@@ -143,9 +196,17 @@ try
   if (app.Environment.IsDevelopment())
   {
     app.UseSwagger();
+    // #6: Iterate discovered versions so v2+ automatically appears in Swagger UI.
     app.UseSwaggerUI(options =>
     {
-      options.SwaggerEndpoint("/swagger/v1/swagger.json", "Prive API v1");
+      var descriptions = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+      foreach (var description in descriptions.ApiVersionDescriptions.OrderByDescending(d => d.ApiVersion))
+      {
+        var label = description.IsDeprecated
+          ? $"Prive API {description.GroupName.ToUpper()} (deprecated)"
+          : $"Prive API {description.GroupName.ToUpper()}";
+        options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", label);
+      }
     });
   }
 
@@ -164,6 +225,9 @@ try
   {
     Predicate = registration => registration.Tags.Contains("ready")
   });
+
+  await Api.Shared.Persistence.DbSeeder.SeedAsync(app.Services);
+
   app.Run();
 }
 catch (Exception exception)

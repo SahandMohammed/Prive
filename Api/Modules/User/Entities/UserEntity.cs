@@ -17,7 +17,8 @@ public sealed class UserEntity
 public enum UserRole
 {
   Unassigned = 0,
-  Owner = 1,
-  Manager = 2,
-  Professional = 3
+  SuperAdmin = 1,
+  Owner = 2,
+  Manager = 3,
+  Professional = 4
 }

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Api.Infrastructure.Configuration;
+using Api.Infrastructure.Http;
 using Api.Modules.User;
 using Api.Shared.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -29,22 +30,16 @@ public sealed class AuthService
 
   public async Task<(LoginResponse Response, string RefreshToken)> LoginAsync(LoginRequest request)
   {
-    var user = await _db.Users.SingleOrDefaultAsync(user => user.Username == request.Username);
+    var user = await _db.Users.SingleOrDefaultAsync(u => u.Username == request.Username);
 
     if (user is null)
-    {
-      throw new AuthException("Invalid username or password.");
-    }
+      throw new UnauthorizedException(ErrorCodes.Auth.InvalidCredentials, "Invalid username or password.");
 
     if (!user.IsActive)
-    {
-      throw new AuthException("This account has been deactivated.");
-    }
+      throw new UnauthorizedException(ErrorCodes.Auth.AccountDeactivated, "This account has been deactivated.");
 
     if (user.LockoutUntilUtc is { } lockoutUntil && lockoutUntil > DateTime.UtcNow)
-    {
-      throw new AuthException("Account temporarily locked due to repeated failed attempts. Try again later.");
-    }
+      throw new UnauthorizedException(ErrorCodes.Auth.AccountLocked, "Account temporarily locked due to repeated failed attempts. Try again later.");
 
     var verificationResult = _hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
     if (verificationResult == PasswordVerificationResult.Failed)
@@ -57,7 +52,7 @@ public sealed class AuthService
       }
 
       await _db.SaveChangesAsync();
-      throw new AuthException("Invalid username or password.");
+      throw new UnauthorizedException(ErrorCodes.Auth.InvalidCredentials, "Invalid username or password.");
     }
 
     user.FailedLoginAttemptCount = 0;
@@ -73,17 +68,13 @@ public sealed class AuthService
 
   public async Task<(LoginResponse Response, string RefreshToken)> RefreshAsync(string refreshToken)
   {
-    var existingToken = await _db.RefreshTokens.SingleOrDefaultAsync(token => token.TokenHash == Hash(refreshToken));
+    var existingToken = await _db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == Hash(refreshToken));
     if (existingToken is null || !existingToken.IsActive)
-    {
-      throw new AuthException("Session expired. Please log in again.");
-    }
+      throw new UnauthorizedException(ErrorCodes.Auth.SessionExpired, "Session expired. Please log in again.");
 
     var user = await _db.Users.FindAsync(existingToken.UserId);
     if (user is null || !user.IsActive)
-    {
-      throw new AuthException("Session expired. Please log in again.");
-    }
+      throw new UnauthorizedException(ErrorCodes.Auth.SessionExpired, "Session expired. Please log in again.");
 
     existingToken.RevokedAtUtc = DateTime.UtcNow;
     var newRefreshToken = await IssueRefreshTokenAsync(user.Id);
@@ -95,11 +86,8 @@ public sealed class AuthService
 
   public async Task LogoutAsync(string refreshToken)
   {
-    var existingToken = await _db.RefreshTokens.SingleOrDefaultAsync(token => token.TokenHash == Hash(refreshToken));
-    if (existingToken is null)
-    {
-      return;
-    }
+    var existingToken = await _db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == Hash(refreshToken));
+    if (existingToken is null) return;
 
     existingToken.RevokedAtUtc = DateTime.UtcNow;
     await _db.SaveChangesAsync();
@@ -108,18 +96,16 @@ public sealed class AuthService
   public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
   {
     var user = await _db.Users.FindAsync(userId)
-      ?? throw new AuthException("User not found.");
+      ?? throw new NotFoundException(ErrorCodes.User.NotFound, "User not found.");
 
     if (_hasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword) == PasswordVerificationResult.Failed)
-    {
-      throw new AuthException("Current password is incorrect.");
-    }
+      throw new BadRequestException(ErrorCodes.Auth.WrongPassword, "Current password is incorrect.");
 
     user.PasswordHash = _hasher.HashPassword(user, request.NewPassword);
     user.MustChangePassword = false;
 
     var activeTokens = await _db.RefreshTokens
-      .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
+      .Where(t => t.UserId == userId && t.RevokedAtUtc == null)
       .ToListAsync();
     foreach (var token in activeTokens)
     {
@@ -167,5 +153,3 @@ public sealed class AuthService
   private static string Hash(string value) =>
     Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
-
-public sealed class AuthException(string message) : Exception(message);

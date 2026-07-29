@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Api.Infrastructure.Configuration;
+using Api.Infrastructure.Http;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,42 +29,33 @@ public sealed class AuthController : ControllerBase
   }
 
   [HttpPost("login")]
-  public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
+  [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+  public async Task<IActionResult> Login([FromBody] LoginRequest request)
   {
-    try
-    {
-      var (response, refreshToken) = await _authService.LoginAsync(request);
-      SetRefreshTokenCookie(refreshToken);
-      return Ok(response);
-    }
-    catch (AuthException exception)
-    {
-      return Unauthorized(new { error = exception.Message });
-    }
+    var (response, refreshToken) = await _authService.LoginAsync(request);
+    SetRefreshTokenCookie(refreshToken);
+    return Ok(ApiResponse<LoginResponse>.Ok(response));
   }
 
   [HttpPost("refresh")]
-  public async Task<ActionResult<LoginResponse>> Refresh()
+  [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+  public async Task<IActionResult> Refresh()
   {
     var refreshToken = Request.Cookies[RefreshTokenCookieName];
     if (string.IsNullOrEmpty(refreshToken))
     {
-      return Unauthorized(new { error = "No refresh token." });
+      return Unauthorized(ApiResponse.Fail(ErrorCodes.Auth.NoRefreshToken, "No refresh token provided."));
     }
 
-    try
-    {
-      var (response, newRefreshToken) = await _authService.RefreshAsync(refreshToken);
-      SetRefreshTokenCookie(newRefreshToken);
-      return Ok(response);
-    }
-    catch (AuthException exception)
-    {
-      return Unauthorized(new { error = exception.Message });
-    }
+    var (response, newRefreshToken) = await _authService.RefreshAsync(refreshToken);
+    SetRefreshTokenCookie(newRefreshToken);
+    return Ok(ApiResponse<LoginResponse>.Ok(response));
   }
 
   [HttpPost("logout")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
   public async Task<IActionResult> Logout()
   {
     var refreshToken = Request.Cookies[RefreshTokenCookieName];
@@ -78,24 +70,20 @@ public sealed class AuthController : ControllerBase
 
   [Authorize]
   [HttpPost("change-password")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
   public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
   {
     var subject = User.FindFirstValue("sub");
     if (!Guid.TryParse(subject, out var userId))
     {
-      return Unauthorized();
+      return Unauthorized(ApiResponse.Fail(ErrorCodes.Common.Unauthorized, "Invalid token subject."));
     }
 
-    try
-    {
-      await _authService.ChangePasswordAsync(userId, request);
-      Response.Cookies.Delete(RefreshTokenCookieName, CookieOptions());
-      return NoContent();
-    }
-    catch (AuthException exception)
-    {
-      return BadRequest(new { error = exception.Message });
-    }
+    await _authService.ChangePasswordAsync(userId, request);
+    Response.Cookies.Delete(RefreshTokenCookieName, CookieOptions());
+    return NoContent();
   }
 
   private void SetRefreshTokenCookie(string refreshToken)

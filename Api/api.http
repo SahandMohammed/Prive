@@ -4,3 +4,5 @@ GET {{api_HostAddress}}/api/v1/users
 Accept: application/json
 
 ###
+
+POST {{api_HostAddress}}/api/v1/auth
