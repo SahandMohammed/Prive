@@ -1,0 +1,2 @@
+// Global types — only truly cross-feature types live here.
+// Keep this folder small; feature-specific types belong in features/<name>/types/.

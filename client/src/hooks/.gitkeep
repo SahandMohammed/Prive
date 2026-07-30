@@ -1,0 +1,2 @@
+// Shared hooks — only for hooks used by 2+ features.
+// Keep this folder small; feature-specific hooks belong in features/<name>/hooks/.

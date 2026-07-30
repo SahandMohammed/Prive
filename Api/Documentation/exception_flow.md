@@ -117,12 +117,6 @@ flowchart TD
 | User not found | `NotFoundException` | `USER_NOT_FOUND` |
 | Username already taken | `ConflictException` | `USER_USERNAME_TAKEN` |
 
-### User controller — [`UserController.cs`](../Modules/User/UserController.cs)
-
-| Condition | Exception | Code |
-|---|---|---|
-| `GetById` returns `null` (null-coalescing throw) | `NotFoundException` | `USER_NOT_FOUND` |
-
 ---
 
 ## Response Envelope (All Error Paths)
@@ -136,7 +130,7 @@ same envelope shape:
   "error": {
     "code": "USER_NOT_FOUND",
     "message": "User with id '...' was not found.",
-    "traceId": "00-a1b2c3d4e5f6a7b8-01"
+    "traceId": "0HN4K1F2Q8B3R:00000001"
   }
 }
 ```
@@ -149,7 +143,7 @@ Validation errors include a `details` array (only on `VALIDATION_FAILED`):
   "error": {
     "code": "VALIDATION_FAILED",
     "message": "One or more validation errors occurred.",
-    "traceId": "00-a1b2c3d4e5f6a7b8-01",
+    "traceId": "0HN4K1F2Q8B3R:00000002",
     "details": [
       { "field": "username", "message": "The Username field is required." },
       { "field": "password", "message": "Password must be at least 8 characters." }
@@ -192,8 +186,13 @@ no changes needed there.
 ### Password Hashing — PBKDF2, not bcrypt
 
 `PasswordHasher<T>` from `Microsoft.AspNetCore.Identity` uses **PBKDF2-HMAC-SHA512**,
-not bcrypt. In .NET 9+ the default iteration count is 600 000 rounds, which is
+not bcrypt. This project targets **net10.0**, so the default iteration count is
+**600 000 rounds** (the .NET 9+ default — .NET 8 used 100 000). This is
 NIST SP 800-63B-compliant and equivalent in practical security to bcrypt for this use case.
+
+> **Note for downgraders:** If you retarget to net8.0, the default drops to 100 000 iterations.
+> Existing hashes remain readable — the iteration count is stored in the hash — but new
+> passwords will be hashed with fewer rounds until you upgrade back.
 
 ### Enum Ordinal Compatibility
 
