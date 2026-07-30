@@ -31,9 +31,7 @@ public sealed class UserController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetById(Guid id)
   {
-    var user = await _userService.GetByIdAsync(id)
-      ?? throw new NotFoundException(ErrorCodes.User.NotFound, $"User with id '{id}' was not found.");
-
+    var user = await _userService.GetByIdAsync(id);
     return Ok(ApiResponse<UserResponse>.Ok(user));
   }
 

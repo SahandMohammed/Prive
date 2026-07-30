@@ -23,10 +23,12 @@ public sealed class UserService
       .ToListAsync();
   }
 
-  public async Task<UserResponse?> GetByIdAsync(Guid id)
+  public async Task<UserResponse> GetByIdAsync(Guid id)
   {
-    var user = await _db.Users.FindAsync(id);
-    return user is null ? null : ToResponse(user);
+    var user = await _db.Users.FindAsync(id)
+      ?? throw new NotFoundException(ErrorCodes.User.NotFound, $"User with id '{id}' was not found.");
+
+    return ToResponse(user);
   }
 
   public async Task<UserResponse> CreateAsync(CreateUserRequest request)
