@@ -26,6 +26,17 @@ public static class ErrorCodes
     public const string UsernameTaken = "USER_USERNAME_TAKEN";
   }
 
+  public static class Finance
+  {
+    public const string CurrencyNotFound = "FINANCE_CURRENCY_NOT_FOUND";
+    public const string MoneyBoxNotFound = "FINANCE_MONEY_BOX_NOT_FOUND";
+    public const string AccountNotFound = "FINANCE_ACCOUNT_NOT_FOUND";
+    public const string InvoiceNotFound = "FINANCE_INVOICE_NOT_FOUND";
+    public const string InsufficientFunds = "FINANCE_INSUFFICIENT_FUNDS";
+    public const string InvalidAmount = "FINANCE_INVALID_AMOUNT";
+    public const string PaymentExceedsTotal = "FINANCE_PAYMENT_EXCEEDS_TOTAL";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";

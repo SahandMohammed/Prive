@@ -4,6 +4,7 @@ using Api.Infrastructure.Errors;
 using Api.Infrastructure.Http;
 using Api.Infrastructure.OpenApi;
 using Api.Modules.Auth;
+using Api.Modules.Finance;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -176,9 +177,16 @@ try
     options.CustomSchemaIds(type =>
     {
       if (!type.IsGenericType) return type.Name;
-      var baseName = type.Name.Split('`')[0];
-      var args = string.Join("_", type.GetGenericArguments().Select(t => t.Name));
-      return $"{baseName}_{args}";
+      
+      string GetTypeName(Type t)
+      {
+        if (!t.IsGenericType) return t.Name;
+        var baseName = t.Name.Split('`')[0];
+        var args = string.Join("_", t.GetGenericArguments().Select(GetTypeName));
+        return $"{baseName}_{args}";
+      }
+
+      return GetTypeName(type);
     });
   });
   // #6: Dynamically registers one Swagger document per discovered API version.
@@ -217,7 +225,8 @@ try
 
   builder.Services
     .AddUserModule()
-    .AddAuthModule();
+    .AddAuthModule()
+    .AddFinanceModule();
 
   var app = builder.Build();
 
