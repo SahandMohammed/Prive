@@ -7,6 +7,7 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => setSession(data.accessToken, data.mustChangePassword),
+    onSuccess: (data) =>
+      setSession(data.accessToken, data.accessTokenExpiresAtUtc, data.mustChangePassword),
   })
 }

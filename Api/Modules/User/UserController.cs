@@ -2,13 +2,14 @@ using Api.Infrastructure.Http;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Api.Modules.User;
 
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/users")]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize]
 public sealed class UserController : ControllerBase
 {
   private readonly UserService _userService;
@@ -19,6 +20,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpGet]
+  [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(typeof(ApiResponse<List<UserResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetAll()
   {
@@ -26,7 +28,24 @@ public sealed class UserController : ControllerBase
     return Ok(ApiResponse<List<UserResponse>>.Ok(users));
   }
 
+  [HttpGet("me")]
+  [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetMe()
+  {
+    var subject = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier) 
+                  ?? User.FindFirstValue("sub");
+
+    if (!Guid.TryParse(subject, out var userId))
+    {
+      return Unauthorized(ApiResponse.Fail(ErrorCodes.Common.Unauthorized, "Invalid token subject."));
+    }
+
+    var user = await _userService.GetByIdAsync(userId);
+    return Ok(ApiResponse<UserResponse>.Ok(user));
+  }
+
   [HttpGet("{id:guid}")]
+  [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetById(Guid id)
@@ -36,6 +55,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpPost]
+  [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status201Created)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
   public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
@@ -48,6 +68,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpPut("{id:guid}")]
+  [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -58,6 +79,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpPost("{id:guid}/reset-password")]
+  [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetPasswordRequest request)
@@ -67,6 +89,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpDelete("{id:guid}")]
+  [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> Delete(Guid id)

@@ -2,8 +2,9 @@ import { z } from 'zod'
 
 export const createUserSchema = z.object({
   username: z.string().min(2, 'Username must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
-  role: z.enum(['Admin', 'User'], { message: 'Role must be Admin or User' }),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: z.enum(['SuperAdmin', 'Owner', 'Manager', 'Professional', 'Cashier', 'Unassigned'], { message: 'Please select a valid role' }),
+  mustChangePassword: z.boolean().optional(),
 })
 
 export type CreateUserFormValues = z.infer<typeof createUserSchema>

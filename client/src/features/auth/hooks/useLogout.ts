@@ -8,7 +8,10 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: authApi.logout,
-    onSuccess: () => {
+    // onSettled fires on both success AND error.
+    // A failed /auth/logout request (network blip, 500) must not trap the user
+    // in a logged-in state — they clicked logout and expect to be logged out.
+    onSettled: () => {
       clearSession()
       queryClient.clear()
     },

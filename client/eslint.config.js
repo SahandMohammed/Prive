@@ -100,6 +100,25 @@ export default defineConfig([
           ],
         },
       ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features/*/*'],
+              message: 'Features must be imported from their public index.ts. Do not reach into feature internals.',
+            },
+            {
+              group: ['../features/*/*'],
+              message: 'Features must be imported from their public index.ts. Do not reach into feature internals.',
+            },
+            {
+              group: ['../../features/*/*'],
+              message: 'Features must be imported from their public index.ts. Do not reach into feature internals.',
+            }
+          ],
+        },
+      ],
     },
   },
 

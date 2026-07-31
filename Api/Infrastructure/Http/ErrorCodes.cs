@@ -32,5 +32,6 @@ public static class ErrorCodes
     public const string Unauthorized     = "UNAUTHORIZED";
     public const string Forbidden        = "FORBIDDEN";
     public const string ServerError      = "SERVER_ERROR";
+    public const string TooManyRequests  = "TOO_MANY_REQUESTS";
   }
 }

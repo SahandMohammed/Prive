@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Serilog;
 using Microsoft.Extensions.Options;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -118,6 +120,33 @@ try
     });
   builder.Services.AddAuthorization();
 
+  builder.Services.AddRateLimiter(options =>
+  {
+    options.AddPolicy("LoginPolicy", context =>
+    {
+      var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+      return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+      {
+        PermitLimit = 5,
+        Window = TimeSpan.FromMinutes(1),
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        QueueLimit = 0
+      });
+    });
+
+    options.OnRejected = async (context, token) =>
+    {
+      context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+      context.HttpContext.Response.ContentType = "application/json";
+      await context.HttpContext.Response.WriteAsJsonAsync(
+        ApiResponse.Fail(
+          ErrorCodes.Common.TooManyRequests,
+          "Too many requests. Please try again later.",
+          traceId: context.HttpContext.TraceIdentifier),
+        cancellationToken: token);
+    };
+  });
+
   var healthChecks = builder.Services.AddHealthChecks();
 
   if (!string.IsNullOrWhiteSpace(connectionString))
@@ -212,8 +241,9 @@ try
 
   app.UseSerilogRequestLogging();
   app.UseMiddleware<GlobalExceptionMiddleware>();
-  app.UseHttpsRedirection();
   app.UseCors(CorsOptions.PolicyName);
+  app.UseHttpsRedirection();
+  app.UseRateLimiter();
   app.UseAuthentication();
   app.UseAuthorization();
   app.MapControllers();

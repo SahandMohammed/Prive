@@ -4,19 +4,27 @@ import { setAccessToken } from '@/lib/apiClient'
 interface AuthSessionState {
   isAuthenticated: boolean
   mustChangePassword: boolean
-  setSession: (accessToken: string, mustChangePassword: boolean) => void
+  // Stored so the refresh interceptor can proactively refresh before expiry.
+  // null when not logged in.
+  accessTokenExpiresAtUtc: string | null
+  setSession: (
+    accessToken: string,
+    accessTokenExpiresAtUtc: string,
+    mustChangePassword: boolean,
+  ) => void
   clearSession: () => void
 }
 
 export const useAuthSessionStore = create<AuthSessionState>((set) => ({
   isAuthenticated: false,
   mustChangePassword: false,
-  setSession: (accessToken, mustChangePassword) => {
+  accessTokenExpiresAtUtc: null,
+  setSession: (accessToken, accessTokenExpiresAtUtc, mustChangePassword) => {
     setAccessToken(accessToken)
-    set({ isAuthenticated: true, mustChangePassword })
+    set({ isAuthenticated: true, accessTokenExpiresAtUtc, mustChangePassword })
   },
   clearSession: () => {
     setAccessToken(null)
-    set({ isAuthenticated: false, mustChangePassword: false })
+    set({ isAuthenticated: false, accessTokenExpiresAtUtc: null, mustChangePassword: false })
   },
 }))

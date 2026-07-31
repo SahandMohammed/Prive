@@ -20,5 +20,6 @@ public enum UserRole
   SuperAdmin = 1,
   Owner = 2,
   Manager = 3,
-  Professional = 4
+  Professional = 4,
+  Cashier = 5
 }

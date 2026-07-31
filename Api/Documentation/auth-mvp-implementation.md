@@ -44,7 +44,7 @@ dotnet tool run dotnet-ef -- database update
 
 ## Assumptions and follow-up
 
-The existing project had no user persistence model. The minimal entity introduces `Unassigned`, `Owner`, `Manager`, and `Professional` roles because the supplied auth contract requires a role and an optional linked-professional ID. Account creation and the first Owner bootstrap remain intentionally unimplemented, as specified.
+The existing project had no user persistence model. The minimal entity introduces `Unassigned`, `SuperAdmin`, `Owner`, `Manager`, `Professional`, and `Cashier` roles because the supplied auth contract requires a role and an optional linked-professional ID. Account creation and the first Owner bootstrap remain intentionally unimplemented, as specified.
 
 Next recommended work:
 

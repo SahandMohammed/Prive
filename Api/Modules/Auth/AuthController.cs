@@ -4,6 +4,7 @@ using Api.Infrastructure.Http;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Auth;
@@ -29,6 +30,7 @@ public sealed class AuthController : ControllerBase
   }
 
   [HttpPost("login")]
+  [EnableRateLimiting("LoginPolicy")]
   [ProducesResponseType(typeof(ApiResponse<LoginResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
   public async Task<IActionResult> Login([FromBody] LoginRequest request)
