@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
 import { LoginPage } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
 import { 
@@ -28,6 +29,7 @@ import {
   PurchaseInvoicesPage, 
   PurchaseReturnsPage 
 } from '@/features/purchases'
+import { ItemsPage, CreateItemPage } from '@/features/settings'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -49,12 +51,14 @@ export const router = createBrowserRouter([
   // Public-only routes (redirect to /dashboard if already authenticated)
   {
     element: <PublicOnlyRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [{ path: '/login', element: <LoginPage /> }],
   },
 
   // Protected routes (redirect to /login if not authenticated)
   {
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <AppLayout />,
@@ -84,6 +88,10 @@ export const router = createBrowserRouter([
           { path: '/purchases', element: <PurchasesDashboard /> },
           { path: '/purchases/invoices', element: <PurchaseInvoicesPage /> },
           { path: '/purchases/returns', element: <PurchaseReturnsPage /> },
+
+          // Settings
+          { path: '/settings/items', element: <ItemsPage /> },
+          { path: '/settings/items/new', element: <CreateItemPage /> },
         ],
       },
     ],

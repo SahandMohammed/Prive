@@ -12,6 +12,7 @@ import {
   BookOpenIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  Settings,
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '@/features/auth'
 import { cn } from '@/lib/utils'
@@ -82,6 +83,11 @@ export function Sidebar() {
           <SubNavItem to="/finance/treasury">Treasury (Safes)</SubNavItem>
           <SubNavItem to="/finance/vouchers">Vouchers</SubNavItem>
           <SubNavItem to="/finance/transfers">Internal Transfer</SubNavItem>
+        </NavGroup>
+
+        {/* Settings Module */}
+        <NavGroup label="Settings" icon={<Settings className="w-4 h-4" />}>
+          <SubNavItem to="/settings/items">Items</SubNavItem>
         </NavGroup>
 
         {/* Other Admin Tools */}
