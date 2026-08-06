@@ -4,28 +4,13 @@ import { Input } from '@/components/ui/input'
 import { Link } from 'react-router-dom'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { 
-  Plus, Search, SlidersHorizontal, Folder, Package, 
-  Briefcase, MoreHorizontal, Filter, Check, ChevronLeft, 
-  ChevronRight, ChevronsLeft, ChevronsRight
+  Plus, Search, SlidersHorizontal, MoreHorizontal, 
+  Filter, Check, AlertCircle, FileQuestion, Loader2
 } from 'lucide-react'
+import { DataTablePagination } from '@/components/data-table/DataTablePagination'
+import { DataTableShell } from '@/components/data-table/DataTableShell'
 
-interface ItemDto {
-  id: string
-  code: string
-  name: string
-  type: 'Product' | 'Service'
-  unit: string
-  price: number
-  isActive: boolean
-}
-
-const MOCK_ITEMS: ItemDto[] = [
-  { id: 'i-1', code: 'PRD-001', name: 'Premium Consulting Hour', type: 'Service', unit: 'hr', price: 150, isActive: true },
-  { id: 'i-2', code: 'PRD-002', name: 'Software License (Annual)', type: 'Product', unit: 'ea', price: 1200, isActive: true },
-  { id: 'i-3', code: 'PRD-003', name: 'Hardware Setup Fee', type: 'Service', unit: 'lump', price: 500, isActive: true },
-  { id: 'i-4', code: 'PRD-004', name: 'Monthly Retainer', type: 'Service', unit: 'mo', price: 3000, isActive: true },
-  { id: 'i-5', code: 'PRD-005', name: 'Server Rack 42U', type: 'Product', unit: 'ea', price: 850, isActive: false },
-]
+import { useItems } from '../hooks/useSettings'
 
 export function ItemsPage() {
   const [activeTab, setActiveTab] = useState<'All' | 'Product' | 'Service'>('All')
@@ -41,7 +26,8 @@ export function ItemsPage() {
   const [sortField, setSortField] = useState<'name' | 'code' | 'type' | 'price' | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  const [items] = useState<ItemDto[]>(MOCK_ITEMS)
+  const { data: apiItems = [], isLoading, isError } = useItems()
+  const items = apiItems
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -69,7 +55,7 @@ export function ItemsPage() {
       if (sortField === 'name') { valA = a.name.toLowerCase(); valB = b.name.toLowerCase() }
       else if (sortField === 'code') { valA = a.code.toLowerCase(); valB = b.code.toLowerCase() }
       else if (sortField === 'type') { valA = a.type.toLowerCase(); valB = b.type.toLowerCase() }
-      else if (sortField === 'price') { valA = a.price; valB = b.price }
+      else if (sortField === 'price') { valA = a.basePrice; valB = b.basePrice }
 
       if (valA < valB) return sortDirection === 'asc' ? -1 : 1
       if (valA > valB) return sortDirection === 'asc' ? 1 : -1
@@ -82,7 +68,6 @@ export function ItemsPage() {
     return sortedItems.slice(start, start + pageSize)
   }, [sortedItems, page, pageSize])
 
-  const totalPages = Math.ceil(filteredItems.length / pageSize) || 1
   const isAllSelected = paginatedItems.length > 0 && paginatedItems.every(i => selectedIds.includes(i.id))
   
   const toggleSelectAll = () => {
@@ -119,34 +104,25 @@ export function ItemsPage() {
         </div>
       </div>
 
-      {/* TABS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl">
-        <div onClick={() => { setActiveTab('All'); setPage(1); }} className={`bg-white dark:bg-slate-900 rounded-xl p-4 border transition-all cursor-pointer shadow-2xs ${activeTab === 'All' ? 'border-[#e05d38] ring-1 ring-[#e05d38]' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'}`}>
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium text-xs">
-            <Folder className="w-4 h-4 text-slate-500" />
-            <span>All Items <span className="text-[#e05d38] font-bold">({items.length})</span></span>
-          </div>
-        </div>
-        <div onClick={() => { setActiveTab('Product'); setPage(1); }} className={`bg-white dark:bg-slate-900 rounded-xl p-4 border transition-all cursor-pointer shadow-2xs ${activeTab === 'Product' ? 'border-[#e05d38] ring-1 ring-[#e05d38]' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'}`}>
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium text-xs">
-            <Package className="w-4 h-4 text-blue-500" />
-            <span>Products <span className="text-[#e05d38] font-bold">({items.filter(i => i.type === 'Product').length})</span></span>
-          </div>
-        </div>
-        <div onClick={() => { setActiveTab('Service'); setPage(1); }} className={`bg-white dark:bg-slate-900 rounded-xl p-4 border transition-all cursor-pointer shadow-2xs ${activeTab === 'Service' ? 'border-[#e05d38] ring-1 ring-[#e05d38]' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'}`}>
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium text-xs">
-            <Briefcase className="w-4 h-4 text-purple-500" />
-            <span>Services <span className="text-[#e05d38] font-bold">({items.filter(i => i.type === 'Service').length})</span></span>
-          </div>
-        </div>
-      </div>
-
-      {/* TOOLBAR */}
+      {/* ITEM TYPE DROPDOWN & TOOLBAR */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search Items" className="pl-9 pr-10 h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg text-sm" />
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search Items" className="pl-9 pr-10 h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg text-sm shadow-xs" />
+          </div>
+          <select 
+            value={activeTab} 
+            onChange={(e) => { setActiveTab(e.target.value as 'All' | 'Product' | 'Service'); setPage(1); }}
+            className="flex h-10 w-full sm:w-48 items-center justify-between rounded-md border border-slate-200 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-xs ring-offset-white focus:outline-none focus:ring-1 focus:ring-[#e05d38] dark:border-slate-800 dark:ring-offset-slate-950"
+          >
+            <option value="All">All Items ({items.length})</option>
+            <option value="Product">Products ({items.filter(i => i.type === 'Product').length})</option>
+            <option value="Service">Services ({items.filter(i => i.type === 'Service').length})</option>
+          </select>
         </div>
+
+
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
           <Button variant="outline" size="default" className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 text-xs font-medium gap-2 shadow-2xs h-10" onClick={() => { setHeaderTypeFilter(''); setHeaderStatusFilter(''); setSearch(''); setPage(1); }}>
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" /> Clear Filters
@@ -155,7 +131,7 @@ export function ItemsPage() {
       </div>
 
       {/* TABLE */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xs">
+      <DataTableShell>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -229,7 +205,44 @@ export function ItemsPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {paginatedItems.map((item) => {
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-500">
+                      <Loader2 className="w-8 h-8 animate-spin text-[#e05d38] mb-4" />
+                      <p className="text-sm font-medium">Loading items...</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {isError && !isLoading && (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center text-red-500">
+                      <AlertCircle className="w-10 h-10 mb-4 opacity-80" />
+                      <p className="text-base font-medium">Failed to load items</p>
+                      <p className="text-sm opacity-80 mt-1">Please try refreshing the page or check your connection.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {!isLoading && !isError && paginatedItems.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-500">
+                      <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-full mb-4">
+                        <FileQuestion className="w-8 h-8 opacity-50" />
+                      </div>
+                      <p className="text-base font-medium text-slate-700 dark:text-slate-300">No items found</p>
+                      <p className="text-sm mt-1">Try adjusting your filters or create a new item.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {!isLoading && !isError && paginatedItems.map((item) => {
                 const isChecked = selectedIds.includes(item.id)
                 return (
                   <TableRow key={item.id} className={`border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${isChecked ? 'bg-orange-50/30 dark:bg-orange-950/10' : ''}`}>
@@ -241,8 +254,8 @@ export function ItemsPage() {
                         {item.type}
                       </span>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-slate-500">{item.unit}</TableCell>
-                    <TableCell className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="px-4 py-3.5 text-slate-500">{item.baseUnitOfMeasureName}</TableCell>
+                    <TableCell className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">${item.basePrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell className="px-4 py-3.5">
                       {item.isActive 
                         ? <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-600">Active</span>
@@ -256,85 +269,16 @@ export function ItemsPage() {
             </TableBody>
           </Table>
         </div>
-      </div>
+      </DataTableShell>
 
       {/* 5. FOOTER PAGINATION ROW */}
-      <div className="flex items-center justify-end gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-        {/* Page size selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Rows per page:</span>
-          <select 
-            className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs px-2 shadow-2xs outline-none focus:border-slate-300 cursor-pointer"
-            value={pageSize}
-            onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
-
-        {/* Page navigation controls */}
-        <div className="flex items-center gap-1.5">
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(1)}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronsLeft className="h-4 w-4" />
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          {/* Page numbers */}
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <Button
-              key={p}
-              variant={p === page ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPage(p)}
-              className={`h-8 w-8 p-0 text-xs font-semibold rounded-lg cursor-pointer ${
-                p === page 
-                  ? 'bg-[#e05d38] hover:bg-[#c94f2d] text-white shadow-xs' 
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 shadow-2xs'
-              }`}
-            >
-              {p}
-            </Button>
-          ))}
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(totalPages)}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronsRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={filteredItems.length}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+      />
     </div>
   )
 }

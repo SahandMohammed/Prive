@@ -37,6 +37,19 @@ public static class ErrorCodes
     public const string PaymentExceedsTotal = "FINANCE_PAYMENT_EXCEEDS_TOTAL";
   }
 
+  public static class Settings
+  {
+    public const string ItemNotFound = "SETTINGS_ITEM_NOT_FOUND";
+    public const string ItemCodeTaken = "SETTINGS_ITEM_CODE_TAKEN";
+    public const string CategoryNotFound = "SETTINGS_CATEGORY_NOT_FOUND";
+    public const string UnitOfMeasureNotFound = "SETTINGS_UNIT_OF_MEASURE_NOT_FOUND";
+    public const string ServiceRequiresDuration = "SETTINGS_SERVICE_REQUIRES_DURATION";
+    public const string MultiplePurchasingDefaults = "SETTINGS_MULTIPLE_PURCHASING_DEFAULTS";
+    public const string MultipleSellingDefaults = "SETTINGS_MULTIPLE_SELLING_DEFAULTS";
+    public const string SettingsAlreadySetup = "SETTINGS_ALREADY_SETUP";
+    public const string SettingsNotSetup = "SETTINGS_NOT_SETUP";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";

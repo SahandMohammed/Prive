@@ -1,3 +1,4 @@
+using Api.Modules.Settings;
 using Api.Modules.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -40,5 +41,34 @@ public static class DbSeeder
     logger.LogInformation(
       "SuperAdmin user seeded successfully. Username: {Username} — Please change the default password after first login.",
       SuperAdminUsername);
+
+    if (!await db.UnitsOfMeasure.AnyAsync())
+    {
+      db.UnitsOfMeasure.AddRange(
+        new UnitOfMeasureEntity { Name = "Piece", Abbreviation = "pcs" },
+        new UnitOfMeasureEntity { Name = "Carton", Abbreviation = "ctn" },
+        new UnitOfMeasureEntity { Name = "Kilogram", Abbreviation = "kg" },
+        new UnitOfMeasureEntity { Name = "Hour", Abbreviation = "hr" },
+        new UnitOfMeasureEntity { Name = "Session", Abbreviation = "sess" }
+      );
+      await db.SaveChangesAsync();
+      logger.LogInformation("Seeded default Units of Measure.");
+    }
+
+    if (!await db.ItemCategories.AnyAsync())
+    {
+      var hairCat = new ItemCategoryEntity { Name = "Hair" };
+      var skinCat = new ItemCategoryEntity { Name = "Skin Care" };
+      db.ItemCategories.AddRange(hairCat, skinCat);
+      await db.SaveChangesAsync();
+      
+      db.ItemCategories.AddRange(
+        new ItemCategoryEntity { Name = "Coloring", ParentCategoryId = hairCat.Id },
+        new ItemCategoryEntity { Name = "Styling", ParentCategoryId = hairCat.Id },
+        new ItemCategoryEntity { Name = "Facials", ParentCategoryId = skinCat.Id }
+      );
+      await db.SaveChangesAsync();
+      logger.LogInformation("Seeded default Item Categories.");
+    }
   }
 }

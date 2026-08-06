@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DataTablePagination } from '@/components/data-table/DataTablePagination'
+import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useState } from 'react'
 
@@ -286,6 +288,7 @@ export function PurchaseInvoicesPage() {
             <p className="text-sm text-muted-foreground">Loading purchase registry...</p>
           ) : pagedInvoices && pagedInvoices.items.length > 0 ? (
             <div className="space-y-4">
+              <DataTableShell>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -325,46 +328,15 @@ export function PurchaseInvoicesPage() {
                   })}
                 </TableBody>
               </Table>
+              </DataTableShell>
 
-              {/* Server-side Pagination controls */}
-              <div className="flex justify-between items-center pt-4 border-t border-border">
-                <div className="text-xs text-muted-foreground">
-                  Showing Page <strong>{pagedInvoices.pageNumber}</strong> of <strong>{pagedInvoices.totalPages}</strong> ({pagedInvoices.totalCount} total invoices)
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Rows per page:</span>
-                    <select 
-                      className="h-8 rounded border border-input bg-transparent text-xs"
-                      value={pageSize}
-                      onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      disabled={page <= 1}
-                      onClick={() => setPage(p => p - 1)}
-                    >
-                      Previous
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      disabled={page >= pagedInvoices.totalPages}
-                      onClick={() => setPage(p => p + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <DataTablePagination
+                page={page}
+                pageSize={pageSize}
+                totalItems={pagedInvoices.totalCount}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+              />
             </div>
           ) : (
             <div className="text-center py-6 text-muted-foreground text-sm">

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Link } from 'react-router-dom'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTablePagination } from '@/components/data-table/DataTablePagination'
+import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { 
   Upload, 
   Download, 
@@ -22,11 +24,7 @@ import {
   TrendingUp, 
   TrendingDown,
   Filter,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight
+  Check
 } from 'lucide-react'
 
 // --- Extended type to hold paidAmount and status for demo ---
@@ -318,8 +316,6 @@ export function SalesInvoicesPage() {
     const start = (page - 1) * pageSize
     return sortedInvoices.slice(start, start + pageSize)
   }, [sortedInvoices, page, pageSize])
-
-  const totalPages = Math.ceil(filteredInvoices.length / pageSize) || 1
 
   // Selection handlers
   const isAllSelected = paginatedInvoices.length > 0 && paginatedInvoices.every(inv => selectedIds.includes(inv.id))
@@ -615,7 +611,7 @@ export function SalesInvoicesPage() {
       </div>
 
       {/* 4. TABLE CONTAINER */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xs">
+      <DataTableShell>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -818,85 +814,16 @@ export function SalesInvoicesPage() {
             </TableBody>
           </Table>
         </div>
-      </div>
+      </DataTableShell>
 
       {/* 5. FOOTER PAGINATION ROW */}
-      <div className="flex items-center justify-end gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-        {/* Page size selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Rows per page:</span>
-          <select 
-            className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs px-2 shadow-2xs outline-none focus:border-slate-300"
-            value={pageSize}
-            onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
-
-        {/* Page navigation controls */}
-        <div className="flex items-center gap-1.5">
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(1)}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronsLeft className="h-4 w-4" />
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(p => p - 1)}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          {/* ... numbers ... */}
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <Button
-              key={p}
-              variant={p === page ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPage(p)}
-              className={`h-8 w-8 p-0 text-xs font-semibold rounded-lg cursor-pointer ${
-                p === page 
-                  ? 'bg-[#e05d38] hover:bg-[#c94f2d] text-white shadow-xs' 
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 shadow-2xs'
-              }`}
-            >
-              {p}
-            </Button>
-          ))}
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(totalPages)}
-            className="h-8 w-8 p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 rounded-lg shadow-2xs cursor-pointer"
-          >
-            <ChevronsRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={filteredInvoices.length}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+      />
     </div>
   )
 }

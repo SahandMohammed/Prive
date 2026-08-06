@@ -27,9 +27,10 @@ import {
 import { 
   PurchasesDashboard, 
   PurchaseInvoicesPage, 
-  PurchaseReturnsPage 
+  PurchaseReturnsPage,
+  SuppliersPage,
 } from '@/features/purchases'
-import { ItemsPage, CreateItemPage } from '@/features/settings'
+import { ItemsPage, CreateItemPage, BusinessSettingsPage } from '@/features/settings'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -88,8 +89,10 @@ export const router = createBrowserRouter([
           { path: '/purchases', element: <PurchasesDashboard /> },
           { path: '/purchases/invoices', element: <PurchaseInvoicesPage /> },
           { path: '/purchases/returns', element: <PurchaseReturnsPage /> },
+          { path: '/purchases/suppliers', element: <SuppliersPage /> },
 
           // Settings
+          { path: '/settings/business', element: <BusinessSettingsPage /> },
           { path: '/settings/items', element: <ItemsPage /> },
           { path: '/settings/items/new', element: <CreateItemPage /> },
         ],

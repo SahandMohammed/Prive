@@ -69,6 +69,7 @@ export function Sidebar() {
         <NavGroup label="Purchases" icon={<ShoppingCartIcon className="w-4 h-4" />}>
           <SubNavItem to="/purchases/invoices">Purchase Invoice</SubNavItem>
           <SubNavItem to="/purchases/returns">Purchase Return</SubNavItem>
+          <SubNavItem to="/purchases/suppliers">Suppliers</SubNavItem>
         </NavGroup>
 
         {/* Accounting Module */}
@@ -87,6 +88,7 @@ export function Sidebar() {
 
         {/* Settings Module */}
         <NavGroup label="Settings" icon={<Settings className="w-4 h-4" />}>
+          <SubNavItem to="/settings/business">Business Settings</SubNavItem>
           <SubNavItem to="/settings/items">Items</SubNavItem>
         </NavGroup>
 

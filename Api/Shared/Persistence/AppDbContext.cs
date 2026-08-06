@@ -1,5 +1,6 @@
 using Api.Modules.Auth;
 using Api.Modules.User;
+using Api.Modules.Settings;
 using Microsoft.EntityFrameworkCore;
 using Api.Modules.Finance;
 
@@ -20,6 +21,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<InvoiceLineEntity> InvoiceLines => Set<InvoiceLineEntity>();
   public DbSet<VoucherEntity> Vouchers => Set<VoucherEntity>();
   public DbSet<VoucherAllocationEntity> VoucherAllocations => Set<VoucherAllocationEntity>();
+
+  // Settings / Items Module
+  public DbSet<UnitOfMeasureEntity> UnitsOfMeasure => Set<UnitOfMeasureEntity>();
+  public DbSet<ItemCategoryEntity> ItemCategories => Set<ItemCategoryEntity>();
+  public DbSet<ItemEntity> Items => Set<ItemEntity>();
+  public DbSet<ItemUnitOfMeasureEntity> ItemUnitsOfMeasure => Set<ItemUnitOfMeasureEntity>();
+  public DbSet<BusinessSettingsEntity> BusinessSettings => Set<BusinessSettingsEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
