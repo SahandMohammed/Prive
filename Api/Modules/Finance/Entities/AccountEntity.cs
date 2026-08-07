@@ -6,11 +6,12 @@ public sealed class AccountEntity
   public string Code { get; set; } = string.Empty; // e.g., 1001, 1001.1
   public string Name { get; set; } = string.Empty;
   public AccountCategory Category { get; set; } // Asset, Liability, Equity, Revenue, Expense
+  public AccountType Type { get; set; } = AccountType.General;
   
   public Guid? ParentAccountId { get; set; }
   public AccountEntity? ParentAccount { get; set; }
   
-  public bool IsLeaf { get; set; } = true; // Only leaf accounts can have Journal Entries
+  public bool IsLeaf { get; set; } = true; // Only leaf accounts can receive ledger transactions.
   
   // Specific currency for this account (optional). If null, it accepts base currency.
   public Guid? CurrencyId { get; set; }

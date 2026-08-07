@@ -7,6 +7,7 @@ public static class SettingsModule
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IBusinessSettingsService, BusinessSettingsService>();
         services.AddScoped<IWarehouseService, WarehouseService>();
+        services.AddScoped<IPostingSettingsProvider, PostingSettingsProvider>();
         return services;
     }
 }

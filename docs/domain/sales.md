@@ -1,7 +1,11 @@
 # Sales Domain
 
-**Status:** Baseline only; validate and extend from the original sales specification.
+**Status:** Accepted MVP contract.
 
-Sales owns customer-facing sales documents, their lines, lifecycle, and sales-specific validation. Any inventory reservation/deduction and finance posting must be explicitly defined here and coordinated with the Inventory and Finance owners; sales must not update account balances by an undocumented shortcut.
+Sales owns `SalesInvoices` and `SalesInvoiceLines`. One invoice shape represents a sale or sales return. A return has `IsReturn = true`, links to the posted original invoice, and each return line links to its original line. It never edits the original.
 
-For each supported transition, document the trigger, allowed prior state, inventory effect, finance effect, reversal/cancellation effect, permissions, and audit requirement.
+Draft invoices are editable/deletable and create no ledger rows. Posting atomically marks the invoice Posted, adds receivable/income movements to `AccountTransactions`, and adds negative product movements to `StockTransactions`; services never affect stock. Returns use the opposite signs. Voiding appends exact reversals and marks the source Voided.
+
+Sales validates that the contact is an active Customer (or CustomerAndVendor), plus base currency, exact line/header totals, inventory eligibility, allowed lifecycle transition, source idempotency, and cumulative returnable quantity. Return lines must exactly inherit the original item, account, UoM, conversion, and unit-price snapshot. `WarehouseId` is optional for service-only invoices and required for tracked inventory. An invoice with an active receipt allocation cannot be voided, and an original invoice cannot be voided while any linked return remains Posted. Invoice outstanding equals total less active receipt allocations and linked posted returns; it is not the customer's general ledger balance.
+
+See [database.md](../architecture/database.md) for the relational design and indexes.

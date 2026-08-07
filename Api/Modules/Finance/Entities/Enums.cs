@@ -12,23 +12,30 @@ public enum AccountCategory
 public enum ContactType
 {
   Customer = 1,
-  Vendor = 2
+  Vendor = 2,
+  CustomerAndVendor = 3,
+  Other = 4
 }
 
-public enum InvoiceType
+/// <summary>
+/// Operational purpose of an account. Balances are derived from AccountTransactions;
+/// this value does not determine a debit/credit convention.
+/// </summary>
+public enum AccountType
 {
-  SalesInvoice = 1,
-  SalesReturn = 2,
-  PurchaseInvoice = 3,
-  PurchaseReturn = 4
+  General = 0,
+  Cash = 1,
+  Bank = 2,
+  Receivable = 3,
+  Payable = 4,
+  Income = 5,
+  Expense = 6,
+  Inventory = 7
 }
 
-public enum VoucherType
+public enum FinancialVoucherType
 {
   Receipt = 1,
   Payment = 2,
-  InternalTransfer = 3,
-  CurrencyExchange = 4,
-  DirectIncome = 5,
-  DirectExpense = 6
+  Transfer = 3
 }

@@ -35,6 +35,14 @@ public static class ErrorCodes
     public const string InsufficientFunds = "FINANCE_INSUFFICIENT_FUNDS";
     public const string InvalidAmount = "FINANCE_INVALID_AMOUNT";
     public const string PaymentExceedsTotal = "FINANCE_PAYMENT_EXCEEDS_TOTAL";
+    public const string VoucherNotFound = "FINANCE_VOUCHER_NOT_FOUND";
+    public const string VoucherNotDraft = "FINANCE_VOUCHER_NOT_DRAFT";
+    public const string VoucherNotPosted = "FINANCE_VOUCHER_NOT_POSTED";
+    public const string InvalidVoucher = "FINANCE_INVALID_VOUCHER";
+    public const string InvalidAllocation = "FINANCE_INVALID_ALLOCATION";
+    public const string AllocationExceedsVoucher = "FINANCE_ALLOCATION_EXCEEDS_VOUCHER";
+    public const string AllocationExceedsOutstanding = "FINANCE_ALLOCATION_EXCEEDS_OUTSTANDING";
+    public const string BaseCurrencyRequired = "FINANCE_BASE_CURRENCY_REQUIRED";
   }
 
   public static class Settings
@@ -50,6 +58,43 @@ public static class ErrorCodes
     public const string SettingsNotSetup = "SETTINGS_NOT_SETUP";
     public const string WarehouseCodeTaken = "SETTINGS_WAREHOUSE_CODE_TAKEN";
     public const string ServiceCannotTrackInventory = "SETTINGS_SERVICE_CANNOT_TRACK_INVENTORY";
+    public const string InvalidBaseCurrency = "SETTINGS_INVALID_BASE_CURRENCY";
+    public const string InvalidReceivableAccount = "SETTINGS_INVALID_RECEIVABLE_ACCOUNT";
+    public const string InvalidPayableAccount = "SETTINGS_INVALID_PAYABLE_ACCOUNT";
+  }
+
+  public static class Sales
+  {
+    public const string InvoiceNotFound = "SALES_INVOICE_NOT_FOUND";
+    public const string InvoiceNotDraft = "SALES_INVOICE_NOT_DRAFT";
+    public const string InvoiceNotPosted = "SALES_INVOICE_NOT_POSTED";
+    public const string InvalidInvoice = "SALES_INVALID_INVOICE";
+    public const string InvalidReturn = "SALES_INVALID_RETURN";
+    public const string ReturnQuantityExceeded = "SALES_RETURN_QUANTITY_EXCEEDED";
+    public const string ActiveAllocations = "SALES_INVOICE_HAS_ACTIVE_ALLOCATIONS";
+    public const string PostedReturns = "SALES_INVOICE_HAS_POSTED_RETURNS";
+  }
+
+  public static class Purchases
+  {
+    public const string InvoiceNotFound = "PURCHASE_INVOICE_NOT_FOUND";
+    public const string InvoiceNotDraft = "PURCHASE_INVOICE_NOT_DRAFT";
+    public const string InvoiceNotPosted = "PURCHASE_INVOICE_NOT_POSTED";
+    public const string InvalidInvoice = "PURCHASE_INVALID_INVOICE";
+    public const string InvalidReturn = "PURCHASE_INVALID_RETURN";
+    public const string ReturnQuantityExceeded = "PURCHASE_RETURN_QUANTITY_EXCEEDED";
+    public const string ActiveAllocations = "PURCHASE_INVOICE_HAS_ACTIVE_ALLOCATIONS";
+    public const string PostedReturns = "PURCHASE_INVOICE_HAS_POSTED_RETURNS";
+  }
+
+  public static class Inventory
+  {
+    public const string InsufficientStock = "INVENTORY_INSUFFICIENT_STOCK";
+    public const string InvalidMovement = "INVENTORY_INVALID_MOVEMENT";
+    public const string AdjustmentNotFound = "INVENTORY_ADJUSTMENT_NOT_FOUND";
+    public const string TransferNotFound = "INVENTORY_TRANSFER_NOT_FOUND";
+    public const string DocumentNotDraft = "INVENTORY_DOCUMENT_NOT_DRAFT";
+    public const string DocumentNotPosted = "INVENTORY_DOCUMENT_NOT_POSTED";
   }
 
   public static class Common
@@ -59,5 +104,6 @@ public static class ErrorCodes
     public const string Forbidden        = "FORBIDDEN";
     public const string ServerError      = "SERVER_ERROR";
     public const string TooManyRequests  = "TOO_MANY_REQUESTS";
+    public const string ConcurrentOperation = "CONCURRENT_OPERATION";
   }
 }

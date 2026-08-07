@@ -1,4 +1,5 @@
 using Api.Infrastructure.Http;
+using Api.Modules.Finance;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,11 +14,9 @@ public interface IBusinessSettingsService
 
 public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettingsService
 {
-    private static readonly Guid SettingsId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
     public async Task<BusinessSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {
-        var entity = await db.BusinessSettings.FirstOrDefaultAsync(x => x.Id == SettingsId, ct);
+        var entity = await db.BusinessSettings.FirstOrDefaultAsync(x => x.Id == BusinessSettingsEntity.SingletonId, ct);
         
         if (entity == null)
         {
@@ -31,7 +30,7 @@ public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettings
 
     public async Task<BusinessSettingsDto> SetupSettingsAsync(SetupBusinessRequest req, CancellationToken ct = default)
     {
-        var existing = await db.BusinessSettings.FirstOrDefaultAsync(x => x.Id == SettingsId, ct);
+        var existing = await db.BusinessSettings.FirstOrDefaultAsync(x => x.Id == BusinessSettingsEntity.SingletonId, ct);
         if (existing != null && existing.IsSetupCompleted)
         {
             throw new ConflictException(ErrorCodes.Settings.SettingsAlreadySetup, "Business settings have already been set up.");
@@ -39,12 +38,21 @@ public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettings
 
         if (existing == null)
         {
-            existing = new BusinessSettingsEntity { Id = SettingsId };
+            existing = new BusinessSettingsEntity { Id = BusinessSettingsEntity.SingletonId };
             db.BusinessSettings.Add(existing);
         }
 
+        var references = await ValidateFinancialSettingsAsync(
+            req.BaseCurrencyId,
+            req.DefaultReceivableAccountId,
+            req.DefaultPayableAccountId,
+            ct);
+
         existing.BusinessName = req.BusinessName;
-        existing.BaseCurrencyCode = req.BaseCurrencyCode;
+        existing.BaseCurrencyId = references.Currency.Id;
+        existing.BaseCurrencyCode = references.Currency.Code;
+        existing.DefaultReceivableAccountId = references.Receivable.Id;
+        existing.DefaultPayableAccountId = references.Payable.Id;
         existing.DefaultLanguage = req.DefaultLanguage;
         
         existing.CurrencySymbol = req.CurrencySymbol;
@@ -59,11 +67,17 @@ public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettings
 
     public async Task<BusinessSettingsDto> UpdateSettingsAsync(UpdateBusinessSettingsRequest req, CancellationToken ct = default)
     {
-        var existing = await db.BusinessSettings.FirstOrDefaultAsync(x => x.Id == SettingsId, ct);
+        var existing = await db.BusinessSettings.FirstOrDefaultAsync(x => x.Id == BusinessSettingsEntity.SingletonId, ct);
         if (existing == null || !existing.IsSetupCompleted)
         {
             throw new BadRequestException(ErrorCodes.Settings.SettingsNotSetup, "Business settings must be set up first.");
         }
+
+        var references = await ValidateFinancialSettingsAsync(
+            existing.BaseCurrencyId,
+            req.DefaultReceivableAccountId,
+            req.DefaultPayableAccountId,
+            ct);
 
         existing.BusinessName = req.BusinessName;
         existing.Address = req.Address;
@@ -80,6 +94,8 @@ public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettings
         existing.CurrencySymbol = req.CurrencySymbol;
         existing.CurrencySymbolPosition = req.CurrencySymbolPosition;
         existing.CurrencyDecimalPlaces = req.CurrencyDecimalPlaces;
+        existing.DefaultReceivableAccountId = references.Receivable.Id;
+        existing.DefaultPayableAccountId = references.Payable.Id;
 
         await db.SaveChangesAsync(ct);
         return MapToDto(existing);
@@ -87,7 +103,10 @@ public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettings
 
     private static BusinessSettingsDto MapToDto(BusinessSettingsEntity entity) => new()
     {
+        BaseCurrencyId = entity.BaseCurrencyId,
         BaseCurrencyCode = entity.BaseCurrencyCode,
+        DefaultReceivableAccountId = entity.DefaultReceivableAccountId,
+        DefaultPayableAccountId = entity.DefaultPayableAccountId,
         CurrencySymbol = entity.CurrencySymbol,
         CurrencySymbolPosition = entity.CurrencySymbolPosition,
         CurrencyDecimalPlaces = entity.CurrencyDecimalPlaces,
@@ -103,4 +122,43 @@ public sealed class BusinessSettingsService(AppDbContext db) : IBusinessSettings
         NextInvoiceNumber = entity.NextInvoiceNumber,
         IsSetupCompleted = entity.IsSetupCompleted
     };
+
+    private async Task<(CurrencyEntity Currency, AccountEntity Receivable, AccountEntity Payable)> ValidateFinancialSettingsAsync(
+        Guid baseCurrencyId,
+        Guid receivableAccountId,
+        Guid payableAccountId,
+        CancellationToken ct)
+    {
+        var currency = await db.Currencies.SingleOrDefaultAsync(x => x.Id == baseCurrencyId, ct);
+        if (currency is null || !currency.IsActive || !currency.IsBaseCurrency || currency.ExchangeRate != 1m)
+        {
+            throw new BadRequestException(
+                ErrorCodes.Settings.InvalidBaseCurrency,
+                "Base currency must reference an active base currency with an exchange rate of 1.");
+        }
+
+        var accounts = await db.Accounts
+            .Where(x => x.Id == receivableAccountId || x.Id == payableAccountId)
+            .ToDictionaryAsync(x => x.Id, ct);
+
+        if (!accounts.TryGetValue(receivableAccountId, out var receivable) ||
+            !receivable.IsActive || receivable.Type != AccountType.Receivable ||
+            (receivable.CurrencyId.HasValue && receivable.CurrencyId != currency.Id))
+        {
+            throw new BadRequestException(
+                ErrorCodes.Settings.InvalidReceivableAccount,
+                "Default receivable account must reference an active Receivable account.");
+        }
+
+        if (!accounts.TryGetValue(payableAccountId, out var payable) ||
+            !payable.IsActive || payable.Type != AccountType.Payable ||
+            (payable.CurrencyId.HasValue && payable.CurrencyId != currency.Id))
+        {
+            throw new BadRequestException(
+                ErrorCodes.Settings.InvalidPayableAccount,
+                "Default payable account must reference an active Payable account.");
+        }
+
+        return (currency, receivable, payable);
+    }
 }

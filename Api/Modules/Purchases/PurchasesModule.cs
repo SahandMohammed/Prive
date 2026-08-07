@@ -5,6 +5,7 @@ public static class PurchasesModule
   public static IServiceCollection AddPurchasesModule(this IServiceCollection services)
   {
     services.AddScoped<ISupplierService, SupplierService>();
+    services.AddScoped<IPurchasePostingService, PurchasePostingService>();
     return services;
   }
 }

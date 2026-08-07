@@ -1,7 +1,8 @@
 using Api.Infrastructure.Http;
 using Api.Modules.Finance;
-using Api.Shared.Persistence;
+using Api.Modules.Settings;
 using Api.Shared.Pagination;
+using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Purchases;
@@ -12,14 +13,11 @@ public interface ISupplierService
   Task<SupplierDto> CreateSupplierAsync(CreateSupplierRequest request, CancellationToken ct = default);
 }
 
-public sealed class SupplierService(AppDbContext db) : ISupplierService
+public sealed class SupplierService(AppDbContext db, IPostingSettingsProvider postingSettings) : ISupplierService
 {
   public async Task<PagedResult<SupplierDto>> GetSuppliersAsync(SupplierListQuery request, CancellationToken ct = default)
   {
-    var query = db.Contacts
-      .AsNoTracking()
-      .Where(contact => contact.Type == ContactType.Vendor)
-      .AsQueryable();
+    var query = db.Contacts.AsNoTracking().Where(contact => contact.Type == ContactType.Vendor).AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
@@ -36,143 +34,73 @@ public sealed class SupplierService(AppDbContext db) : ISupplierService
       : query.OrderBy(contact => contact.Name).ThenBy(contact => contact.Id);
 
     var page = await query.ToPagedResultAsync(request, ct);
-    return new PagedResult<SupplierDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.Page, page.PageSize);
+    var settings = await postingSettings.GetRequiredAsync(ct);
+    var contactIds = page.Items.Select(contact => contact.Id).ToArray();
+    var openingBalances = await db.AccountTransactions
+      .AsNoTracking()
+      .Where(transaction =>
+        transaction.AccountId == settings.DefaultPayableAccountId &&
+        transaction.SourceType == AccountTransactionSourceType.OpeningBalance &&
+        transaction.ContactId.HasValue &&
+        contactIds.Contains(transaction.ContactId.Value))
+      .GroupBy(transaction => transaction.ContactId!.Value)
+      .Select(group => new { ContactId = group.Key, Amount = group.Sum(transaction => transaction.BaseAmount) })
+      .ToDictionaryAsync(row => row.ContactId, row => row.Amount, ct);
+
+    var suppliers = page.Items
+      .Select(supplier => MapToDto(supplier, openingBalances.GetValueOrDefault(supplier.Id), settings.DefaultPayableAccountId))
+      .ToList();
+    return new PagedResult<SupplierDto>(suppliers, page.TotalCount, page.Page, page.PageSize);
   }
 
   public async Task<SupplierDto> CreateSupplierAsync(CreateSupplierRequest request, CancellationToken ct = default)
   {
-    var name = request.Name.Trim();
-    var accountsPayable = await GetOrCreateAccountsPayableAsync(ct);
-    var account = new AccountEntity
-    {
-      Code = await GetNextSupplierAccountCodeAsync(accountsPayable, ct),
-      Name = $"{name} (Vendor) Account",
-      Category = AccountCategory.Liability,
-      ParentAccountId = accountsPayable.Id,
-      IsLeaf = true,
-    };
-
+    var settings = await postingSettings.GetRequiredAsync(ct);
     var supplier = new ContactEntity
     {
-      Name = name,
+      Name = request.Name.Trim(),
       Type = ContactType.Vendor,
       PhoneNumber = Normalize(request.PhoneNumber),
       Email = Normalize(request.Email),
       Address = Normalize(request.Address),
-      Description = Normalize(request.Description),
-      OpeningBalance = request.OpeningBalance,
-      AccountId = account.Id,
+      Description = Normalize(request.Description)
     };
-
-    db.Accounts.Add(account);
     db.Contacts.Add(supplier);
 
     if (request.OpeningBalance > 0)
     {
-      var baseCurrency = await db.Currencies.SingleOrDefaultAsync(currency => currency.IsBaseCurrency, ct)
-        ?? throw new BadRequestException(
-          ErrorCodes.Finance.CurrencyNotFound,
-          "A base currency must be configured before recording a supplier opening balance.");
-      var openingBalanceEquity = await GetOrCreateOpeningBalanceEquityAsync(ct);
-      db.JournalEntries.Add(new JournalEntryEntity
+      db.AccountTransactions.Add(new AccountTransactionEntity
       {
-        EntryDateUtc = DateTime.UtcNow,
-        ReferenceType = "SupplierOpeningBalance",
-        ReferenceId = supplier.Id,
-        Description = $"Opening balance - {supplier.Name}",
-        Lines =
-        {
-          new JournalEntryLineEntity
-          {
-            AccountId = openingBalanceEquity.Id,
-            Debit = request.OpeningBalance,
-            Credit = 0,
-            CurrencyId = baseCurrency.Id,
-            ExchangeRate = baseCurrency.ExchangeRate,
-            BaseDebit = request.OpeningBalance * baseCurrency.ExchangeRate,
-          },
-          new JournalEntryLineEntity
-          {
-            AccountId = account.Id,
-            Debit = 0,
-            Credit = request.OpeningBalance,
-            CurrencyId = baseCurrency.Id,
-            ExchangeRate = baseCurrency.ExchangeRate,
-            BaseCredit = request.OpeningBalance * baseCurrency.ExchangeRate,
-          },
-        },
+        AccountId = settings.DefaultPayableAccountId,
+        ContactId = supplier.Id,
+        CurrencyId = settings.BaseCurrencyId,
+        Amount = request.OpeningBalance,
+        BaseAmount = request.OpeningBalance,
+        TransactionDateUtc = DateTime.UtcNow,
+        SourceType = AccountTransactionSourceType.OpeningBalance,
+        SourceId = supplier.Id,
+        Description = $"Opening balance - {supplier.Name}"
       });
     }
 
     await db.SaveChangesAsync(ct);
-    return MapToDto(supplier);
-  }
-
-  private async Task<AccountEntity> GetOrCreateAccountsPayableAsync(CancellationToken ct)
-  {
-    var accountsPayable = await db.Accounts.SingleOrDefaultAsync(account => account.Code == "2100", ct);
-    if (accountsPayable is not null) return accountsPayable;
-
-    var liabilities = await db.Accounts.SingleOrDefaultAsync(account => account.Code == "2000", ct);
-    if (liabilities is null)
-    {
-      liabilities = new AccountEntity { Code = "2000", Name = "Liabilities", Category = AccountCategory.Liability, IsLeaf = false };
-      db.Accounts.Add(liabilities);
-    }
-
-    accountsPayable = new AccountEntity
-    {
-      Code = "2100",
-      Name = "Accounts Payable",
-      Category = AccountCategory.Liability,
-      ParentAccountId = liabilities.Id,
-      IsLeaf = false,
-    };
-    db.Accounts.Add(accountsPayable);
-    return accountsPayable;
-  }
-
-  private async Task<string> GetNextSupplierAccountCodeAsync(AccountEntity accountsPayable, CancellationToken ct)
-  {
-    var childCount = await db.Accounts.CountAsync(account => account.ParentAccountId == accountsPayable.Id, ct);
-    return $"{accountsPayable.Code}.{childCount + 1}";
-  }
-
-  private async Task<AccountEntity> GetOrCreateOpeningBalanceEquityAsync(CancellationToken ct)
-  {
-    var equity = await db.Accounts.SingleOrDefaultAsync(account => account.Code == "3001", ct);
-    if (equity is not null) return equity;
-
-    var equityRoot = await db.Accounts.SingleOrDefaultAsync(account => account.Code == "3000", ct);
-    if (equityRoot is null)
-    {
-      equityRoot = new AccountEntity { Code = "3000", Name = "Equity", Category = AccountCategory.Equity, IsLeaf = false };
-      db.Accounts.Add(equityRoot);
-    }
-
-    equity = new AccountEntity
-    {
-      Code = "3001",
-      Name = "Opening Balance Equity",
-      Category = AccountCategory.Equity,
-      ParentAccountId = equityRoot.Id,
-      IsLeaf = true,
-    };
-    db.Accounts.Add(equity);
-    return equity;
+    return MapToDto(supplier, request.OpeningBalance, settings.DefaultPayableAccountId);
   }
 
   private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-  private static SupplierDto MapToDto(ContactEntity supplier) => new(
+  // OpeningBalance is retained in this API response for compatibility, but it is
+  // calculated from opening-balance ledger movements and is not stored on Contact.
+  // AccountId is the shared Vendor Payables account, not a per-contact account.
+  private static SupplierDto MapToDto(ContactEntity supplier, decimal openingBalance, Guid payableAccountId) => new(
     supplier.Id,
     supplier.Name,
     supplier.PhoneNumber,
     supplier.Email,
     supplier.Address,
     supplier.Description,
-    supplier.OpeningBalance,
-    supplier.AccountId,
+    openingBalance,
+    payableAccountId,
     supplier.IsActive,
     supplier.CreatedAtUtc);
 }

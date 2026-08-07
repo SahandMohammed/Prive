@@ -1,5 +1,7 @@
 namespace Api.Modules.Settings;
 
+using Api.Modules.Finance;
+
 public enum ItemType
 {
     Product = 0,
@@ -15,6 +17,13 @@ public sealed class ItemEntity
     
     public decimal BasePrice { get; set; }
     public decimal BaseCost { get; set; }
+
+    // These are nullable while legacy catalog rows are migrated. New item workflows
+    // should require them before an item can be posted on a document.
+    public Guid? SalesAccountId { get; set; }
+    public AccountEntity? SalesAccount { get; set; }
+    public Guid? PurchaseAccountId { get; set; }
+    public AccountEntity? PurchaseAccount { get; set; }
     
     public Guid CategoryId { get; set; }
     public ItemCategoryEntity Category { get; set; } = null!;

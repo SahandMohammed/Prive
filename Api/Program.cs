@@ -7,6 +7,8 @@ using Api.Modules.Auth;
 using Api.Modules.Finance;
 using Api.Modules.Settings;
 using Api.Modules.Purchases;
+using Api.Modules.Inventory;
+using Api.Modules.Sales;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -230,7 +232,9 @@ try
     .AddAuthModule()
     .AddFinanceModule()
     .AddSettingsModule()
-    .AddPurchasesModule();
+    .AddPurchasesModule()
+    .AddInventoryModule()
+    .AddSalesModule();
 
   var app = builder.Build();
 
