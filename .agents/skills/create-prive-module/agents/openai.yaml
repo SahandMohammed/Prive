@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Prive Module"
+  short_description: "Build a complete Prive feature module"
+  default_prompt: "Use $create-prive-module to add a new Prive module."

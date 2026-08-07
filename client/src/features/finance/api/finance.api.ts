@@ -14,7 +14,6 @@ import type {
   InvoiceType,
   VoucherType,
   ContactType,
-  PagedResult,
 } from '../types/finance.types'
 
 export const financeApi = {
@@ -40,15 +39,15 @@ export const financeApi = {
     search?: string,
     startDate?: string,
     endDate?: string,
-    pageNumber = 1,
+    page = 1,
     pageSize = 10
   ) => {
-    let url = `/finance/invoices?pageNumber=${pageNumber}&pageSize=${pageSize}`
+    let url = `/finance/invoices?page=${page}&pageSize=${pageSize}`
     if (type !== undefined) url += `&type=${type}`
     if (search) url += `&search=${encodeURIComponent(search)}`
     if (startDate) url += `&startDate=${startDate}`
     if (endDate) url += `&endDate=${endDate}`
-    return apiClient.get<PagedResult<InvoiceDto>>(url)
+    return apiClient.getPaginated<InvoiceDto>(url)
   },
   createInvoice: (body: CreateInvoiceRequest) => apiClient.post<InvoiceDto>('/finance/invoices', body),
 

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Api.Infrastructure.Http;
+using Api.Shared.Pagination;
 
 namespace Api.Modules.Finance;
 
@@ -82,16 +83,12 @@ public class FinanceController : ControllerBase
 
   // --- Invoices ---
   [HttpGet("invoices")]
-  public async Task<ActionResult<ApiResponse<Api.Shared.Pagination.PagedResult<InvoiceEntity>>>> GetInvoices(
-    [FromQuery] InvoiceType? type,
-    [FromQuery] string? search,
-    [FromQuery] DateTime? startDate,
-    [FromQuery] DateTime? endDate,
-    [FromQuery] int pageNumber = 1,
-    [FromQuery] int pageSize = 10)
+  public async Task<ActionResult<ApiResponse<List<InvoiceEntity>>>> GetInvoices(
+    [FromQuery] InvoiceListQuery query,
+    CancellationToken ct)
   {
-    var pagedResult = await _financeService.GetInvoicesAsync(type, search, startDate, endDate, pageNumber, pageSize);
-    return Ok(ApiResponse<Api.Shared.Pagination.PagedResult<InvoiceEntity>>.Ok(pagedResult));
+    var pagedResult = await _financeService.GetInvoicesAsync(query, ct);
+    return Ok(ApiResponse<List<InvoiceEntity>>.Ok(pagedResult.Items, pagedResult.ToMetadata()));
   }
 
   [HttpPost("invoices")]
@@ -147,3 +144,11 @@ public record CreateAccountRequest(string Code, string Name, AccountCategory Cat
 public record CreateContactRequest(string Name, ContactType Type);
 public record CreateInvoiceRequest(InvoiceType Type, Guid ContactId, Guid CurrencyId, decimal ExchangeRate, List<InvoiceLineDto> Lines, DateTime InvoiceDate);
 public record CreateVoucherRequest(VoucherType Type, Guid TreasuryAccountId, Guid? ContactId, Guid CurrencyId, decimal ExchangeRate, decimal TotalAmount, DateTime VoucherDate, List<VoucherAllocationDto> Allocations);
+
+public sealed class InvoiceListQuery : PaginationRequest
+{
+  public InvoiceType? Type { get; init; }
+  public string? Search { get; init; }
+  public DateTime? StartDate { get; init; }
+  public DateTime? EndDate { get; init; }
+}

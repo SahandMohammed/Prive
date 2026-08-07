@@ -3,9 +3,9 @@ import { usersApi } from '../api/users.api'
 
 export const USERS_QUERY_KEY = ['users'] as const
 
-export function useUsers() {
+export function useUsers(page = 1, pageSize = 20, search?: string) {
   return useQuery({
-    queryKey: USERS_QUERY_KEY,
-    queryFn: usersApi.list,
+    queryKey: [...USERS_QUERY_KEY, page, pageSize, search],
+    queryFn: () => usersApi.list(page, pageSize, search),
   })
 }

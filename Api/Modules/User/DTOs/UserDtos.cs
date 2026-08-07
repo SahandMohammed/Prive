@@ -1,6 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using Api.Shared.Pagination;
 
 namespace Api.Modules.User;
+
+public sealed class UserListQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+}
 
 public sealed record UserResponse(
   Guid Id,

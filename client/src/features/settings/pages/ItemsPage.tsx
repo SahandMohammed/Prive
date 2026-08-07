@@ -26,47 +26,19 @@ export function ItemsPage() {
   const [sortField, setSortField] = useState<'name' | 'code' | 'type' | 'price' | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  const { data: apiItems = [], isLoading, isError } = useItems()
-  const items = apiItems
-
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      if (activeTab === 'Product' && item.type !== 'Product') return false
-      if (activeTab === 'Service' && item.type !== 'Service') return false
-
-      if (headerTypeFilter && item.type !== headerTypeFilter) return false
-      if (headerStatusFilter && (item.isActive ? 'Active' : 'Inactive') !== headerStatusFilter) return false
-
-      if (search.trim()) {
-        const query = search.toLowerCase()
-        if (!item.name.toLowerCase().includes(query) && !item.code.toLowerCase().includes(query)) return false
-      }
-
-      return true
-    })
-  }, [items, activeTab, headerTypeFilter, headerStatusFilter, search])
-
-  const sortedItems = useMemo(() => {
-    if (!sortField) return filteredItems
-    return [...filteredItems].sort((a, b) => {
-      let valA: string | number = ''
-      let valB: string | number = ''
-      
-      if (sortField === 'name') { valA = a.name.toLowerCase(); valB = b.name.toLowerCase() }
-      else if (sortField === 'code') { valA = a.code.toLowerCase(); valB = b.code.toLowerCase() }
-      else if (sortField === 'type') { valA = a.type.toLowerCase(); valB = b.type.toLowerCase() }
-      else if (sortField === 'price') { valA = a.basePrice; valB = b.basePrice }
-
-      if (valA < valB) return sortDirection === 'asc' ? -1 : 1
-      if (valA > valB) return sortDirection === 'asc' ? 1 : -1
-      return 0
-    })
-  }, [filteredItems, sortField, sortDirection])
-
-  const paginatedItems = useMemo(() => {
-    const start = (page - 1) * pageSize
-    return sortedItems.slice(start, start + pageSize)
-  }, [sortedItems, page, pageSize])
+  const itemQuery = useMemo(() => ({
+    page,
+    pageSize,
+    search: search.trim() || undefined,
+    type: activeTab === 'All' ? headerTypeFilter || undefined : activeTab,
+    isActive: headerStatusFilter ? headerStatusFilter === 'Active' : undefined,
+    sortBy: sortField || undefined,
+    sortDirection,
+  }), [activeTab, headerStatusFilter, headerTypeFilter, page, pageSize, search, sortDirection, sortField])
+  const { data: itemPage, isLoading, isError } = useItems(itemQuery)
+  const items = itemPage?.data ?? []
+  const totalItems = itemPage?.meta.totalCount ?? 0
+  const paginatedItems = items
 
   const isAllSelected = paginatedItems.length > 0 && paginatedItems.every(i => selectedIds.includes(i.id))
   
@@ -116,9 +88,9 @@ export function ItemsPage() {
             onChange={(e) => { setActiveTab(e.target.value as 'All' | 'Product' | 'Service'); setPage(1); }}
             className="flex h-10 w-full sm:w-48 items-center justify-between rounded-md border border-slate-200 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-xs ring-offset-white focus:outline-none focus:ring-1 focus:ring-[#e05d38] dark:border-slate-800 dark:ring-offset-slate-950"
           >
-            <option value="All">All Items ({items.length})</option>
-            <option value="Product">Products ({items.filter(i => i.type === 'Product').length})</option>
-            <option value="Service">Services ({items.filter(i => i.type === 'Service').length})</option>
+            <option value="All">All Items ({totalItems})</option>
+            <option value="Product">Products</option>
+            <option value="Service">Services</option>
           </select>
         </div>
 
@@ -275,7 +247,7 @@ export function ItemsPage() {
       <DataTablePagination
         page={page}
         pageSize={pageSize}
-        totalItems={filteredItems.length}
+        totalItems={totalItems}
         onPageChange={setPage}
         onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
       />

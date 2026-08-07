@@ -21,6 +21,7 @@ export interface Item {
   baseUnitOfMeasureId: string;
   baseUnitOfMeasureName: string;
   durationMinutes: number | null;
+  trackInventory: boolean;
   description: string | null;
   isActive: boolean;
   additionalUnits: ItemUnitOfMeasure[];
@@ -40,6 +41,21 @@ export interface ItemCategory {
   isActive: boolean;
 }
 
+export interface Warehouse {
+  id: string;
+  code: string;
+  name: string;
+  address: string | null;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
+export interface CreateWarehouseRequest {
+  code: string;
+  name: string;
+  address: string | null;
+}
+
 export interface CreateItemUnitRequest {
   unitOfMeasureId: string;
   conversionFactor: number;
@@ -56,6 +72,7 @@ export interface CreateItemRequest {
   categoryId: string;
   baseUnitOfMeasureId: string;
   durationMinutes: number | null;
+  trackInventory: boolean;
   description: string | null;
   additionalUnits: CreateItemUnitRequest[];
 }

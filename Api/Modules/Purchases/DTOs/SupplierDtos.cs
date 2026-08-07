@@ -1,6 +1,13 @@
 using System.ComponentModel.DataAnnotations;
+using Api.Shared.Pagination;
 
 namespace Api.Modules.Purchases;
+
+public sealed class SupplierListQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+  public string? SortDirection { get; init; }
+}
 
 public sealed record SupplierDto(
   Guid Id,

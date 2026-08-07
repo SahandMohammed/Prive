@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using Api.Shared.Pagination;
 
 namespace Api.Infrastructure.Http;
 
 /// <summary>
 /// Unified envelope for all API responses.
 ///
-/// Success:  { "success": true,  "data": { ... } }
+/// Success:  { "success": true,  "data": { ... }, "meta": { ... } }
 /// Error:    { "success": false, "error": { "code": "...", "message": "...", "traceId": "...", "details": [...] } }
 ///
 /// HTTP status codes always match the envelope state:
@@ -23,14 +24,19 @@ public sealed class ApiResponse<T>
 
   [JsonPropertyOrder(2)]
   [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+  public PaginationMetadata? Meta { get; private init; }
+
+  [JsonPropertyOrder(3)]
+  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
   public ApiError? Error { get; private init; }
 
   private ApiResponse() { }
 
-  public static ApiResponse<T> Ok(T data) => new()
+  public static ApiResponse<T> Ok(T data, PaginationMetadata? meta = null) => new()
   {
     Success = true,
-    Data = data
+    Data = data,
+    Meta = meta
   };
 
   public static ApiResponse<T> Fail(

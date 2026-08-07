@@ -84,7 +84,7 @@ export function BusinessSettingsPage() {
         businessName: settings.businessName,
         defaultLanguage: settings.defaultLanguage,
         currencySymbol: settings.currencySymbol,
-        currencySymbolPosition: settings.currencySymbolPosition as any,
+        currencySymbolPosition: settings.currencySymbolPosition === 'After' ? 'After' : 'Before',
         currencyDecimalPlaces: settings.currencyDecimalPlaces,
         address: settings.address || '',
         phoneNumber: settings.phoneNumber || '',

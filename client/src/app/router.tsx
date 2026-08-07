@@ -30,7 +30,7 @@ import {
   PurchaseReturnsPage,
   SuppliersPage,
 } from '@/features/purchases'
-import { ItemsPage, CreateItemPage, BusinessSettingsPage } from '@/features/settings'
+import { ItemsPage, CreateItemPage, BusinessSettingsPage, WarehousesPage } from '@/features/settings'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -95,6 +95,7 @@ export const router = createBrowserRouter([
           { path: '/settings/business', element: <BusinessSettingsPage /> },
           { path: '/settings/items', element: <ItemsPage /> },
           { path: '/settings/items/new', element: <CreateItemPage /> },
+          { path: '/settings/warehouses', element: <WarehousesPage /> },
         ],
       },
     ],

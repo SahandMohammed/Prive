@@ -17,7 +17,7 @@ export function UserTable() {
         </tr>
       </thead>
       <tbody>
-        {users?.map((user) => (
+        {users?.data.map((user) => (
           <tr key={user.id} className="border-b last:border-0">
             <td className="py-2 pr-4">{user.username}</td>
             <td className="py-2 pr-4">{user.role}</td>

@@ -66,3 +66,15 @@ public sealed class BusinessSettingsConfiguration : IEntityTypeConfiguration<Bus
         builder.Property(x => x.CurrencySymbolPosition).HasMaxLength(10);
     }
 }
+
+public sealed class WarehouseConfiguration : IEntityTypeConfiguration<WarehouseEntity>
+{
+    public void Configure(EntityTypeBuilder<WarehouseEntity> builder)
+    {
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Code).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.Name).IsRequired();
+        builder.Property(x => x.Address).HasMaxLength(500);
+        builder.HasIndex(x => x.Code).IsUnique();
+    }
+}

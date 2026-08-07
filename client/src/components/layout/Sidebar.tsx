@@ -90,6 +90,7 @@ export function Sidebar() {
         <NavGroup label="Settings" icon={<Settings className="w-4 h-4" />}>
           <SubNavItem to="/settings/business">Business Settings</SubNavItem>
           <SubNavItem to="/settings/items">Items</SubNavItem>
+          <SubNavItem to="/settings/warehouses">Warehouses</SubNavItem>
         </NavGroup>
 
         {/* Other Admin Tools */}

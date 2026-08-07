@@ -70,5 +70,12 @@ public static class DbSeeder
       await db.SaveChangesAsync();
       logger.LogInformation("Seeded default Item Categories.");
     }
+
+    if (!await db.Warehouses.AnyAsync())
+    {
+      db.Warehouses.Add(new WarehouseEntity { Code = "MAIN", Name = "Main Warehouse" });
+      await db.SaveChangesAsync();
+      logger.LogInformation("Seeded the default warehouse.");
+    }
   }
 }

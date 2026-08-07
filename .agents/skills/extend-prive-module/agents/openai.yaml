@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extend Prive Module"
+  short_description: "Safely extend an existing Prive module"
+  default_prompt: "Use $extend-prive-module to extend an existing Prive capability."

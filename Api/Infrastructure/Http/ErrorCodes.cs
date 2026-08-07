@@ -48,6 +48,8 @@ public static class ErrorCodes
     public const string MultipleSellingDefaults = "SETTINGS_MULTIPLE_SELLING_DEFAULTS";
     public const string SettingsAlreadySetup = "SETTINGS_ALREADY_SETUP";
     public const string SettingsNotSetup = "SETTINGS_NOT_SETUP";
+    public const string WarehouseCodeTaken = "SETTINGS_WAREHOUSE_CODE_TAKEN";
+    public const string ServiceCannotTrackInventory = "SETTINGS_SERVICE_CANNOT_TRACK_INVENTORY";
   }
 
   public static class Common

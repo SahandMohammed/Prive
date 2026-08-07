@@ -4,10 +4,10 @@ import type { CreateSupplierRequest } from '../types/suppliers.types'
 
 export const SUPPLIERS_QUERY_KEY = ['purchases', 'suppliers'] as const
 
-export function useSuppliers() {
+export function useSuppliers(query: { page: number; pageSize: number; search?: string; sortDirection?: string }) {
   return useQuery({
-    queryKey: SUPPLIERS_QUERY_KEY,
-    queryFn: suppliersApi.list,
+    queryKey: [...SUPPLIERS_QUERY_KEY, query],
+    queryFn: () => suppliersApi.list(query),
   })
 }
 

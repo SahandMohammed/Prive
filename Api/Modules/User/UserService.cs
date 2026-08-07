@@ -1,5 +1,6 @@
 using Api.Infrastructure.Http;
 using Api.Shared.Persistence;
+using Api.Shared.Pagination;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,12 +16,23 @@ public sealed class UserService
     _db = db;
   }
 
-  public async Task<List<UserResponse>> GetAllAsync()
+  public async Task<PagedResult<UserResponse>> GetAllAsync(UserListQuery request, CancellationToken ct = default)
   {
-    return await _db.Users
+    var query = _db.Users
+      .AsNoTracking()
+      .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(request.Search))
+    {
+      var search = request.Search.Trim().ToLower();
+      query = query.Where(user => user.Username.ToLower().Contains(search));
+    }
+
+    return await query
       .OrderBy(u => u.Username)
+      .ThenBy(u => u.Id)
       .Select(u => ToResponse(u))
-      .ToListAsync();
+      .ToPagedResultAsync(request, ct);
   }
 
   public async Task<UserResponse> GetByIdAsync(Guid id)

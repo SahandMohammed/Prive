@@ -286,7 +286,7 @@ export function PurchaseInvoicesPage() {
 
           {invoicesLoading ? (
             <p className="text-sm text-muted-foreground">Loading purchase registry...</p>
-          ) : pagedInvoices && pagedInvoices.items.length > 0 ? (
+          ) : pagedInvoices && pagedInvoices.data.length > 0 ? (
             <div className="space-y-4">
               <DataTableShell>
               <Table>
@@ -302,7 +302,7 @@ export function PurchaseInvoicesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedInvoices.items.map((inv: InvoiceDto) => {
+                  {pagedInvoices.data.map((inv: InvoiceDto) => {
                     const vend = vendors?.find((v: ContactDto) => v.id === inv.contactId)
                     const currency = currencies?.find((c: CurrencyDto) => c.id === inv.currencyId)
                     const baseAmount = inv.totalAmount * inv.exchangeRate
@@ -333,7 +333,7 @@ export function PurchaseInvoicesPage() {
               <DataTablePagination
                 page={page}
                 pageSize={pageSize}
-                totalItems={pagedInvoices.totalCount}
+                totalItems={pagedInvoices.meta.totalCount}
                 onPageChange={setPage}
                 onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
               />

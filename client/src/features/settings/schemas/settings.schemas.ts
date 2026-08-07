@@ -10,6 +10,7 @@ export const createItemSchema = z.object({
   subcategoryId: z.string().optional().nullable(),
   baseUnitOfMeasureId: z.string().min(1, 'Base unit of measure is required'),
   durationMinutes: z.number().min(1, 'Duration must be at least 1 minute').nullable().optional(),
+  trackInventory: z.boolean(),
   description: z.string().nullable().optional(),
   additionalUnits: z.array(z.object({
     unitOfMeasureId: z.string().uuid(),
@@ -25,6 +26,17 @@ export const createItemSchema = z.object({
       path: ['durationMinutes']
     });
   }
+  if (val.type === 'Service' && val.trackInventory) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Services cannot track inventory', path: ['trackInventory'] });
+  }
 });
 
 export type CreateItemFormValues = z.infer<typeof createItemSchema>;
+
+export const createWarehouseSchema = z.object({
+  code: z.string().trim().min(1, 'Warehouse code is required').max(50),
+  name: z.string().trim().min(1, 'Warehouse name is required'),
+  address: z.string().trim().max(500).optional(),
+});
+
+export type CreateWarehouseFormValues = z.infer<typeof createWarehouseSchema>;

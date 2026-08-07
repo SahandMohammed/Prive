@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ export function CreateItemPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm<CreateItemFormValues>({
@@ -32,12 +32,13 @@ export function CreateItemPage() {
       type: 'Product',
       basePrice: 0,
       baseCost: 0,
+      trackInventory: false,
       additionalUnits: [],
     },
   });
 
-  const selectedType = watch('type');
-  const selectedCategoryId = watch('categoryId');
+  const selectedType = useWatch({ control, name: 'type' });
+  const selectedCategoryId = useWatch({ control, name: 'categoryId' });
 
   const topLevelCategories = categories.filter(c => !c.parentCategoryId);
   const subcategories = categories.filter(c => c.parentCategoryId === selectedCategoryId);
@@ -227,6 +228,13 @@ export function CreateItemPage() {
               />
               {errors.durationMinutes && <p className="text-xs text-red-500">{errors.durationMinutes.message}</p>}
             </div>
+          )}
+
+          {selectedType === 'Product' && (
+            <label className="flex items-center gap-3 self-end rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+              <input type="checkbox" {...register('trackInventory')} className="h-4 w-4 rounded border-slate-300 text-[#e05d38] focus:ring-[#e05d38]" />
+              Track inventory for this product
+            </label>
           )}
         </div>
 

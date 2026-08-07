@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Api.Shared.Persistence;
+using Api.Shared.Pagination;
 
 namespace Api.Modules.Finance;
 
@@ -19,13 +20,7 @@ public interface IFinanceService
   Task<ContactEntity> CreateContactAsync(string name, ContactType type);
   
   // Invoices (Sales / Purchases)
-  Task<Api.Shared.Pagination.PagedResult<InvoiceEntity>> GetInvoicesAsync(
-    InvoiceType? type = null,
-    string? search = null,
-    DateTime? startDate = null,
-    DateTime? endDate = null,
-    int pageNumber = 1,
-    int pageSize = 10);
+  Task<PagedResult<InvoiceEntity>> GetInvoicesAsync(InvoiceListQuery query, CancellationToken ct = default);
   Task<InvoiceEntity> CreateInvoiceAsync(InvoiceType type, Guid contactId, Guid currencyId, decimal exchangeRate, List<InvoiceLineDto> lines, DateTime invoiceDate);
   
   // Vouchers (Receipts / Payments / Transfers)
@@ -186,29 +181,24 @@ public class FinanceService : IFinanceService
     return contact;
   }
 
-  public async Task<Api.Shared.Pagination.PagedResult<InvoiceEntity>> GetInvoicesAsync(
-    InvoiceType? type = null,
-    string? search = null,
-    DateTime? startDate = null,
-    DateTime? endDate = null,
-    int pageNumber = 1,
-    int pageSize = 10)
+  public async Task<PagedResult<InvoiceEntity>> GetInvoicesAsync(InvoiceListQuery request, CancellationToken ct = default)
   {
     var query = _context.Invoices
+      .AsNoTracking()
       .Include(i => i.Contact)
       .Include(i => i.Currency)
       .Include(i => i.Lines)
         .ThenInclude(l => l.Account)
       .AsQueryable();
 
-    if (type.HasValue)
+    if (request.Type.HasValue)
     {
-      query = query.Where(i => i.Type == type.Value);
+      query = query.Where(i => i.Type == request.Type.Value);
     }
 
-    if (!string.IsNullOrWhiteSpace(search))
+    if (!string.IsNullOrWhiteSpace(request.Search))
     {
-      var searchLower = search.ToLower();
+      var searchLower = request.Search.Trim().ToLower();
       query = query.Where(i => 
         (i.Contact != null && i.Contact.Name.ToLower().Contains(searchLower)) ||
         i.Lines.Any(l => l.Description.ToLower().Contains(searchLower)) ||
@@ -216,23 +206,20 @@ public class FinanceService : IFinanceService
       );
     }
 
-    if (startDate.HasValue)
+    if (request.StartDate.HasValue)
     {
-      query = query.Where(i => i.InvoiceDateUtc >= startDate.Value.ToUniversalTime());
+      query = query.Where(i => i.InvoiceDateUtc >= request.StartDate.Value.ToUniversalTime());
     }
 
-    if (endDate.HasValue)
+    if (request.EndDate.HasValue)
     {
-      query = query.Where(i => i.InvoiceDateUtc <= endDate.Value.ToUniversalTime());
+      query = query.Where(i => i.InvoiceDateUtc <= request.EndDate.Value.ToUniversalTime());
     }
 
     // Newest first
-    query = query.OrderByDescending(i => i.InvoiceDateUtc);
+    query = query.OrderByDescending(i => i.InvoiceDateUtc).ThenByDescending(i => i.Id);
 
-    var totalCount = await query.CountAsync();
-    var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
-
-    return new Api.Shared.Pagination.PagedResult<InvoiceEntity>(items, totalCount, pageNumber, pageSize);
+    return await query.ToPagedResultAsync(request, ct);
   }
 
   public async Task<InvoiceEntity> CreateInvoiceAsync(InvoiceType type, Guid contactId, Guid currencyId, decimal exchangeRate, List<InvoiceLineDto> lines, DateTime invoiceDate)

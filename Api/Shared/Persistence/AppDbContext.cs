@@ -28,6 +28,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<ItemEntity> Items => Set<ItemEntity>();
   public DbSet<ItemUnitOfMeasureEntity> ItemUnitsOfMeasure => Set<ItemUnitOfMeasureEntity>();
   public DbSet<BusinessSettingsEntity> BusinessSettings => Set<BusinessSettingsEntity>();
+  public DbSet<WarehouseEntity> Warehouses => Set<WarehouseEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {

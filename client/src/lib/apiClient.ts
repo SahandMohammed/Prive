@@ -1,6 +1,6 @@
 import axios, { isAxiosError } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
-import type { ApiEnvelope } from './apiResponse'
+import type { ApiEnvelope, ApiSuccessEnvelope, PaginatedResponse } from './apiResponse'
 import { ApiRequestError } from './apiError'
 import { env } from './env'
 
@@ -166,10 +166,10 @@ rawClient.interceptors.response.use(
 // error.response.data. We extract it here so every caller always receives
 // ApiRequestError — never a raw AxiosError — for any structured domain error.
 
-async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<T> {
+async function unwrapEnvelope<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<ApiSuccessEnvelope<T>> {
   try {
     const { data: envelope } = await promise
-    if (envelope.success) return envelope.data
+    if (envelope.success) return envelope
     // Shouldn't reach here (Axios throws on non-2xx) but guard it anyway.
     throw new ApiRequestError(envelope.error, 200)
   } catch (err) {
@@ -183,12 +183,23 @@ async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<T>
   }
 }
 
+async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<T> {
+  return (await unwrapEnvelope(promise)).data
+}
+
+async function unwrapPaginated<T>(promise: Promise<{ data: ApiEnvelope<T[]> }>): Promise<PaginatedResponse<T[]>> {
+  const envelope = await unwrapEnvelope(promise)
+  if (!envelope.meta) throw new Error('Expected pagination metadata in the API response.')
+  return { data: envelope.data, meta: envelope.meta }
+}
+
 // ---------------------------------------------------------------------------
 // Public API client
 // ---------------------------------------------------------------------------
 
 export const apiClient = {
   get: <T>(url: string) => unwrap<T>(rawClient.get<ApiEnvelope<T>>(url)),
+  getPaginated: <T>(url: string) => unwrapPaginated<T>(rawClient.get<ApiEnvelope<T[]>>(url)),
   post: <T>(url: string, body?: unknown) =>
     unwrap<T>(rawClient.post<ApiEnvelope<T>>(url, body)),
   put: <T>(url: string, body?: unknown) =>

@@ -82,12 +82,12 @@ export function useInvoices(
   search?: string,
   startDate?: string,
   endDate?: string,
-  pageNumber = 1,
+  page = 1,
   pageSize = 10
 ) {
   return useQuery({
-    queryKey: ['invoices', type, search, startDate, endDate, pageNumber, pageSize],
-    queryFn: () => financeApi.getInvoices(type, search, startDate, endDate, pageNumber, pageSize),
+    queryKey: ['invoices', type, search, startDate, endDate, page, pageSize],
+    queryFn: () => financeApi.getInvoices(type, search, startDate, endDate, page, pageSize),
   })
 }
 

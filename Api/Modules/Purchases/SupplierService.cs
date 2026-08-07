@@ -1,27 +1,42 @@
 using Api.Infrastructure.Http;
 using Api.Modules.Finance;
 using Api.Shared.Persistence;
+using Api.Shared.Pagination;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Purchases;
 
 public interface ISupplierService
 {
-  Task<List<SupplierDto>> GetSuppliersAsync(CancellationToken ct = default);
+  Task<PagedResult<SupplierDto>> GetSuppliersAsync(SupplierListQuery query, CancellationToken ct = default);
   Task<SupplierDto> CreateSupplierAsync(CreateSupplierRequest request, CancellationToken ct = default);
 }
 
 public sealed class SupplierService(AppDbContext db) : ISupplierService
 {
-  public async Task<List<SupplierDto>> GetSuppliersAsync(CancellationToken ct = default)
+  public async Task<PagedResult<SupplierDto>> GetSuppliersAsync(SupplierListQuery request, CancellationToken ct = default)
   {
-    var suppliers = await db.Contacts
+    var query = db.Contacts
       .AsNoTracking()
       .Where(contact => contact.Type == ContactType.Vendor)
-      .OrderBy(contact => contact.Name)
-      .ToListAsync(ct);
+      .AsQueryable();
 
-    return suppliers.Select(MapToDto).ToList();
+    if (!string.IsNullOrWhiteSpace(request.Search))
+    {
+      var search = request.Search.Trim().ToLower();
+      query = query.Where(supplier =>
+        supplier.Name.ToLower().Contains(search) ||
+        (supplier.PhoneNumber != null && supplier.PhoneNumber.ToLower().Contains(search)) ||
+        (supplier.Email != null && supplier.Email.ToLower().Contains(search)) ||
+        (supplier.Address != null && supplier.Address.ToLower().Contains(search)));
+    }
+
+    query = string.Equals(request.SortDirection, "desc", StringComparison.OrdinalIgnoreCase)
+      ? query.OrderByDescending(contact => contact.Name).ThenByDescending(contact => contact.Id)
+      : query.OrderBy(contact => contact.Name).ThenBy(contact => contact.Id);
+
+    var page = await query.ToPagedResultAsync(request, ct);
+    return new PagedResult<SupplierDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.Page, page.PageSize);
   }
 
   public async Task<SupplierDto> CreateSupplierAsync(CreateSupplierRequest request, CancellationToken ct = default)

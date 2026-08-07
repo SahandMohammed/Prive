@@ -1,4 +1,5 @@
 using Api.Infrastructure.Http;
+using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,7 +7,7 @@ namespace Api.Modules.Settings;
 
 public interface IItemService
 {
-    Task<List<ItemDto>> GetItemsAsync(CancellationToken ct = default);
+    Task<PagedResult<ItemDto>> GetItemsAsync(ItemListQuery query, CancellationToken ct = default);
     Task<ItemDto> CreateItemAsync(CreateItemRequest req, CancellationToken ct = default);
     
     Task<List<UnitOfMeasureDto>> GetUnitsOfMeasureAsync(CancellationToken ct = default);
@@ -18,17 +19,39 @@ public interface IItemService
 
 public sealed class ItemService(AppDbContext db) : IItemService
 {
-    public async Task<List<ItemDto>> GetItemsAsync(CancellationToken ct = default)
+    public async Task<PagedResult<ItemDto>> GetItemsAsync(ItemListQuery request, CancellationToken ct = default)
     {
-        var items = await db.Items
+        var query = db.Items
             .AsNoTracking()
             .Include(i => i.Category)
             .Include(i => i.BaseUnitOfMeasure)
             .Include(i => i.AdditionalUnits)
                 .ThenInclude(au => au.UnitOfMeasure)
-            .ToListAsync(ct);
-            
-        return items.Select(MapToDto).ToList();
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim().ToLower();
+            query = query.Where(item => item.Name.ToLower().Contains(search) || item.Code.ToLower().Contains(search));
+        }
+        if (request.Type.HasValue) query = query.Where(item => item.Type == request.Type.Value);
+        if (request.IsActive.HasValue) query = query.Where(item => item.IsActive == request.IsActive.Value);
+
+        var descending = string.Equals(request.SortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+        query = (request.SortBy?.ToLowerInvariant(), descending) switch
+        {
+            ("code", true) => query.OrderByDescending(item => item.Code).ThenByDescending(item => item.Id),
+            ("code", false) => query.OrderBy(item => item.Code).ThenBy(item => item.Id),
+            ("type", true) => query.OrderByDescending(item => item.Type).ThenByDescending(item => item.Id),
+            ("type", false) => query.OrderBy(item => item.Type).ThenBy(item => item.Id),
+            ("price", true) => query.OrderByDescending(item => item.BasePrice).ThenByDescending(item => item.Id),
+            ("price", false) => query.OrderBy(item => item.BasePrice).ThenBy(item => item.Id),
+            ("name", true) => query.OrderByDescending(item => item.Name).ThenByDescending(item => item.Id),
+            _ => query.OrderBy(item => item.Name).ThenBy(item => item.Id)
+        };
+
+        var page = await query.ToPagedResultAsync(request, ct);
+        return new PagedResult<ItemDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.Page, page.PageSize);
     }
     
     public async Task<ItemDto> CreateItemAsync(CreateItemRequest req, CancellationToken ct = default)
@@ -41,6 +64,11 @@ public sealed class ItemService(AppDbContext db) : IItemService
         if (req.Type == ItemType.Service && !req.DurationMinutes.HasValue)
         {
             throw new BadRequestException(ErrorCodes.Settings.ServiceRequiresDuration, "A duration is required for Service items.");
+        }
+
+        if (req.Type == ItemType.Service && req.TrackInventory)
+        {
+            throw new BadRequestException(ErrorCodes.Settings.ServiceCannotTrackInventory, "Service items cannot track inventory.");
         }
         
         if (req.AdditionalUnits != null)
@@ -68,6 +96,7 @@ public sealed class ItemService(AppDbContext db) : IItemService
             CategoryId = req.CategoryId,
             BaseUnitOfMeasureId = req.BaseUnitOfMeasureId,
             DurationMinutes = req.Type == ItemType.Service ? req.DurationMinutes : null,
+            TrackInventory = req.Type == ItemType.Product && req.TrackInventory,
             Description = req.Description,
             AdditionalUnits = new List<ItemUnitOfMeasureEntity>()
         };
@@ -150,6 +179,7 @@ public sealed class ItemService(AppDbContext db) : IItemService
             i.BaseUnitOfMeasureId,
             i.BaseUnitOfMeasure.Name,
             i.DurationMinutes,
+            i.TrackInventory,
             i.Description,
             i.IsActive,
             i.AdditionalUnits.Select(au => new ItemUnitOfMeasureDto(

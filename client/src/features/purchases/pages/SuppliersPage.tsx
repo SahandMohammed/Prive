@@ -15,30 +15,10 @@ export function SuppliersPage() {
   const [pageSize, setPageSize] = useState(10)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-  const { data: suppliers = [], isLoading, isError } = useSuppliers()
-
-  const filteredSuppliers = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return suppliers
-
-    return suppliers.filter((supplier) =>
-      [supplier.name, supplier.phoneNumber, supplier.email, supplier.address]
-        .some((value) => value?.toLowerCase().includes(query)),
-    )
-  }, [search, suppliers])
-
-  const sortedSuppliers = useMemo(
-    () => [...filteredSuppliers].sort((a, b) =>
-      sortDirection === 'asc'
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name),
-    ),
-    [filteredSuppliers, sortDirection],
-  )
-
-  const totalPages = Math.max(1, Math.ceil(sortedSuppliers.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const paginatedSuppliers = sortedSuppliers.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const supplierQuery = useMemo(() => ({ page, pageSize, search: search.trim() || undefined, sortDirection }), [page, pageSize, search, sortDirection])
+  const { data: supplierPage, isLoading, isError } = useSuppliers(supplierQuery)
+  const totalSuppliers = supplierPage?.meta.totalCount ?? 0
+  const paginatedSuppliers = supplierPage?.data ?? []
   const isAllSelected = paginatedSuppliers.length > 0 && paginatedSuppliers.every((supplier) => selectedIds.includes(supplier.id))
 
   const toggleAll = () => {
@@ -72,7 +52,7 @@ export function SuppliersPage() {
             className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-xs dark:border-slate-800 dark:bg-slate-900"
           />
         </div>
-        <p className="text-sm text-slate-500">{filteredSuppliers.length} supplier{filteredSuppliers.length === 1 ? '' : 's'}</p>
+        <p className="text-sm text-slate-500">{totalSuppliers} supplier{totalSuppliers === 1 ? '' : 's'}</p>
       </div>
 
       <DataTableShell>
@@ -112,9 +92,9 @@ export function SuppliersPage() {
       </DataTableShell>
 
       <DataTablePagination
-        page={currentPage}
+        page={page}
         pageSize={pageSize}
-        totalItems={sortedSuppliers.length}
+        totalItems={totalSuppliers}
         onPageChange={setPage}
         onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
       />

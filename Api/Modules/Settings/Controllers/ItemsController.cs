@@ -1,4 +1,5 @@
 using Api.Infrastructure.Http;
+using Api.Shared.Pagination;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,10 +14,10 @@ public sealed class ItemsController(IItemService itemService) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<List<ItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetItems(CancellationToken ct)
+    public async Task<IActionResult> GetItems([FromQuery] ItemListQuery query, CancellationToken ct)
     {
-        var items = await itemService.GetItemsAsync(ct);
-        return Ok(ApiResponse<List<ItemDto>>.Ok(items));
+        var items = await itemService.GetItemsAsync(query, ct);
+        return Ok(ApiResponse<List<ItemDto>>.Ok(items.Items, items.ToMetadata()));
     }
     
     [HttpPost]

@@ -1,4 +1,5 @@
 using Api.Infrastructure.Http;
+using Api.Shared.Pagination;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,10 +23,10 @@ public sealed class UserController : ControllerBase
   [HttpGet]
   [Authorize(Roles = "SuperAdmin,Manager")]
   [ProducesResponseType(typeof(ApiResponse<List<UserResponse>>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> GetAll()
+  public async Task<IActionResult> GetAll([FromQuery] UserListQuery query, CancellationToken ct)
   {
-    var users = await _userService.GetAllAsync();
-    return Ok(ApiResponse<List<UserResponse>>.Ok(users));
+    var users = await _userService.GetAllAsync(query, ct);
+    return Ok(ApiResponse<List<UserResponse>>.Ok(users.Items, users.ToMetadata()));
   }
 
   [HttpGet("me")]

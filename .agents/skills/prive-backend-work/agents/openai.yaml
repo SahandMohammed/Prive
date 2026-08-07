@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prive Backend Work"
+  short_description: "Apply Prive backend architecture conventions"
+  default_prompt: "Use $prive-backend-work to implement this Prive backend change."

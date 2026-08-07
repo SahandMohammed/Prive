@@ -15,6 +15,21 @@ export interface ApiError {
 export interface ApiSuccessEnvelope<T> {
   success: true
   data: T
+  meta?: PaginationMetadata
+}
+
+export interface PaginationMetadata {
+  page: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+  hasPreviousPage: boolean
+  hasNextPage: boolean
+}
+
+export interface PaginatedResponse<T> {
+  data: T
+  meta: PaginationMetadata
 }
 
 export interface ApiErrorEnvelope {

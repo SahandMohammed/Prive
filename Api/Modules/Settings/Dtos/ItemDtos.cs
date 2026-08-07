@@ -1,4 +1,15 @@
+using Api.Shared.Pagination;
+
 namespace Api.Modules.Settings;
+
+public sealed class ItemListQuery : PaginationRequest
+{
+    public string? Search { get; init; }
+    public ItemType? Type { get; init; }
+    public bool? IsActive { get; init; }
+    public string? SortBy { get; init; }
+    public string? SortDirection { get; init; }
+}
 
 public sealed record ItemDto(
     Guid Id,
@@ -12,6 +23,7 @@ public sealed record ItemDto(
     Guid BaseUnitOfMeasureId,
     string BaseUnitOfMeasureName,
     int? DurationMinutes,
+    bool TrackInventory,
     string? Description,
     bool IsActive,
     List<ItemUnitOfMeasureDto> AdditionalUnits
@@ -35,6 +47,7 @@ public sealed record CreateItemRequest(
     Guid CategoryId,
     Guid BaseUnitOfMeasureId,
     int? DurationMinutes,
+    bool TrackInventory,
     string? Description,
     List<CreateItemUnitRequest> AdditionalUnits
 );

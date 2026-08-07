@@ -38,7 +38,7 @@ export function VouchersPage() {
   // Fetch outstanding invoices for selected contact to support allocations
   const invoiceType = type === VoucherType.Receipt ? InvoiceType.SalesInvoice : InvoiceType.PurchaseInvoice
   const { data: invoices } = useInvoices(invoiceType)
-  const contactInvoices = invoices?.items.filter((i: InvoiceDto) => i.contactId === contactId)
+  const contactInvoices = invoices?.data.filter((i: InvoiceDto) => i.contactId === contactId)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

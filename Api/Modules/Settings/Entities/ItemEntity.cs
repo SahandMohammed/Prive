@@ -23,6 +23,7 @@ public sealed class ItemEntity
     public UnitOfMeasureEntity BaseUnitOfMeasure { get; set; } = null!;
     
     public int? DurationMinutes { get; set; }
+    public bool TrackInventory { get; set; }
     
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;

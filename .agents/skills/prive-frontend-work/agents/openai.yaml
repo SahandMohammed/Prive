@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prive Frontend Work"
+  short_description: "Apply Prive frontend architecture conventions"
+  default_prompt: "Use $prive-frontend-work to implement this Prive frontend change."
