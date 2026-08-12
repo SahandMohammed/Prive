@@ -4,11 +4,6 @@ using Api.Infrastructure.Errors;
 using Api.Infrastructure.Http;
 using Api.Infrastructure.OpenApi;
 using Api.Modules.Auth;
-using Api.Modules.Finance;
-using Api.Modules.Settings;
-using Api.Modules.Purchases;
-using Api.Modules.Inventory;
-using Api.Modules.Sales;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -229,12 +224,7 @@ try
 
   builder.Services
     .AddUserModule()
-    .AddAuthModule()
-    .AddFinanceModule()
-    .AddSettingsModule()
-    .AddPurchasesModule()
-    .AddInventoryModule()
-    .AddSalesModule();
+    .AddAuthModule();
 
   var app = builder.Build();
 
