@@ -221,6 +221,9 @@ try
       options.SubstituteApiVersionInUrl = true;
     });
 
+  // Provides the required fallback if no registered exception handler handles an exception.
+  // GlobalExceptionHandler handles application exceptions and preserves the API envelope.
+  builder.Services.AddProblemDetails();
   builder.Services.AddExceptionHandler<Api.Infrastructure.Errors.GlobalExceptionHandler>();
 
   builder.Services
