@@ -17,16 +17,13 @@ public sealed class AuthController : ControllerBase
   private const string RefreshTokenCookieName = "refreshToken";
   private readonly AuthService _authService;
   private readonly JwtOptions _jwt;
-  private readonly IWebHostEnvironment _environment;
 
   public AuthController(
     AuthService authService,
-    IOptions<JwtOptions> jwt,
-    IWebHostEnvironment environment)
+    IOptions<JwtOptions> jwt)
   {
     _authService = authService;
     _jwt = jwt.Value;
-    _environment = environment;
   }
 
   [HttpPost("login")]
@@ -93,7 +90,9 @@ public sealed class AuthController : ControllerBase
   private CookieOptions CookieOptions() => new()
   {
     HttpOnly = true,
-    Secure = !_environment.IsDevelopment(),
+    // Browsers require Secure whenever SameSite=None is used. The configured
+    // client uses the HTTPS API endpoint in development and production.
+    Secure = true,
     SameSite = SameSiteMode.None,
     Path = "/",
     IsEssential = true

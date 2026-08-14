@@ -2,6 +2,8 @@ import { registerSessionHandlers, setAccessToken } from '@/lib/apiClient'
 import { useAuthSessionStore } from './stores/auth-session.store'
 import { authApi } from './api/auth.api'
 
+let restoreSessionPromise: Promise<void> | null = null
+
 // ---------------------------------------------------------------------------
 // initAuthSession
 // ---------------------------------------------------------------------------
@@ -36,13 +38,28 @@ export function initAuthSession(): void {
 // error — the user genuinely isn't logged in. Nothing to do.
 
 export async function tryRestoreSession(): Promise<void> {
-  try {
-    const data = await authApi.refresh()
-    useAuthSessionStore
-      .getState()
-      .setSession(data.accessToken, data.accessTokenExpiresAtUtc, data.mustChangePassword)
-  } catch {
-    // No valid cookie — not an error condition. The user will see /login.
-    setAccessToken(null)
+  if (restoreSessionPromise) {
+    return restoreSessionPromise
   }
+
+  const attempt = (async () => {
+    try {
+      const data = await authApi.refresh()
+      useAuthSessionStore
+        .getState()
+        .setSession(data.accessToken, data.accessTokenExpiresAtUtc, data.mustChangePassword)
+    } catch {
+      // No valid cookie — not an error condition. The user will see /login.
+      setAccessToken(null)
+    }
+  })()
+
+  restoreSessionPromise = attempt
+  void attempt.finally(() => {
+    if (restoreSessionPromise === attempt) {
+      restoreSessionPromise = null
+    }
+  })
+
+  return attempt
 }
