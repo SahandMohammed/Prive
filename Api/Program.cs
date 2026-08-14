@@ -1,6 +1,5 @@
 using Api.Modules.User;
 using Api.Infrastructure.Configuration;
-using Api.Infrastructure.Errors;
 using Api.Infrastructure.Http;
 using Api.Infrastructure.OpenApi;
 using Api.Modules.Auth;
@@ -222,6 +221,8 @@ try
       options.SubstituteApiVersionInUrl = true;
     });
 
+  builder.Services.AddExceptionHandler<Api.Infrastructure.Errors.GlobalExceptionHandler>();
+
   builder.Services
     .AddUserModule()
     .AddAuthModule();
@@ -247,7 +248,7 @@ try
   }
 
   app.UseSerilogRequestLogging();
-  app.UseMiddleware<GlobalExceptionMiddleware>();
+  app.UseExceptionHandler();
   app.UseCors(CorsOptions.PolicyName);
   app.UseHttpsRedirection();
   app.UseRateLimiter();

@@ -1,7 +1,7 @@
 # Exception Flow — Prive API
 
 > This document describes how exceptions travel through the application and how each
-> type is translated into an HTTP response. Read alongside [`ApiException.cs`](../Infrastructure/Http/ApiException.cs) and [`GlobalExceptionMiddleware.cs`](../Infrastructure/Errors/GlobalExceptionMiddleware.cs).
+> type is translated into an HTTP response. Read alongside [`ApiException.cs`](../Infrastructure/Http/ApiException.cs) and [`GlobalExceptionHandler.cs`](../Infrastructure/Errors/GlobalExceptionHandler.cs).
 
 ---
 
@@ -22,7 +22,7 @@ Exception  (BCL)
 ```
 
 **Rule:** Services throw derived exceptions. Controllers throw nothing (pure happy-path).
-The middleware handles all exception-to-response translation.
+The global exception handler translates all exceptions to responses.
 
 ---
 
@@ -32,9 +32,9 @@ The middleware handles all exception-to-response translation.
 flowchart TD
     A([HTTP Request]) --> MW_IN
 
-    subgraph MW ["GlobalExceptionMiddleware — wraps the entire pipeline"]
+    subgraph MW ["GlobalExceptionHandler — wraps the entire pipeline"]
       direction TB
-      MW_IN["try { await _next(context) }"] --> JWT
+      MW_IN["TryHandleAsync"] --> JWT
     end
 
     subgraph JWT ["JWT Bearer Middleware"]
@@ -66,7 +66,7 @@ flowchart TD
 
     EX1 & EX2 & EX3 & EX4 --> MW_CATCH
 
-    subgraph MW_CATCH ["GlobalExceptionMiddleware — catch blocks, in order"]
+    subgraph MW_CATCH ["GlobalExceptionHandler — TryHandleAsync"]
       direction TB
       C1{Exception type?}
       C1 -->|"OperationCanceledException\n& RequestAborted"| C_CANCEL["Log.Information\nNo response — client gone"]
@@ -121,7 +121,7 @@ flowchart TD
 
 ## Response Envelope (All Error Paths)
 
-Every error — whether from the middleware, JWT events, or validation factory — produces the
+Every error — whether from the exception handler, JWT events, or validation factory — produces the
 same envelope shape:
 
 ```json
@@ -176,7 +176,7 @@ public sealed class TooManyRequestsException(string code, string message)
 ```
 
 Then add the error code constant to [`ErrorCodes.cs`](../Infrastructure/Http/ErrorCodes.cs)
-under the appropriate nested class. The middleware handles everything else automatically —
+under the appropriate nested class. The exception handler handles everything else automatically —
 no changes needed there.
 
 ---

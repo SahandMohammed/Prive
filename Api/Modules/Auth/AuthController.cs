@@ -45,11 +45,8 @@ public sealed class AuthController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
   public async Task<IActionResult> Refresh()
   {
-    var refreshToken = Request.Cookies[RefreshTokenCookieName];
-    if (string.IsNullOrEmpty(refreshToken))
-    {
-      return Unauthorized(ApiResponse.Fail(ErrorCodes.Auth.NoRefreshToken, "No refresh token provided."));
-    }
+    var refreshToken = Request.Cookies[RefreshTokenCookieName]
+      ?? throw new UnauthorizedException(ErrorCodes.Auth.NoRefreshToken, "No refresh token provided.");
 
     var (response, newRefreshToken) = await _authService.RefreshAsync(refreshToken);
     SetRefreshTokenCookie(newRefreshToken);
@@ -77,11 +74,9 @@ public sealed class AuthController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
   public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
   {
-    var subject = User.FindFirstValue("sub");
-    if (!Guid.TryParse(subject, out var userId))
-    {
-      return Unauthorized(ApiResponse.Fail(ErrorCodes.Common.Unauthorized, "Invalid token subject."));
-    }
+    var userId = Guid.TryParse(User.FindFirstValue("sub"), out var id)
+      ? id
+      : throw new UnauthorizedException(ErrorCodes.Common.Unauthorized, "Invalid token subject.");
 
     await _authService.ChangePasswordAsync(userId, request);
     Response.Cookies.Delete(RefreshTokenCookieName, CookieOptions());

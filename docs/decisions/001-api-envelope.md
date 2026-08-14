@@ -1,19 +1,22 @@
 # ADR-001 — Standard API Envelope
 
-**Status:** Accepted, subject to code verification
+**Status:** Accepted
 
 ## Decision
 
-All normal API responses use a shared `ApiResponse<T>` / frontend `ApiEnvelope<T>` contract. The frontend API client unwraps successful data and converts failed envelopes to `ApiRequestError`.
+All API responses use the `ApiResponse<T>` envelope. The shape is:
 
-Expected service failures use typed exceptions and centralized error codes; a global exception handler maps them to HTTP status and the envelope.
+- **Success:** `{ "success": true, "data": T, "meta"?: PaginationMetadata }`
+- **Error:** `{ "success": false, "error": { "code": string, "message": string, "traceId"?: string, "details"?: ApiFieldError[] } }`
+
+`traceId` lives inside the `error` object, not at the envelope level. `details` is only present for `VALIDATION_FAILED` responses.
+
+Services throw typed `ApiException` subclasses with `ErrorCodes` constants. The `GlobalExceptionHandler` (`IExceptionHandler`) maps them to the correct HTTP status and envelope. Controllers never construct error responses manually.
+
+The frontend `apiClient` unwraps successful data and converts failed envelopes to `ApiRequestError`.
 
 ## Consequences
 
 - Controllers and services do not invent local response/error shapes.
 - Feature UI handles `ApiRequestError` through TanStack Query state.
 - Any schema change must be made in backend, frontend envelope types, API client, and `error-handling.md` together.
-
-## Open verification
-
-The prior documents disagree on whether `traceId` is top-level or inside `error`. Treat the implementation as definitive and update this ADR once verified.

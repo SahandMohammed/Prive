@@ -1,12 +1,12 @@
 # Prive — Agent Instructions
 
-Prive is an operational salon ERP. Its known stack is ASP.NET Core Web API (.NET 10), PostgreSQL/EF Core, and React + Vite + TypeScript.
+Prive is a salon management platform. Stack: ASP.NET Core Web API (.NET 10), PostgreSQL/EF Core, React + Vite + TypeScript.
 
 ## Working principles
 
 Prioritize simplicity, readability, explicit contracts, and consistency with the existing code. Inspect a similar implementation before adding a new pattern. Make the smallest complete change; do not redesign unrelated code or add dependencies without a clear need.
 
-The current code is the source of truth for what exists. Domain documents define intended business behaviour. ADRs define accepted technical or business decisions. Archived documents are historical only. The current task defines the requested outcome.
+The current code is the source of truth for what exists. The current task defines the requested outcome. Resolve a conflict by this order: current prompt, ADR, architecture document, code. If it remains unresolved, state the conflict and ask before changing behaviour.
 
 ## Context routing
 
@@ -18,19 +18,18 @@ Read only the material needed for the task:
 | Frontend work | `docs/architecture/frontend.md` |
 | Error/API contract work | `docs/architecture/error-handling.md`, `docs/decisions/001-api-envelope.md` |
 | Authentication | `docs/architecture/authentication.md`, `docs/decisions/002-authentication.md` |
-| Finance | `docs/domain/finance.md`, `docs/decisions/003-financial-ledger.md` |
-| Sales, purchases, inventory, warehouse | Matching file under `docs/domain/` |
-
-Never use `docs/archive/` as current guidance unless the task explicitly asks for historical context. Resolve a conflict by this order: current prompt, accepted ADR, domain document, architecture document, code, archive. If it remains unresolved, state the conflict and ask before changing business behaviour.
 
 ## Backend rules
 
-- Organize code by module/vertical slice under `Api/Modules/`.
-- Controllers own binding, authorization, service calls, and successful HTTP responses.
-- Services own business rules, persistence through `AppDbContext`, and explicit domain/API exceptions.
-- Use the centralized error codes; never introduce magic error-code strings.
-- Keep error-to-HTTP mapping in centralized exception handling, not services or controllers.
-- Keep authorization explicit at endpoints and follow the closest comparable module.
+- Organize code by module/vertical slice under `Api/Modules/<Module>/`.
+- Each module directory contains: controller, service, module registration, `DTOs/` (request/response records), and `Entities/` (entity classes + EF configurations in the same file).
+- Controllers own binding, authorization, service calls, and wrapping results in `ApiResponse<T>`. Controllers never contain business logic.
+- Services own business rules, persistence through `AppDbContext`, and throw typed exceptions from `Api.Infrastructure.Http` with codes from `ErrorCodes`.
+- **Never** create manual error responses in controllers — throw `NotFoundException`, `ConflictException`, `BadRequestException`, `UnauthorizedException`, or `ForbiddenException` and the `GlobalExceptionHandler` formats them automatically.
+- Use the centralized `ErrorCodes` class; never use inline error-code strings.
+- Use the existing pagination infrastructure (`PaginationRequest`, `PagedResult<T>`, `ToPagedResultAsync()`, `PaginationMetadata`) for collection endpoints.
+- Register new modules via an extension method in `<Module>Module.cs` and call it in `Program.cs`.
+- Add new `DbSet<T>` properties to `AppDbContext.cs` when persisting new entities.
 
 ## Frontend rules
 
@@ -44,8 +43,8 @@ Never use `docs/archive/` as current guidance unless the task explicitly asks fo
 
 ## Execution and verification
 
-For a non-trivial change: inspect comparable code, read the routed documents, identify affected contracts, implement the smallest complete solution, then build/test the affected projects. For frontend changes run the available typecheck/lint/tests; for backend changes build/test the solution and include a migration where the model changes. Review the final diff for unrelated edits.
+For a non-trivial change: inspect comparable code (Auth or User module), read the routed documents, identify affected contracts, implement the smallest complete solution, then build/test. For backend changes run `dotnet build` and include a migration where the model changes. Review the final diff for unrelated edits.
 
 ## Packaged workflows
 
-If the project installs `.agents/skills/`, use the matching skill for a new module, an extension to an existing module, backend-only work, or frontend-only work. Those workflows complement these rules; they do not override accepted ADRs or the current task.
+If the project installs `.agents/skills/`, use the matching skill for a new module, an extension to an existing module, backend-only work, or frontend-only work. Those workflows complement these rules.

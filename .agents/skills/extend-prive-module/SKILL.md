@@ -5,11 +5,17 @@ description: Safely extend an existing Prive backend module and matching React f
 
 # Extend a Prive Module
 
-1. Read `AGENTS.md` and the routed architecture/domain/decision documents. Inspect the entire relevant module or feature, its tests, routes, contracts, and nearest analogous workflow before changing it.
-2. State the existing behaviour being preserved, the requested delta, affected API/database/UI contracts, and whether data migration/backfill is required. Escalate conflicts between code and current documentation instead of guessing.
-3. Preserve module ownership and public contracts. Extend existing DTO/API/query-key/form patterns rather than creating parallel paths. Keep compatibility deliberately; identify any breaking API or persisted-data change before making it.
-4. Put business rules and expected exceptions in the service. Add or update centralized error codes. Keep controllers, pure feature API calls, Query hooks, and UI error states aligned with the standard envelope.
-5. Add a migration for schema changes and safe handling for existing records when applicable. Update the routed domain document or ADR only when the enduring contract changes.
-6. Run focused tests plus affected build/typecheck/lint commands. Validate old and new paths, authorization, validation failures, and cache invalidation.
+1. Read `AGENTS.md` and `docs/architecture/backend.md`. Inspect the **entire** module being extended — its entity, configuration, DTOs, service, controller, and module registration.
+2. State the existing behaviour being preserved, the requested change, and whether migration/backfill is needed. Escalate conflicts between code and documentation instead of guessing.
+3. Follow the module's established patterns exactly:
+   - Add new properties to the existing entity class and update its `IEntityTypeConfiguration`.
+   - Add/update request/response records in the existing `DTOs/<Name>Dtos.cs` — do not create a second DTO file.
+   - Add new error codes to the existing `ErrorCodes.<Module>` nested class.
+   - Add new service methods that throw typed exceptions with `ErrorCodes` constants.
+   - Add controller endpoints wrapped in `ApiResponse<T>` with proper `[Authorize]` and `[ProducesResponseType]`.
+4. Use existing infrastructure — do not duplicate or reinvent:
+   - `ApiResponse<T>.Ok()`, typed exceptions, `ErrorCodes`, pagination utilities.
+5. Add a migration for schema changes: `dotnet ef migrations add <MigrationName>`.
+6. Verify: `dotnet build` must pass with 0 errors, 0 warnings.
 
-Report compatibility decisions, migration implications, verification, and follow-up work that was intentionally deferred.
+Report compatibility decisions, migration implications, and verification results.
