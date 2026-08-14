@@ -88,6 +88,18 @@ export function Sidebar() {
           <SubNavItem to="/finance/transfers">Internal Transfer</SubNavItem>
         </NavGroup>
 
+        <NavGroup label="Inventory" icon={<ShoppingBagIcon className="w-4 h-4" />}>
+          <SubNavItem to="/inventory">Stock Overview</SubNavItem>
+          <SubNavItem to="/inventory/products">Products</SubNavItem>
+          <SubNavItem to="/inventory/categories">Categories</SubNavItem>
+          <SubNavItem to="/inventory/units">Units</SubNavItem>
+          <SubNavItem to="/inventory/warehouses">Warehouses</SubNavItem>
+          <SubNavItem to="/inventory/opening-stock">Opening Stock</SubNavItem>
+          <SubNavItem to="/inventory/adjustments">Adjustments</SubNavItem>
+          <SubNavItem to="/inventory/transfers">Transfers</SubNavItem>
+          <SubNavItem to="/inventory/ledger">Stock Ledger</SubNavItem>
+        </NavGroup>
+
         {/* Settings Module */}
         <NavGroup label="Settings" icon={<Settings className="w-4 h-4" />}>
           <SubNavItem to="/settings/business">Business Settings</SubNavItem>

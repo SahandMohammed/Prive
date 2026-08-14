@@ -34,6 +34,7 @@ import {
   SuppliersPage,
 } from '@/features/purchases'
 import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
+import { AdjustmentDocumentPage, AdjustmentsListPage, InventoryOverviewPage, MovementHistoryPage, OpeningStockDocumentPage, OpeningStockListPage, ProductsPage, TransferDocumentPage, TransfersListPage, CategoriesPage, UnitsPage, WarehousesPage as InventoryWarehousesPage } from '@/features/inventory'
 import { BranchesPage, BusinessSettingsPage as BaseBusinessSettingsPage, CurrenciesPage as BaseCurrenciesPage } from '@/features/business'
 
 // ---------------------------------------------------------------------------
@@ -105,6 +106,21 @@ export const router = createBrowserRouter([
           { path: '/settings/items', element: <ItemsPage /> },
           { path: '/settings/items/new', element: <CreateItemPage /> },
           { path: '/settings/warehouses', element: <WarehousesPage /> },
+          { path: '/inventory', element: <InventoryOverviewPage /> },
+          { path: '/inventory/opening-stock', element: <OpeningStockListPage /> },
+          { path: '/inventory/opening-stock/new', element: <OpeningStockDocumentPage /> },
+          { path: '/inventory/opening-stock/:id', element: <OpeningStockDocumentPage /> },
+          { path: '/inventory/adjustments', element: <AdjustmentsListPage /> },
+          { path: '/inventory/adjustments/new', element: <AdjustmentDocumentPage /> },
+          { path: '/inventory/adjustments/:id', element: <AdjustmentDocumentPage /> },
+          { path: '/inventory/transfers', element: <TransfersListPage /> },
+          { path: '/inventory/transfers/new', element: <TransferDocumentPage /> },
+          { path: '/inventory/transfers/:id', element: <TransferDocumentPage /> },
+          { path: '/inventory/ledger', element: <MovementHistoryPage /> },
+          { path: '/inventory/products', element: <ProductsPage /> },
+          { path: '/inventory/categories', element: <CategoriesPage /> },
+          { path: '/inventory/units', element: <UnitsPage /> },
+          { path: '/inventory/warehouses', element: <InventoryWarehousesPage /> },
         ],
       },
     ],

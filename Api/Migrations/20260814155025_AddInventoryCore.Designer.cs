@@ -3,6 +3,7 @@ using System;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260814155025_AddInventoryCore")]
+    partial class AddInventoryCore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -368,93 +371,6 @@ namespace api.Migrations
                     b.ToTable("currencies", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Modules.Inventory.OpeningStockDocumentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BranchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("DocumentDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("DocumentNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("PostedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("DocumentNumber")
-                        .IsUnique();
-
-                    b.HasIndex("WarehouseId");
-
-                    b.HasIndex("DocumentDate", "Status");
-
-                    b.ToTable("opening_stock_documents", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.OpeningStockLineEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("OpeningStockDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("UnitCostBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("OpeningStockDocumentId", "ProductId")
-                        .IsUnique();
-
-                    b.ToTable("opening_stock_lines", (string)null);
-                });
-
             modelBuilder.Entity("Api.Modules.Inventory.ProductCategoryEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -538,98 +454,6 @@ namespace api.Migrations
                     b.ToTable("products", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Modules.Inventory.StockAdjustmentDocumentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BranchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("DocumentDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("DocumentNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("PostedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("DocumentNumber")
-                        .IsUnique();
-
-                    b.HasIndex("WarehouseId");
-
-                    b.HasIndex("DocumentDate", "Status");
-
-                    b.ToTable("stock_adjustment_documents", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.StockAdjustmentLineEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ActualQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("StockAdjustmentDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("SystemQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("StockAdjustmentDocumentId", "ProductId")
-                        .IsUnique();
-
-                    b.ToTable("stock_adjustment_lines", (string)null);
-                });
-
             modelBuilder.Entity("Api.Modules.Inventory.StockMovementEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -645,12 +469,6 @@ namespace api.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid?>("OpeningStockDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("OpeningStockLineId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("PerformedByUserId")
                         .HasColumnType("uuid");
@@ -670,12 +488,6 @@ namespace api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("StockAdjustmentDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("StockAdjustmentLineId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("TransferId")
                         .HasColumnType("uuid");
 
@@ -691,31 +503,13 @@ namespace api.Migrations
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("WarehouseTransferDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("WarehouseTransferLineId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("OpeningStockDocumentId");
-
-                    b.HasIndex("OpeningStockLineId");
-
                     b.HasIndex("PerformedByUserId");
-
-                    b.HasIndex("StockAdjustmentDocumentId");
-
-                    b.HasIndex("StockAdjustmentLineId");
 
                     b.HasIndex("TransferId");
 
                     b.HasIndex("WarehouseId");
-
-                    b.HasIndex("WarehouseTransferDocumentId");
-
-                    b.HasIndex("WarehouseTransferLineId");
 
                     b.HasIndex("ProductId", "WarehouseId", "MovementDate");
 
@@ -779,98 +573,6 @@ namespace api.Migrations
                         .IsUnique();
 
                     b.ToTable("warehouses", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.WarehouseTransferDocumentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BranchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("DestinationWarehouseId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("DocumentDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("DocumentNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("PostedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("SourceWarehouseId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("DestinationWarehouseId");
-
-                    b.HasIndex("DocumentNumber")
-                        .IsUnique();
-
-                    b.HasIndex("SourceWarehouseId");
-
-                    b.HasIndex("DocumentDate", "Status");
-
-                    b.ToTable("warehouse_transfer_documents", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.WarehouseTransferLineEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("AvailableSourceQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("WarehouseTransferDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("WarehouseTransferDocumentId", "ProductId")
-                        .IsUnique();
-
-                    b.ToTable("warehouse_transfer_lines", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.User.UserEntity", b =>
@@ -995,52 +697,6 @@ namespace api.Migrations
                     b.Navigation("BaseCurrency");
                 });
 
-            modelBuilder.Entity("Api.Modules.Inventory.OpeningStockDocumentEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.User.UserEntity", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.WarehouseEntity", "Warehouse")
-                        .WithMany()
-                        .HasForeignKey("WarehouseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Branch");
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("Warehouse");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.OpeningStockLineEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Inventory.OpeningStockDocumentEntity", "Document")
-                        .WithMany("Lines")
-                        .HasForeignKey("OpeningStockDocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.ProductEntity", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("Api.Modules.Inventory.ProductEntity", b =>
                 {
                     b.HasOne("Api.Modules.Inventory.ProductCategoryEntity", "Category")
@@ -1060,64 +716,8 @@ namespace api.Migrations
                     b.Navigation("UnitOfMeasure");
                 });
 
-            modelBuilder.Entity("Api.Modules.Inventory.StockAdjustmentDocumentEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.User.UserEntity", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.WarehouseEntity", "Warehouse")
-                        .WithMany()
-                        .HasForeignKey("WarehouseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Branch");
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("Warehouse");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.StockAdjustmentLineEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Inventory.ProductEntity", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.StockAdjustmentDocumentEntity", "Document")
-                        .WithMany("Lines")
-                        .HasForeignKey("StockAdjustmentDocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("Api.Modules.Inventory.StockMovementEntity", b =>
                 {
-                    b.HasOne("Api.Modules.Inventory.OpeningStockDocumentEntity", "OpeningStockDocument")
-                        .WithMany("Movements")
-                        .HasForeignKey("OpeningStockDocumentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Api.Modules.Inventory.OpeningStockLineEntity", "OpeningStockLine")
-                        .WithMany("Movements")
-                        .HasForeignKey("OpeningStockLineId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Api.Modules.User.UserEntity", "PerformedByUser")
                         .WithMany()
                         .HasForeignKey("PerformedByUserId")
@@ -1130,49 +730,17 @@ namespace api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Api.Modules.Inventory.StockAdjustmentDocumentEntity", "StockAdjustmentDocument")
-                        .WithMany("Movements")
-                        .HasForeignKey("StockAdjustmentDocumentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Api.Modules.Inventory.StockAdjustmentLineEntity", "StockAdjustmentLine")
-                        .WithMany("Movements")
-                        .HasForeignKey("StockAdjustmentLineId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Api.Modules.Inventory.WarehouseEntity", "Warehouse")
                         .WithMany("StockMovements")
                         .HasForeignKey("WarehouseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Api.Modules.Inventory.WarehouseTransferDocumentEntity", "WarehouseTransferDocument")
-                        .WithMany("Movements")
-                        .HasForeignKey("WarehouseTransferDocumentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Api.Modules.Inventory.WarehouseTransferLineEntity", "WarehouseTransferLine")
-                        .WithMany("Movements")
-                        .HasForeignKey("WarehouseTransferLineId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("OpeningStockDocument");
-
-                    b.Navigation("OpeningStockLine");
-
                     b.Navigation("PerformedByUser");
 
                     b.Navigation("Product");
 
-                    b.Navigation("StockAdjustmentDocument");
-
-                    b.Navigation("StockAdjustmentLine");
-
                     b.Navigation("Warehouse");
-
-                    b.Navigation("WarehouseTransferDocument");
-
-                    b.Navigation("WarehouseTransferLine");
                 });
 
             modelBuilder.Entity("Api.Modules.Inventory.WarehouseEntity", b =>
@@ -1184,60 +752,6 @@ namespace api.Migrations
                         .IsRequired();
 
                     b.Navigation("Branch");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.WarehouseTransferDocumentEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.User.UserEntity", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.WarehouseEntity", "DestinationWarehouse")
-                        .WithMany()
-                        .HasForeignKey("DestinationWarehouseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.WarehouseEntity", "SourceWarehouse")
-                        .WithMany()
-                        .HasForeignKey("SourceWarehouseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Branch");
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("DestinationWarehouse");
-
-                    b.Navigation("SourceWarehouse");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.WarehouseTransferLineEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Inventory.ProductEntity", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Inventory.WarehouseTransferDocumentEntity", "Document")
-                        .WithMany("Lines")
-                        .HasForeignKey("WarehouseTransferDocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("Api.Modules.Accounting.AccountEntity", b =>
@@ -1254,18 +768,6 @@ namespace api.Migrations
                     b.Navigation("ReversalJournals");
                 });
 
-            modelBuilder.Entity("Api.Modules.Inventory.OpeningStockDocumentEntity", b =>
-                {
-                    b.Navigation("Lines");
-
-                    b.Navigation("Movements");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.OpeningStockLineEntity", b =>
-                {
-                    b.Navigation("Movements");
-                });
-
             modelBuilder.Entity("Api.Modules.Inventory.ProductCategoryEntity", b =>
                 {
                     b.Navigation("Products");
@@ -1276,18 +778,6 @@ namespace api.Migrations
                     b.Navigation("StockMovements");
                 });
 
-            modelBuilder.Entity("Api.Modules.Inventory.StockAdjustmentDocumentEntity", b =>
-                {
-                    b.Navigation("Lines");
-
-                    b.Navigation("Movements");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.StockAdjustmentLineEntity", b =>
-                {
-                    b.Navigation("Movements");
-                });
-
             modelBuilder.Entity("Api.Modules.Inventory.UnitOfMeasureEntity", b =>
                 {
                     b.Navigation("Products");
@@ -1296,18 +786,6 @@ namespace api.Migrations
             modelBuilder.Entity("Api.Modules.Inventory.WarehouseEntity", b =>
                 {
                     b.Navigation("StockMovements");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.WarehouseTransferDocumentEntity", b =>
-                {
-                    b.Navigation("Lines");
-
-                    b.Navigation("Movements");
-                });
-
-            modelBuilder.Entity("Api.Modules.Inventory.WarehouseTransferLineEntity", b =>
-                {
-                    b.Navigation("Movements");
                 });
 #pragma warning restore 612, 618
         }

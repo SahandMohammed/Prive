@@ -73,6 +73,16 @@ public static class ErrorCodes
     public const string JournalTypeInvalid = "ACCOUNTING_JOURNAL_TYPE_INVALID";
   }
 
+  public static class Inventory
+  {
+    public const string CategoryNotFound = "INVENTORY_CATEGORY_NOT_FOUND"; public const string CategoryNameTaken = "INVENTORY_CATEGORY_NAME_TAKEN"; public const string CategoryInUse = "INVENTORY_CATEGORY_IN_USE"; public const string CategoryInvalid = "INVENTORY_CATEGORY_INVALID";
+    public const string UnitNotFound = "INVENTORY_UNIT_NOT_FOUND"; public const string UnitCodeTaken = "INVENTORY_UNIT_CODE_TAKEN"; public const string UnitInUse = "INVENTORY_UNIT_IN_USE"; public const string UnitInvalid = "INVENTORY_UNIT_INVALID";
+    public const string ProductNotFound = "INVENTORY_PRODUCT_NOT_FOUND"; public const string ProductHasHistory = "INVENTORY_PRODUCT_HAS_HISTORY"; public const string ProductNotStockable = "INVENTORY_PRODUCT_NOT_STOCKABLE"; public const string SkuTaken = "INVENTORY_SKU_TAKEN"; public const string BarcodeTaken = "INVENTORY_BARCODE_TAKEN";
+    public const string WarehouseNotFound = "INVENTORY_WAREHOUSE_NOT_FOUND"; public const string WarehouseCodeTaken = "INVENTORY_WAREHOUSE_CODE_TAKEN"; public const string WarehouseInactive = "INVENTORY_WAREHOUSE_INACTIVE"; public const string WarehouseHasStock = "INVENTORY_WAREHOUSE_HAS_STOCK"; public const string WarehouseHasHistory = "INVENTORY_WAREHOUSE_HAS_HISTORY"; public const string BranchInvalid = "INVENTORY_BRANCH_INVALID";
+    public const string InsufficientStock = "INVENTORY_INSUFFICIENT_STOCK"; public const string TransferSameWarehouse = "INVENTORY_TRANSFER_SAME_WAREHOUSE"; public const string UnitCostRequired = "INVENTORY_UNIT_COST_REQUIRED"; public const string DocumentLinesRequired = "INVENTORY_DOCUMENT_LINES_REQUIRED"; public const string DuplicateDocumentProduct = "INVENTORY_DUPLICATE_DOCUMENT_PRODUCT";
+    public const string DocumentNotFound = "INVENTORY_DOCUMENT_NOT_FOUND"; public const string DocumentNotDraft = "INVENTORY_DOCUMENT_NOT_DRAFT"; public const string DocumentNumberConflict = "INVENTORY_DOCUMENT_NUMBER_CONFLICT"; public const string AdjustmentReasonRequired = "INVENTORY_ADJUSTMENT_REASON_REQUIRED"; public const string WarehouseBranchMismatch = "INVENTORY_WAREHOUSE_BRANCH_MISMATCH";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";

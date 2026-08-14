@@ -4,6 +4,7 @@ using Api.Modules.Branch;
 using Api.Modules.Business;
 using Api.Modules.Currency;
 using Api.Modules.User;
+using Api.Modules.Inventory;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
@@ -18,6 +19,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<AccountEntity> Accounts => Set<AccountEntity>();
   public DbSet<JournalEntryEntity> JournalEntries => Set<JournalEntryEntity>();
   public DbSet<JournalLineEntity> JournalLines => Set<JournalLineEntity>();
+  public DbSet<ProductCategoryEntity> ProductCategories => Set<ProductCategoryEntity>();
+  public DbSet<UnitOfMeasureEntity> UnitsOfMeasure => Set<UnitOfMeasureEntity>();
+  public DbSet<ProductEntity> Products => Set<ProductEntity>();
+  public DbSet<WarehouseEntity> Warehouses => Set<WarehouseEntity>();
+  public DbSet<OpeningStockDocumentEntity> OpeningStockDocuments => Set<OpeningStockDocumentEntity>();
+  public DbSet<OpeningStockLineEntity> OpeningStockLines => Set<OpeningStockLineEntity>();
+  public DbSet<StockAdjustmentDocumentEntity> StockAdjustmentDocuments => Set<StockAdjustmentDocumentEntity>();
+  public DbSet<StockAdjustmentLineEntity> StockAdjustmentLines => Set<StockAdjustmentLineEntity>();
+  public DbSet<WarehouseTransferDocumentEntity> WarehouseTransferDocuments => Set<WarehouseTransferDocumentEntity>();
+  public DbSet<WarehouseTransferLineEntity> WarehouseTransferLines => Set<WarehouseTransferLineEntity>();
+  public DbSet<StockMovementEntity> StockMovements => Set<StockMovementEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
