@@ -168,7 +168,13 @@ rawClient.interceptors.response.use(
 
 async function unwrapEnvelope<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<ApiSuccessEnvelope<T>> {
   try {
-    const { data: envelope } = await promise
+    const { data } = await promise
+    const envelope = data as ApiEnvelope<T> | '' | null | undefined
+    // DELETE and other no-content endpoints intentionally return 204 rather
+    // than an envelope. Treat their empty successful response as void data.
+    if (envelope === '' || envelope === null || envelope === undefined) {
+      return { success: true, data: undefined as T }
+    }
     if (envelope.success) return envelope
     // Shouldn't reach here (Axios throws on non-2xx) but guard it anyway.
     throw new ApiRequestError(envelope.error, 200)

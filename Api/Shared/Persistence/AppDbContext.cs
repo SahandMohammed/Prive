@@ -1,4 +1,5 @@
 using Api.Modules.Auth;
+using Api.Modules.Accounting;
 using Api.Modules.Branch;
 using Api.Modules.Business;
 using Api.Modules.Currency;
@@ -14,6 +15,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<BusinessEntity> Businesses => Set<BusinessEntity>();
   public DbSet<BranchEntity> Branches => Set<BranchEntity>();
   public DbSet<CurrencyEntity> Currencies => Set<CurrencyEntity>();
+  public DbSet<AccountEntity> Accounts => Set<AccountEntity>();
+  public DbSet<JournalEntryEntity> JournalEntries => Set<JournalEntryEntity>();
+  public DbSet<JournalLineEntity> JournalLines => Set<JournalLineEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {

@@ -1,4 +1,8 @@
 export * from './pages/AccountingDashboard'
 export * from './pages/ChartOfAccountsPage'
 export * from './pages/JournalEntriesPage'
+export * from './pages/CreateJournalEntryPage'
 export * from './pages/CurrenciesPage'
+export * from './pages/GeneralLedgerPage'
+export * from './pages/TrialBalancePage'
+

@@ -15,7 +15,10 @@ import {
   AccountingDashboard, 
   ChartOfAccountsPage, 
   JournalEntriesPage, 
-  CurrenciesPage 
+  CreateJournalEntryPage,
+  CurrenciesPage,
+  GeneralLedgerPage,
+  TrialBalancePage,
 } from '@/features/accounting'
 import { 
   SalesDashboard, 
@@ -77,7 +80,10 @@ export const router = createBrowserRouter([
           { path: '/accounting', element: <AccountingDashboard /> },
           { path: '/accounting/chart', element: <ChartOfAccountsPage /> },
           { path: '/accounting/journal', element: <JournalEntriesPage /> },
+          { path: '/accounting/journal/new', element: <CreateJournalEntryPage /> },
           { path: '/accounting/currencies', element: <CurrenciesPage /> },
+          { path: '/accounting/ledger', element: <GeneralLedgerPage /> },
+          { path: '/accounting/trial-balance', element: <TrialBalancePage /> },
 
           // Sales
           { path: '/sales', element: <SalesDashboard /> },

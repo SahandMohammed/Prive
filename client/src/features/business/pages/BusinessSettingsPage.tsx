@@ -31,7 +31,7 @@ export function BusinessSettingsPage() {
 
   const currencies = currenciesQuery.data?.data ?? []
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{business ? 'Business profile' : 'Business setup'}</h1>
         <p className="mt-1 text-sm text-muted-foreground">

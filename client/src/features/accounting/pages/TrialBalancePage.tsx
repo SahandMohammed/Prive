@@ -1,0 +1,14 @@
+import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { useBranches } from '@/features/business'
+import { useTrialBalance } from '../hooks/useAccounting'
+
+export function TrialBalancePage() {
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [branchId, setBranchId] = useState('')
+  const branches = useBranches().data?.data.filter((branch) => branch.isActive) ?? []
+  const trial = useTrialBalance({ fromDate, toDate, branchId })
+  return <div className="space-y-6 p-6"><div><h1 className="text-3xl font-bold tracking-tight">Trial Balance</h1><p className="text-sm text-muted-foreground">Base-currency balances derived only from posted journal lines.</p></div><Card><CardContent className="flex flex-wrap gap-3 p-4"><Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="w-auto" /><Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="w-auto" /><select value={branchId} onChange={(event) => setBranchId(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm"><option value="">All branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} — {branch.name}</option>)}</select></CardContent></Card>{trial.isPending ? <p className="text-sm text-muted-foreground">Loading trial balance…</p> : trial.data ? <Card><CardHeader><CardTitle>Closing totals: Debit {trial.data.totalClosingDebit.toFixed(4)} · Credit {trial.data.totalClosingCredit.toFixed(4)}</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[1050px] text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Account</th><th className="p-2 text-right">Opening Dr</th><th className="p-2 text-right">Opening Cr</th><th className="p-2 text-right">Movement Dr</th><th className="p-2 text-right">Movement Cr</th><th className="p-2 text-right">Closing Dr</th><th className="p-2 text-right">Closing Cr</th></tr></thead><tbody>{trial.data.lines.map((line) => <tr key={line.accountId} className="border-b"><td className="p-2"><span className="font-mono text-xs text-muted-foreground">{line.accountCode}</span> {line.accountName}</td><td className="p-2 text-right font-mono">{line.openingDebit.toFixed(4)}</td><td className="p-2 text-right font-mono">{line.openingCredit.toFixed(4)}</td><td className="p-2 text-right font-mono">{line.debitMovement.toFixed(4)}</td><td className="p-2 text-right font-mono">{line.creditMovement.toFixed(4)}</td><td className="p-2 text-right font-mono">{line.closingDebit.toFixed(4)}</td><td className="p-2 text-right font-mono">{line.closingCredit.toFixed(4)}</td></tr>)}</tbody></table></CardContent></Card> : null}</div>
+}

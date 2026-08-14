@@ -1,5 +1,6 @@
 using Api.Modules.User;
 using Api.Modules.Currency;
+using Api.Modules.Accounting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,7 @@ public static class DbSeeder
     await db.Database.MigrateAsync();
 
     await SeedCurrenciesAsync(db);
+    await AccountingChartSeeder.SeedAsync(db);
 
     if (await db.Users.AnyAsync(u => u.Role == UserRole.SuperAdmin))
     {

@@ -76,6 +76,8 @@ export function Sidebar() {
         <NavGroup label="Accounting" icon={<BookOpenIcon className="w-4 h-4" />}>
           <SubNavItem to="/accounting/chart">Chart of Accounts</SubNavItem>
           <SubNavItem to="/accounting/journal">Journal Entries</SubNavItem>
+          <SubNavItem to="/accounting/ledger">General Ledger</SubNavItem>
+          <SubNavItem to="/accounting/trial-balance">Trial Balance</SubNavItem>
           <SubNavItem to="/accounting/currencies">Currencies</SubNavItem>
         </NavGroup>
 

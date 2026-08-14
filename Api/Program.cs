@@ -6,6 +6,7 @@ using Api.Infrastructure.Configuration;
 using Api.Infrastructure.Http;
 using Api.Infrastructure.OpenApi;
 using Api.Modules.Auth;
+using Api.Modules.Accounting;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -234,7 +235,8 @@ try
     .AddAuthModule()
     .AddBusinessModule()
     .AddBranchModule()
-    .AddCurrencyModule();
+    .AddCurrencyModule()
+    .AddAccountingModule();
 
   var app = builder.Build();
 
