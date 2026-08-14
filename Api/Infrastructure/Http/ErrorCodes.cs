@@ -26,6 +26,28 @@ public static class ErrorCodes
     public const string UsernameTaken = "USER_USERNAME_TAKEN";
   }
 
+  public static class Business
+  {
+    public const string NotConfigured = "BUSINESS_NOT_CONFIGURED";
+    public const string AlreadyConfigured = "BUSINESS_ALREADY_CONFIGURED";
+    public const string BaseCurrencyInvalid = "BUSINESS_BASE_CURRENCY_INVALID";
+  }
+
+  public static class Branch
+  {
+    public const string NotFound = "BRANCH_NOT_FOUND";
+    public const string CodeTaken = "BRANCH_CODE_TAKEN";
+    public const string MainBranchRequired = "BRANCH_MAIN_BRANCH_REQUIRED";
+    public const string MainBranchDeactivationNotAllowed = "BRANCH_MAIN_BRANCH_DEACTIVATION_NOT_ALLOWED";
+  }
+
+  public static class Currency
+  {
+    public const string NotFound = "CURRENCY_NOT_FOUND";
+    public const string CodeTaken = "CURRENCY_CODE_TAKEN";
+    public const string BaseCurrencyDeactivationNotAllowed = "CURRENCY_BASE_CURRENCY_DEACTIVATION_NOT_ALLOWED";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";
@@ -36,4 +58,3 @@ public static class ErrorCodes
     public const string ConcurrentOperation = "CONCURRENT_OPERATION";
   }
 }
-

@@ -94,7 +94,7 @@ public sealed class AuthController : ControllerBase
   {
     HttpOnly = true,
     Secure = !_environment.IsDevelopment(),
-    SameSite = SameSiteMode.Strict,
+    SameSite = SameSiteMode.None,
     Path = "/",
     IsEssential = true
   };

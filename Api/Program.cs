@@ -1,4 +1,7 @@
 using Api.Modules.User;
+using Api.Modules.Branch;
+using Api.Modules.Business;
+using Api.Modules.Currency;
 using Api.Infrastructure.Configuration;
 using Api.Infrastructure.Http;
 using Api.Infrastructure.OpenApi;
@@ -228,7 +231,10 @@ try
 
   builder.Services
     .AddUserModule()
-    .AddAuthModule();
+    .AddAuthModule()
+    .AddBusinessModule()
+    .AddBranchModule()
+    .AddCurrencyModule();
 
   var app = builder.Build();
 

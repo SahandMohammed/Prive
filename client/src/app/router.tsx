@@ -30,7 +30,8 @@ import {
   PurchaseReturnsPage,
   SuppliersPage,
 } from '@/features/purchases'
-import { ItemsPage, CreateItemPage, BusinessSettingsPage, WarehousesPage } from '@/features/settings'
+import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
+import { BranchesPage, BusinessSettingsPage as BaseBusinessSettingsPage, CurrenciesPage as BaseCurrenciesPage } from '@/features/business'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -92,7 +93,9 @@ export const router = createBrowserRouter([
           { path: '/purchases/suppliers', element: <SuppliersPage /> },
 
           // Settings
-          { path: '/settings/business', element: <BusinessSettingsPage /> },
+          { path: '/settings/business', element: <BaseBusinessSettingsPage /> },
+          { path: '/settings/branches', element: <BranchesPage /> },
+          { path: '/settings/currencies', element: <BaseCurrenciesPage /> },
           { path: '/settings/items', element: <ItemsPage /> },
           { path: '/settings/items/new', element: <CreateItemPage /> },
           { path: '/settings/warehouses', element: <WarehousesPage /> },

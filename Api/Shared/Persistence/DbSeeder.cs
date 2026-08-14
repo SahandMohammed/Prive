@@ -1,4 +1,5 @@
 using Api.Modules.User;
+using Api.Modules.Currency;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,9 +18,11 @@ public static class DbSeeder
 
     await db.Database.MigrateAsync();
 
+    await SeedCurrenciesAsync(db);
+
     if (await db.Users.AnyAsync(u => u.Role == UserRole.SuperAdmin))
     {
-      logger.LogInformation("SuperAdmin user already exists. Skipping seed.");
+      logger.LogInformation("SuperAdmin user already exists. Skipping user seed.");
       return;
     }
 
@@ -40,5 +43,24 @@ public static class DbSeeder
     logger.LogInformation(
       "SuperAdmin user seeded successfully. Username: {Username} — Please change the default password after first login.",
       SuperAdminUsername);
+  }
+
+  private static async Task SeedCurrenciesAsync(AppDbContext db)
+  {
+    var currencies = new[]
+    {
+      new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "د.ع", DecimalPlaces = 0 },
+      new CurrencyEntity { Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2 }
+    };
+
+    foreach (var currency in currencies)
+    {
+      if (!await db.Currencies.AnyAsync(existing => existing.Code == currency.Code))
+      {
+        db.Currencies.Add(currency);
+      }
+    }
+
+    await db.SaveChangesAsync();
   }
 }

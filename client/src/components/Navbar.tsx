@@ -1,6 +1,4 @@
-import React from 'react'
-
-const Navbar = (props: string) => {
+const Navbar = () => {
   return <div>{}</div>
 }
 
