@@ -8,6 +8,7 @@ using Api.Infrastructure.OpenApi;
 using Api.Modules.Auth;
 using Api.Modules.Accounting;
 using Api.Modules.Inventory;
+using Api.Modules.Contact;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -238,7 +239,8 @@ try
     .AddBranchModule()
     .AddCurrencyModule()
     .AddAccountingModule()
-    .AddInventoryModule();
+    .AddInventoryModule()
+    .AddContactModule();
 
   var app = builder.Build();
 

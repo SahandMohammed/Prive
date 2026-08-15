@@ -83,6 +83,12 @@ public static class ErrorCodes
     public const string DocumentNotFound = "INVENTORY_DOCUMENT_NOT_FOUND"; public const string DocumentNotDraft = "INVENTORY_DOCUMENT_NOT_DRAFT"; public const string DocumentNumberConflict = "INVENTORY_DOCUMENT_NUMBER_CONFLICT"; public const string AdjustmentReasonRequired = "INVENTORY_ADJUSTMENT_REASON_REQUIRED"; public const string WarehouseBranchMismatch = "INVENTORY_WAREHOUSE_BRANCH_MISMATCH";
   }
 
+  public static class Contact
+  {
+    public const string NotFound = "CONTACT_NOT_FOUND";
+    public const string RoleRequired = "CONTACT_ROLE_REQUIRED";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";

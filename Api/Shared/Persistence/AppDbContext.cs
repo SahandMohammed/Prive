@@ -5,6 +5,7 @@ using Api.Modules.Business;
 using Api.Modules.Currency;
 using Api.Modules.User;
 using Api.Modules.Inventory;
+using Api.Modules.Contact;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
@@ -30,6 +31,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<WarehouseTransferDocumentEntity> WarehouseTransferDocuments => Set<WarehouseTransferDocumentEntity>();
   public DbSet<WarehouseTransferLineEntity> WarehouseTransferLines => Set<WarehouseTransferLineEntity>();
   public DbSet<StockMovementEntity> StockMovements => Set<StockMovementEntity>();
+  public DbSet<ContactEntity> Contacts => Set<ContactEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {

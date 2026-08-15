@@ -50,6 +50,10 @@ export function Sidebar() {
           Dashboard
         </NavItem>
 
+        <NavItem to="/contacts" icon={<UsersIcon className="w-4 h-4" />}>
+          Contacts
+        </NavItem>
+
         <NavItem to="/wallets" icon={<WalletIcon className="w-4 h-4" />}>
           Wallets
         </NavItem>
@@ -69,7 +73,6 @@ export function Sidebar() {
         <NavGroup label="Purchases" icon={<ShoppingCartIcon className="w-4 h-4" />}>
           <SubNavItem to="/purchases/invoices">Purchase Invoice</SubNavItem>
           <SubNavItem to="/purchases/returns">Purchase Return</SubNavItem>
-          <SubNavItem to="/purchases/suppliers">Suppliers</SubNavItem>
         </NavGroup>
 
         {/* Accounting Module */}

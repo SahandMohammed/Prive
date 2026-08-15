@@ -31,11 +31,11 @@ import {
   PurchasesDashboard, 
   PurchaseInvoicesPage, 
   PurchaseReturnsPage,
-  SuppliersPage,
 } from '@/features/purchases'
 import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
 import { AdjustmentDocumentPage, AdjustmentsListPage, InventoryOverviewPage, MovementHistoryPage, OpeningStockDocumentPage, OpeningStockListPage, ProductsPage, TransferDocumentPage, TransfersListPage, CategoriesPage, UnitsPage, WarehousesPage as InventoryWarehousesPage } from '@/features/inventory'
 import { BranchesPage, BusinessSettingsPage as BaseBusinessSettingsPage, CurrenciesPage as BaseCurrenciesPage } from '@/features/business'
+import { ContactsPage } from '@/features/contacts'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -70,6 +70,7 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
+          { path: '/contacts', element: <ContactsPage /> },
           
           // Finance
           { path: '/finance', element: <FinanceDashboard /> },
@@ -97,7 +98,7 @@ export const router = createBrowserRouter([
           { path: '/purchases', element: <PurchasesDashboard /> },
           { path: '/purchases/invoices', element: <PurchaseInvoicesPage /> },
           { path: '/purchases/returns', element: <PurchaseReturnsPage /> },
-          { path: '/purchases/suppliers', element: <SuppliersPage /> },
+          { path: '/purchases/suppliers', element: <Navigate to="/contacts?role=supplier" replace /> },
 
           // Settings
           { path: '/settings/business', element: <BaseBusinessSettingsPage /> },
