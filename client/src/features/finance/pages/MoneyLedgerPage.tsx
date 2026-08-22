@@ -28,7 +28,7 @@ export function MoneyLedgerPage() {
       </header>
       <div className="grid gap-3 md:grid-cols-5">
         <Select value={moneyAccountId} onChange={(event) => { setAccount(event.target.value); setPage(1) }}><option value="">All accessible accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</Select>
-        <Select value={sourceType} onChange={(event) => { setSource(event.target.value); setPage(1) }}><option value="">All sources</option><option value="0">Opening balance</option><option value="1">Money transfer</option><option value="2">Supplier payment</option><option value="3">Customer receipt</option></Select>
+        <Select value={sourceType} onChange={(event) => { setSource(event.target.value); setPage(1) }}><option value="">All sources</option><option value="0">Opening balance</option><option value="1">Money transfer</option><option value="2">Supplier payment</option><option value="3">Customer receipt</option><option value="4">POS Sale</option></Select>
         <Input placeholder="Document number" value={documentNumber} onChange={(event) => { setDocument(event.target.value); setPage(1) }} />
         <Input type="date" value={fromDate} onChange={(event) => { setFrom(event.target.value); setPage(1) }} />
         <Input type="date" value={toDate} onChange={(event) => { setTo(event.target.value); setPage(1) }} />
@@ -60,6 +60,8 @@ export function MoneyLedgerPage() {
 function SourceLink({ entry }: { entry: MoneyLedgerEntry }) {
   if (entry.sourceType === MoneyLedgerSourceType.CustomerReceipt)
     return <Link className="font-mono text-xs text-[#d85430]" to={`/finance/customer-receipts/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
+  if (entry.sourceType === MoneyLedgerSourceType.PosSale)
+    return <Link className="font-mono text-xs text-[#d85430]" to={`/pos/sales/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
   return <p className="font-mono text-xs text-primary">{entry.documentNumber}</p>
 }
 
@@ -68,6 +70,7 @@ const sourceLabel: Record<MoneyLedgerSourceType, string> = {
   [MoneyLedgerSourceType.MoneyTransfer]: 'Money transfer',
   [MoneyLedgerSourceType.SupplierPayment]: 'Supplier payment',
   [MoneyLedgerSourceType.CustomerReceipt]: 'Customer receipt',
+  [MoneyLedgerSourceType.PosSale]: 'POS Sale',
 }
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className="h-9 rounded-md border bg-background px-3 text-sm" {...props} /> }
 function Message({ text }: { text: string }) { return <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">{text}</TableCell></TableRow> }

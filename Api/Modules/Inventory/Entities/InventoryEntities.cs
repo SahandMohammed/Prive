@@ -193,5 +193,5 @@ public sealed class StockMovementEntity
 
 public enum ProductPurpose { Resale, Consumable, Both }
 public enum StockMovementType { OpeningStock, PositiveAdjustment, NegativeAdjustment, TransferOut, TransferIn, Purchase, Sale }
-public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer, Purchase, SalesInvoice }
+public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer, Purchase, SalesInvoice, PosSale }
 public enum InventoryDocumentStatus { Draft, Posted }

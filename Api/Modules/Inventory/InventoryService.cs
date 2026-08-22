@@ -1486,6 +1486,7 @@ public sealed class InventoryService
       .Include(x => x.WarehouseTransferDocument)
       .Include(x => x.PurchaseInvoice)
       .Include(x => x.SalesInvoice)
+      .ThenInclude(x => x!.PosSale)
       .AsQueryable();
 
     if (query.ProductId is not null)
@@ -1551,7 +1552,13 @@ public sealed class InventoryService
     if (query.DocumentType is InventoryDocumentType.SalesInvoice)
     {
       movementsQuery = movementsQuery.Where(
-        x => x.SalesInvoiceId != null);
+        x => x.SalesInvoiceId != null && x.SalesInvoice!.PosSale == null);
+    }
+
+    if (query.DocumentType is InventoryDocumentType.PosSale)
+    {
+      movementsQuery = movementsQuery.Where(
+        x => x.SalesInvoiceId != null && x.SalesInvoice!.PosSale != null);
     }
 
     if (!string.IsNullOrWhiteSpace(query.DocumentNumber))
@@ -2265,8 +2272,10 @@ public sealed class InventoryService
             ? InventoryDocumentType.Transfer
             : movement.PurchaseInvoiceId is not null
               ? InventoryDocumentType.Purchase
-              : movement.SalesInvoiceId is not null
-                ? InventoryDocumentType.SalesInvoice
+              : movement.SalesInvoice?.PosSale is not null
+                ? InventoryDocumentType.PosSale
+                : movement.SalesInvoiceId is not null
+                  ? InventoryDocumentType.SalesInvoice
               : null;
 
     var documentId =
@@ -2274,6 +2283,7 @@ public sealed class InventoryService
       movement.StockAdjustmentDocumentId ??
       movement.WarehouseTransferDocumentId ??
       movement.PurchaseInvoiceId ??
+      movement.SalesInvoice?.PosSale?.Id ??
       movement.SalesInvoiceId;
 
     var lineId =

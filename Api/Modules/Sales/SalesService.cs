@@ -2,6 +2,7 @@ using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
+using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -262,14 +263,51 @@ public sealed class SalesService
         line.UnitOfMeasureId,
         line.Description,
         line.Quantity,
-        line.UnitPrice)).ToList());
+        line.UnitPrice,
+        line.ProfessionalUserId)).ToList());
 
     var validation = await ValidateInvoiceAsync(request, true, ct);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
     Recalculate(invoice);
 
+    await PreparePostingEffectsAsync(invoice, validation, userId, null, "Sales invoice", ct);
+    await SaveInvoiceMutationAsync(ct);
+    return await GetInvoiceAsync(id, ct);
+  }
+
+  internal async Task<SalesInvoiceEntity> PrepareImmediateSaleAsync(
+    SalesInvoiceDraftRequest request,
+    string documentNumber,
+    Guid userId,
+    IReadOnlyCollection<JournalLineEntity> settlementLines,
+    CancellationToken ct)
+  {
+    var validation = await ValidateInvoiceAsync(request, false, ct);
+    var invoice = new SalesInvoiceEntity
+    {
+      DocumentNumber = documentNumber,
+      CreatedByUserId = userId
+    };
+    Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
+    ReplaceLines(invoice, request.Lines);
+    Recalculate(invoice);
+    _db.SalesInvoices.Add(invoice);
+
+    await PreparePostingEffectsAsync(invoice, validation, userId, settlementLines, "POS sale", ct);
+    return invoice;
+  }
+
+  private async Task PreparePostingEffectsAsync(
+    SalesInvoiceEntity invoice,
+    InvoiceValidation validation,
+    Guid userId,
+    IReadOnlyCollection<JournalLineEntity>? settlementLines,
+    string journalDescription,
+    CancellationToken ct)
+  {
     var productLines = invoice.Lines.Where(line => line.LineType == SalesLineType.Product).ToList();
-    var accountCodes = new List<string> { _options.AccountsReceivableAccountCode };
+    var accountCodes = new List<string>();
+    if (settlementLines is null) accountCodes.Add(_options.AccountsReceivableAccountCode);
     if (productLines.Count > 0)
     {
       accountCodes.Add(_options.ProductRevenueAccountCode);
@@ -278,7 +316,11 @@ public sealed class SalesService
     }
     var accounts = await _db.Accounts.Where(account => accountCodes.Contains(account.Code))
       .ToDictionaryAsync(account => account.Code, ct);
-    var receivableAccount = GetPostingAccount(accounts, _options.AccountsReceivableAccountCode, AccountClassification.Asset, "accounts receivable");
+
+    AccountEntity? receivableAccount = null;
+    if (settlementLines is null)
+      receivableAccount = GetPostingAccount(accounts, _options.AccountsReceivableAccountCode,
+        AccountClassification.Asset, "accounts receivable");
 
     AccountEntity? productRevenueAccount = null;
     AccountEntity? costOfGoodsSoldAccount = null;
@@ -299,18 +341,18 @@ public sealed class SalesService
     }
 
     var postedAt = DateTime.UtcNow;
-    var journalLines = new List<JournalLineEntity>
-    {
-      new()
+    var journalLines = settlementLines?.ToList() ??
+    [
+      new JournalLineEntity
       {
-        AccountId = receivableAccount.Id,
+        AccountId = receivableAccount!.Id,
         Description = $"Receivable from customer on {invoice.DocumentNumber}",
         CurrencyId = invoice.CurrencyId,
         ExchangeRate = invoice.ExchangeRate,
         OriginalDebitAmount = invoice.Total,
         DebitBaseAmount = invoice.BaseTotal
       }
-    };
+    ];
 
     foreach (var group in invoice.Lines.Where(line => line.LineType == SalesLineType.Service)
       .GroupBy(line => validation.Services[line.ServiceId!.Value].RevenueAccountId))
@@ -367,7 +409,7 @@ public sealed class SalesService
     {
       EntryDate = invoice.InvoiceDate,
       Reference = invoice.DocumentNumber,
-      Description = $"Sales invoice {invoice.DocumentNumber}",
+      Description = $"{journalDescription} {invoice.DocumentNumber}",
       BranchId = invoice.BranchId,
       Status = JournalEntryStatus.Posted,
       Type = JournalEntryType.Standard,
@@ -403,8 +445,6 @@ public sealed class SalesService
     invoice.Status = SalesInvoiceStatus.Posted;
     invoice.PostedAtUtc = postedAt;
     invoice.UpdatedAtUtc = postedAt;
-    await SaveInvoiceMutationAsync(ct);
-    return await GetInvoiceAsync(id, ct);
   }
 
   private async Task ValidateServiceAsync(ServiceRequest request, Guid? currentCategoryId, CancellationToken ct)
@@ -444,7 +484,7 @@ public sealed class SalesService
       var validProductLine = line.LineType == SalesLineType.Product
         && line.ProductId is not null && line.ProductId != Guid.Empty
         && line.UnitOfMeasureId is not null && line.UnitOfMeasureId != Guid.Empty
-        && line.ServiceId is null;
+        && line.ServiceId is null && line.ProfessionalUserId is null;
       if (!validServiceLine && !validProductLine)
         throw new BadRequestException(ErrorCodes.Sales.LineTypeInvalid, "Each sales line must reference exactly one Service or Product.");
     }
@@ -504,6 +544,17 @@ public sealed class SalesService
       || service.RevenueAccount.Classification != AccountClassification.Revenue))
       throw new BadRequestException(ErrorCodes.Sales.ServiceRevenueAccountInvalid, "Every Service requires an active Revenue posting account.");
 
+    var professionalIds = request.Lines.Where(line => line.ProfessionalUserId is not null)
+      .Select(line => line.ProfessionalUserId!.Value).Distinct().ToList();
+    if (professionalIds.Count > 0)
+    {
+      var validProfessionals = await _db.Users.AsNoTracking().CountAsync(user =>
+        professionalIds.Contains(user.Id) && user.IsActive && user.Role == UserRole.Professional, ct);
+      if (validProfessionals != professionalIds.Count)
+        throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
+          "Every assigned Professional must be an active Professional user.");
+    }
+
     var products = await _db.Products.AsNoTracking()
       .Where(product => productIds.Contains(product.Id)
         && product.IsActive
@@ -550,7 +601,8 @@ public sealed class SalesService
         UnitOfMeasureId = request.UnitOfMeasureId,
         Description = Trim(request.Description),
         Quantity = request.Quantity,
-        UnitPrice = request.UnitPrice
+        UnitPrice = request.UnitPrice,
+        ProfessionalUserId = request.ProfessionalUserId
       };
       invoice.Lines.Add(line);
       _db.SalesInvoiceLines.Add(line);
@@ -636,6 +688,7 @@ public sealed class SalesService
   private async Task<string> NextDocumentNumberAsync(CancellationToken ct)
   {
     var last = await _db.SalesInvoices.Select(invoice => invoice.DocumentNumber)
+      .Where(number => number.StartsWith("SI-"))
       .OrderByDescending(number => number)
       .FirstOrDefaultAsync(ct);
     var next = 1;
@@ -678,11 +731,13 @@ public sealed class SalesService
     .Include(invoice => invoice.Currency)
     .Include(invoice => invoice.BaseCurrency)
     .Include(invoice => invoice.CreatedByUser)
+    .Include(invoice => invoice.PosSale)
     .Include(invoice => invoice.Movements)
     .Include(invoice => invoice.ReceiptAllocations).ThenInclude(allocation => allocation.CustomerReceipt)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Product)
-    .Include(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure);
+    .Include(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
+    .Include(invoice => invoice.Lines).ThenInclude(line => line.ProfessionalUser);
 
   private static SalesInvoiceResponse ToInvoiceResponse(SalesInvoiceEntity invoice)
   {
@@ -698,13 +753,15 @@ public sealed class SalesService
         allocation.BaseAmount,
         allocation.CustomerReceipt.JournalEntryId))
       .ToList();
-    var receivedAmount = receipts.Sum(receipt => receipt.Amount);
-    var outstandingAmount = Math.Max(invoice.Total - receivedAmount, 0);
-    var paymentStatus = receivedAmount <= 0
-      ? SalesInvoicePaymentStatus.Unpaid
-      : outstandingAmount <= 0
-        ? SalesInvoicePaymentStatus.Paid
-        : SalesInvoicePaymentStatus.PartiallyPaid;
+    var receivedAmount = invoice.PosSale is null ? receipts.Sum(receipt => receipt.Amount) : invoice.Total;
+    var outstandingAmount = invoice.PosSale is null ? Math.Max(invoice.Total - receivedAmount, 0) : 0;
+    var paymentStatus = invoice.PosSale is not null
+      ? SalesInvoicePaymentStatus.Paid
+      : receivedAmount <= 0
+        ? SalesInvoicePaymentStatus.Unpaid
+        : outstandingAmount <= 0
+          ? SalesInvoicePaymentStatus.Paid
+          : SalesInvoicePaymentStatus.PartiallyPaid;
 
     return new SalesInvoiceResponse(
     invoice.Id,
@@ -749,6 +806,8 @@ public sealed class SalesService
       line.Product?.SKU,
       line.UnitOfMeasureId,
       line.UnitOfMeasure?.Code,
+      line.ProfessionalUserId,
+      line.ProfessionalUser?.Username,
       line.Description,
       line.Quantity,
       line.UnitPrice,

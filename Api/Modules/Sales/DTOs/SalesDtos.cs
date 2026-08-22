@@ -47,7 +47,8 @@ public sealed record SalesInvoiceLineRequest(
   Guid? UnitOfMeasureId,
   [MaxLength(500)] string? Description,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
-  [Range(typeof(decimal), "0", "9999999999999")] decimal UnitPrice);
+  [Range(typeof(decimal), "0", "9999999999999")] decimal UnitPrice,
+  Guid? ProfessionalUserId = null);
 
 public sealed record SalesInvoiceDraftRequest(
   Guid? CustomerId,
@@ -105,6 +106,8 @@ public sealed record SalesInvoiceLineResponse(
   string? SKU,
   Guid? UnitOfMeasureId,
   string? UnitCode,
+  Guid? ProfessionalUserId,
+  string? ProfessionalUsername,
   string? Description,
   decimal Quantity,
   decimal UnitPrice,

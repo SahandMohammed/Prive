@@ -1,4 +1,4 @@
-export const InventoryDocumentType = { OpeningStock: 0, Adjustment: 1, Transfer: 2, Purchase: 3, SalesInvoice: 4 } as const
+export const InventoryDocumentType = { OpeningStock: 0, Adjustment: 1, Transfer: 2, Purchase: 3, SalesInvoice: 4, PosSale: 5 } as const
 export type InventoryDocumentType = typeof InventoryDocumentType[keyof typeof InventoryDocumentType]
 export const InventoryDocumentStatus = { Draft: 0, Posted: 1 } as const
 export type InventoryDocumentStatus = typeof InventoryDocumentStatus[keyof typeof InventoryDocumentStatus]

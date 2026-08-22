@@ -108,6 +108,7 @@ public sealed record JournalEntryResponse(
   Guid? SourceMoneyTransferId,
   Guid? SourceSupplierPaymentId,
   Guid? SourceCustomerReceiptId,
+  Guid? SourcePosSaleId,
   decimal TotalDebitBaseAmount,
   decimal TotalCreditBaseAmount,
   List<JournalLineResponse> Lines);

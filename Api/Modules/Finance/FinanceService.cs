@@ -728,7 +728,8 @@ public sealed class FinanceService
     CancellationToken ct)
   {
     var query = _db.SalesInvoices.AsNoTracking()
-      .Where(invoice => invoice.CustomerId == customerId && invoice.Status == SalesInvoiceStatus.Posted);
+      .Where(invoice => invoice.CustomerId == customerId && invoice.Status == SalesInvoiceStatus.Posted
+        && invoice.PosSale == null);
     if (currencyId is not null) query = query.Where(invoice => invoice.CurrencyId == currencyId);
     var rows = await query.OrderBy(invoice => invoice.InvoiceDate).ThenBy(invoice => invoice.DocumentNumber)
       .Select(invoice => new OutstandingSalesInvoiceResponse(
@@ -857,7 +858,8 @@ public sealed class FinanceService
     var rate = ResolveExplicitRate(account.CurrencyId, business.BaseCurrencyId, request.ExchangeRate);
     var invoiceIds = request.Allocations.Select(allocation => allocation.SalesInvoiceId).ToList();
     var invoices = await _db.SalesInvoices.AsNoTracking()
-      .Where(invoice => invoiceIds.Contains(invoice.Id)).ToDictionaryAsync(invoice => invoice.Id, ct);
+      .Where(invoice => invoiceIds.Contains(invoice.Id) && invoice.PosSale == null)
+      .ToDictionaryAsync(invoice => invoice.Id, ct);
     if (invoices.Count != invoiceIds.Count || invoices.Values.Any(invoice => invoice.Status != SalesInvoiceStatus.Posted))
       throw new BadRequestException(ErrorCodes.Finance.SalesInvoiceInvalid,
         "Every allocation must reference a posted Sales Invoice.");
@@ -901,7 +903,7 @@ public sealed class FinanceService
         "A Money Account must link to an active posting Asset account.");
   }
 
-  private async Task EnsureAccessAsync(
+  internal async Task EnsureAccessAsync(
     Guid moneyAccountId,
     Guid userId,
     MoneyAccountAccessLevel required,
@@ -920,17 +922,29 @@ public sealed class FinanceService
       ?? throw new BadRequestException(ErrorCodes.Finance.BusinessNotConfigured,
         "Complete Business Setup before using Finance.");
 
-  private async Task<decimal> ResolveCurrentRateAsync(
+  internal Task<decimal> ResolveCurrentRateAsync(
     Guid currencyId,
     Guid baseCurrencyId,
     DateOnly date,
     CancellationToken ct)
   {
-    if (currencyId == baseCurrencyId) return 1m;
     var endOfDate = DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MaxValue), DateTimeKind.Utc);
+    return ResolveCurrentRateAsync(currencyId, baseCurrencyId, endOfDate, ct);
+  }
+
+  internal async Task<decimal> ResolveCurrentRateAsync(
+    Guid currencyId,
+    Guid baseCurrencyId,
+    DateTime effectiveAtUtc,
+    CancellationToken ct)
+  {
+    if (currencyId == baseCurrencyId) return 1m;
+    var effectiveAt = effectiveAtUtc.Kind == DateTimeKind.Unspecified
+      ? DateTime.SpecifyKind(effectiveAtUtc, DateTimeKind.Utc)
+      : effectiveAtUtc.ToUniversalTime();
     return await _db.ExchangeRates.AsNoTracking()
       .Where(rate => rate.FromCurrencyId == currencyId && rate.ToCurrencyId == baseCurrencyId
-        && rate.IsActive && rate.EffectiveAtUtc <= endOfDate)
+        && rate.IsActive && rate.EffectiveAtUtc <= effectiveAt)
       .OrderByDescending(rate => rate.EffectiveAtUtc).Select(rate => (decimal?)rate.Rate).FirstOrDefaultAsync(ct)
       ?? throw new BadRequestException(ErrorCodes.Finance.ExchangeRateRequired,
         "Add an active exchange rate from the Money Account currency to the Business base currency.");
@@ -958,7 +972,7 @@ public sealed class FinanceService
     return account;
   }
 
-  private async Task<decimal> BalanceAsync(Guid moneyAccountId, CancellationToken ct) =>
+  internal async Task<decimal> BalanceAsync(Guid moneyAccountId, CancellationToken ct) =>
     await _db.MoneyLedgerEntries.Where(entry => entry.MoneyAccountId == moneyAccountId)
       .SumAsync(entry => (decimal?)entry.Amount, ct) ?? 0m;
 
@@ -1231,7 +1245,7 @@ public sealed class FinanceService
       Description = description
     };
 
-  private static MoneyLedgerEntryEntity LedgerEntry(
+  internal static MoneyLedgerEntryEntity LedgerEntry(
     MoneyAccountEntity account,
     DateOnly date,
     MoneyLedgerSourceType sourceType,
@@ -1272,7 +1286,7 @@ public sealed class FinanceService
         "The minimum Finance workflow supports transfers within one branch only.");
   }
 
-  private static void EnsureActive(MoneyAccountEntity account)
+  internal static void EnsureActive(MoneyAccountEntity account)
   {
     if (!account.IsActive)
       throw new BadRequestException(ErrorCodes.Finance.MoneyAccountInactive,

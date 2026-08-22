@@ -36,6 +36,7 @@ import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
 import { AdjustmentDocumentPage, AdjustmentsListPage, InventoryOverviewPage, MovementHistoryPage, OpeningStockDocumentPage, OpeningStockListPage, ProductsPage, TransferDocumentPage, TransfersListPage, CategoriesPage, UnitsPage, WarehousesPage as InventoryWarehousesPage } from '@/features/inventory'
 import { BranchesPage, BusinessSettingsPage as BaseBusinessSettingsPage, CurrenciesPage as BaseCurrenciesPage } from '@/features/business'
 import { ContactsPage } from '@/features/contacts'
+import { PosPage, PosReceiptPage } from '@/features/pos'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -71,6 +72,8 @@ export const router = createBrowserRouter([
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/contacts', element: <ContactsPage /> },
+          { path: '/pos', element: <PosPage /> },
+          { path: '/pos/sales/:id', element: <PosReceiptPage /> },
           
           // Finance
           { path: '/finance', element: <Navigate to="/finance/money-accounts" replace /> },

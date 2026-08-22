@@ -4,6 +4,7 @@ using Api.Modules.Contact;
 using Api.Modules.Currency;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
+using Api.Modules.Pos;
 using Api.Modules.User;
 
 namespace Api.Modules.Sales;
@@ -62,6 +63,7 @@ public sealed class SalesInvoiceEntity
   public ICollection<SalesInvoiceLineEntity> Lines { get; set; } = new List<SalesInvoiceLineEntity>();
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
   public ICollection<CustomerReceiptAllocationEntity> ReceiptAllocations { get; set; } = new List<CustomerReceiptAllocationEntity>();
+  public PosSaleEntity? PosSale { get; set; }
 }
 
 public sealed class SalesInvoiceLineEntity
@@ -82,6 +84,8 @@ public sealed class SalesInvoiceLineEntity
   public decimal LineSubtotal { get; set; }
   public decimal LineAmount { get; set; }
   public decimal BaseLineAmount { get; set; }
+  public Guid? ProfessionalUserId { get; set; }
+  public UserEntity? ProfessionalUser { get; set; }
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
 }
 

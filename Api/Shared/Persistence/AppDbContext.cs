@@ -9,6 +9,7 @@ using Api.Modules.Contact;
 using Api.Modules.Purchase;
 using Api.Modules.Finance;
 using Api.Modules.Sales;
+using Api.Modules.Pos;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
@@ -50,6 +51,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<ServiceEntity> Services => Set<ServiceEntity>();
   public DbSet<SalesInvoiceEntity> SalesInvoices => Set<SalesInvoiceEntity>();
   public DbSet<SalesInvoiceLineEntity> SalesInvoiceLines => Set<SalesInvoiceLineEntity>();
+  public DbSet<PosSaleEntity> PosSales => Set<PosSaleEntity>();
+  public DbSet<PosTenderEntity> PosTenders => Set<PosTenderEntity>();
+  public DbSet<PosChangeEntity> PosChanges => Set<PosChangeEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {

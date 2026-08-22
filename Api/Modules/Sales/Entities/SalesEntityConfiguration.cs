@@ -79,5 +79,7 @@ public sealed class SalesInvoiceLineEntityConfiguration : IEntityTypeConfigurati
     builder.HasOne(line => line.Service).WithMany(service => service.SalesInvoiceLines).HasForeignKey(line => line.ServiceId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(line => line.Product).WithMany().HasForeignKey(line => line.ProductId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(line => line.UnitOfMeasure).WithMany().HasForeignKey(line => line.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(line => line.ProfessionalUser).WithMany().HasForeignKey(line => line.ProfessionalUserId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasIndex(line => line.ProfessionalUserId);
   }
 }

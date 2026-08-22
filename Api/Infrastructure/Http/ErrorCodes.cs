@@ -179,6 +179,7 @@ public static class ErrorCodes
     public const string ServicePriceInvalid = "SALES_SERVICE_PRICE_INVALID";
     public const string ServiceDurationInvalid = "SALES_SERVICE_DURATION_INVALID";
     public const string ServiceRevenueAccountInvalid = "SALES_SERVICE_REVENUE_ACCOUNT_INVALID";
+    public const string ProfessionalInvalid = "SALES_PROFESSIONAL_INVALID";
     public const string InvoiceNotFound = "SALES_INVOICE_NOT_FOUND";
     public const string DocumentNotDraft = "SALES_INVOICE_NOT_DRAFT";
     public const string DocumentNumberConflict = "SALES_DOCUMENT_NUMBER_CONFLICT";
@@ -201,6 +202,26 @@ public static class ErrorCodes
     public const string InsufficientStock = "SALES_INSUFFICIENT_STOCK";
     public const string AccountMappingInvalid = "SALES_ACCOUNT_MAPPING_INVALID";
     public const string JournalDirectReversalNotAllowed = "SALES_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+  }
+
+  public static class Pos
+  {
+    public const string SaleNotFound = "POS_SALE_NOT_FOUND";
+    public const string BusinessNotConfigured = "POS_BUSINESS_NOT_CONFIGURED";
+    public const string LinesRequired = "POS_LINES_REQUIRED";
+    public const string LineInvalid = "POS_LINE_INVALID";
+    public const string DuplicateLine = "POS_DUPLICATE_LINE";
+    public const string TenderRequired = "POS_TENDER_REQUIRED";
+    public const string TenderInvalid = "POS_TENDER_INVALID";
+    public const string MoneyAccountInvalid = "POS_MONEY_ACCOUNT_INVALID";
+    public const string MoneyAccountBranchMismatch = "POS_MONEY_ACCOUNT_BRANCH_MISMATCH";
+    public const string Underpayment = "POS_UNDERPAYMENT";
+    public const string ChangeRequired = "POS_CHANGE_REQUIRED";
+    public const string ChangeNotDue = "POS_CHANGE_NOT_DUE";
+    public const string ChangeMismatch = "POS_CHANGE_MISMATCH";
+    public const string ChangeBalanceInsufficient = "POS_CHANGE_BALANCE_INSUFFICIENT";
+    public const string ConcurrentCheckout = "POS_CONCURRENT_CHECKOUT";
+    public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
   }
 
   public static class Common

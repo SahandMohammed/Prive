@@ -50,6 +50,12 @@ export function Sidebar() {
           Dashboard
         </NavItem>
 
+        {(role === 'SuperAdmin' || role === 'Manager' || role === 'Cashier') && (
+          <NavItem to="/pos" icon={<ShoppingCartIcon className="w-4 h-4" />}>
+            POS
+          </NavItem>
+        )}
+
         <NavItem to="/contacts" icon={<UsersIcon className="w-4 h-4" />}>
           Contacts
         </NavItem>

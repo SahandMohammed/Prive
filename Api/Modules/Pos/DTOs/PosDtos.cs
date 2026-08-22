@@ -1,0 +1,183 @@
+using System.ComponentModel.DataAnnotations;
+using Api.Modules.Finance;
+using Api.Modules.Sales;
+using Api.Shared.Pagination;
+
+namespace Api.Modules.Pos;
+
+public sealed class PosCatalogQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+  [EnumDataType(typeof(PosCatalogItemType))]
+  public PosCatalogItemType? ItemType { get; init; }
+  public Guid? CategoryId { get; init; }
+  public Guid? WarehouseId { get; init; }
+}
+
+public sealed class PosCustomerListQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+}
+
+public sealed class PosSaleListQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+  public Guid? CustomerId { get; init; }
+  public Guid? BranchId { get; init; }
+  public DateOnly? FromDate { get; init; }
+  public DateOnly? ToDate { get; init; }
+}
+
+public sealed record PosSaleLineRequest(
+  [Required] SalesLineType LineType,
+  Guid? ServiceId,
+  Guid? ProductId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
+  Guid? ProfessionalUserId);
+
+public sealed record PosTenderRequest(
+  [Required] Guid MoneyAccountId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount);
+
+public sealed record PosChangeRequest(
+  [Required] Guid MoneyAccountId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount);
+
+public sealed record CompletePosSaleRequest(
+  [Required] Guid BranchId,
+  Guid? WarehouseId,
+  Guid? CustomerId,
+  [Required, MinLength(1)] List<PosSaleLineRequest> Lines,
+  [Required, MinLength(1)] List<PosTenderRequest> Tenders,
+  PosChangeRequest? Change);
+
+public sealed record PosBranchResponse(Guid Id, string Code, string Name, bool IsMainBranch);
+
+public sealed record PosWarehouseResponse(Guid Id, string Code, string Name, Guid BranchId);
+
+public sealed record PosCategoryResponse(Guid Id, string Name, PosCatalogItemType ItemType);
+
+public sealed record PosProfessionalResponse(Guid Id, string Username);
+
+public sealed record PosMoneyAccountResponse(
+  Guid Id,
+  string Code,
+  string Name,
+  MoneyAccountType Type,
+  Guid BranchId,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Balance,
+  decimal? CurrentExchangeRate);
+
+public sealed record PosSetupResponse(
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  List<PosBranchResponse> Branches,
+  List<PosWarehouseResponse> Warehouses,
+  List<PosCategoryResponse> Categories,
+  List<PosProfessionalResponse> Professionals,
+  List<PosMoneyAccountResponse> MoneyAccounts);
+
+public sealed record PosCatalogItemResponse(
+  PosCatalogItemType ItemType,
+  Guid Id,
+  string Name,
+  Guid CategoryId,
+  string CategoryName,
+  decimal UnitPriceBase,
+  string? SKU,
+  string? Barcode,
+  Guid? UnitOfMeasureId,
+  string? UnitCode,
+  decimal? AvailableQuantity,
+  string? ImageReference);
+
+public sealed record PosCustomerResponse(Guid Id, string Name, string? PrimaryPhoneNumber);
+
+public sealed record PosSaleListResponse(
+  Guid Id,
+  string DocumentNumber,
+  DateTime CompletedAtUtc,
+  Guid BranchId,
+  string BranchName,
+  Guid? CustomerId,
+  string? CustomerName,
+  decimal Total,
+  string BaseCurrencyCode,
+  string CashierUsername);
+
+public sealed record PosSaleLineResponse(
+  Guid Id,
+  SalesLineType LineType,
+  Guid? ServiceId,
+  string? ServiceName,
+  Guid? ProductId,
+  string? ProductName,
+  string? SKU,
+  string? UnitCode,
+  Guid? ProfessionalUserId,
+  string? ProfessionalUsername,
+  decimal Quantity,
+  decimal UnitPrice,
+  decimal LineTotal);
+
+public sealed record PosTenderResponse(
+  Guid Id,
+  int Sequence,
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal TenderedAmount,
+  decimal ExchangeRate,
+  decimal BaseAmount,
+  Guid MoneyLedgerEntryId);
+
+public sealed record PosChangeResponse(
+  Guid Id,
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Amount,
+  decimal ExchangeRate,
+  decimal BaseAmount,
+  Guid MoneyLedgerEntryId);
+
+public sealed record PosSaleResponse(
+  Guid Id,
+  string DocumentNumber,
+  PosSaleStatus Status,
+  Guid SalesInvoiceId,
+  Guid? CustomerId,
+  string? CustomerName,
+  Guid BranchId,
+  string BranchCode,
+  string BranchName,
+  Guid? WarehouseId,
+  string? WarehouseCode,
+  string? WarehouseName,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  decimal Subtotal,
+  decimal Total,
+  decimal TenderedBaseAmount,
+  decimal ChangeBaseAmount,
+  decimal SettledBaseAmount,
+  Guid CashierUserId,
+  string CashierUsername,
+  DateTime CompletedAtUtc,
+  Guid JournalEntryId,
+  List<Guid> StockMovementIds,
+  List<PosSaleLineResponse> Lines,
+  List<PosTenderResponse> Tenders,
+  PosChangeResponse? Change);
+
+public enum PosCatalogItemType
+{
+  Service,
+  Product
+}
