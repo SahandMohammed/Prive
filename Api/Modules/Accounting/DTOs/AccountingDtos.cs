@@ -103,6 +103,9 @@ public sealed record JournalEntryResponse(
   JournalEntryType Type,
   DateTime? PostedAtUtc,
   Guid? ReversalOfJournalId,
+  Guid? SourcePurchaseInvoiceId,
+  Guid? SourceMoneyTransferId,
+  Guid? SourceSupplierPaymentId,
   decimal TotalDebitBaseAmount,
   decimal TotalCreditBaseAmount,
   List<JournalLineResponse> Lines);

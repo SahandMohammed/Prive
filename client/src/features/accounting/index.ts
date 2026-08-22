@@ -5,4 +5,4 @@ export * from './pages/CreateJournalEntryPage'
 export * from './pages/CurrenciesPage'
 export * from './pages/GeneralLedgerPage'
 export * from './pages/TrialBalancePage'
-
+export { useAccountTree } from './hooks/useAccounting'

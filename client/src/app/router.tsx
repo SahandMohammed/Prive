@@ -6,10 +6,11 @@ import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
 import { LoginPage } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
 import { 
-  FinanceDashboard, 
-  TreasuryPage, 
-  VouchersPage, 
-  InternalTransfersPage 
+  MoneyAccountsPage,
+  MoneyLedgerPage,
+  ExchangeRatesPage,
+  MoneyTransfersPage,
+  SupplierPaymentsPage,
 } from '@/features/finance'
 import { 
   AccountingDashboard, 
@@ -28,9 +29,8 @@ import {
   CreateSalesInvoicePage
 } from '@/features/sales'
 import { 
-  PurchasesDashboard, 
+  PurchaseInvoicePage,
   PurchaseInvoicesPage, 
-  PurchaseReturnsPage,
 } from '@/features/purchases'
 import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
 import { AdjustmentDocumentPage, AdjustmentsListPage, InventoryOverviewPage, MovementHistoryPage, OpeningStockDocumentPage, OpeningStockListPage, ProductsPage, TransferDocumentPage, TransfersListPage, CategoriesPage, UnitsPage, WarehousesPage as InventoryWarehousesPage } from '@/features/inventory'
@@ -73,10 +73,12 @@ export const router = createBrowserRouter([
           { path: '/contacts', element: <ContactsPage /> },
           
           // Finance
-          { path: '/finance', element: <FinanceDashboard /> },
-          { path: '/finance/treasury', element: <TreasuryPage /> },
-          { path: '/finance/vouchers', element: <VouchersPage /> },
-          { path: '/finance/transfers', element: <InternalTransfersPage /> },
+          { path: '/finance', element: <Navigate to="/finance/money-accounts" replace /> },
+          { path: '/finance/money-accounts', element: <MoneyAccountsPage /> },
+          { path: '/finance/money-ledger', element: <MoneyLedgerPage /> },
+          { path: '/finance/exchange-rates', element: <ExchangeRatesPage /> },
+          { path: '/finance/transfers', element: <MoneyTransfersPage /> },
+          { path: '/finance/supplier-payments', element: <SupplierPaymentsPage /> },
 
           // Accounting
           { path: '/accounting', element: <AccountingDashboard /> },
@@ -95,10 +97,10 @@ export const router = createBrowserRouter([
           { path: '/sales/pos', element: <POSPage /> },
 
           // Purchases
-          { path: '/purchases', element: <PurchasesDashboard /> },
+          { path: '/purchases', element: <Navigate to="/purchases/invoices" replace /> },
           { path: '/purchases/invoices', element: <PurchaseInvoicesPage /> },
-          { path: '/purchases/returns', element: <PurchaseReturnsPage /> },
-          { path: '/purchases/suppliers', element: <Navigate to="/contacts?role=supplier" replace /> },
+          { path: '/purchases/invoices/new', element: <PurchaseInvoicePage /> },
+          { path: '/purchases/invoices/:id', element: <PurchaseInvoicePage /> },
 
           // Settings
           { path: '/settings/business', element: <BaseBusinessSettingsPage /> },

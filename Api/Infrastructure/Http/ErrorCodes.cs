@@ -87,6 +87,72 @@ public static class ErrorCodes
   {
     public const string NotFound = "CONTACT_NOT_FOUND";
     public const string RoleRequired = "CONTACT_ROLE_REQUIRED";
+    public const string HasHistory = "CONTACT_HAS_HISTORY";
+  }
+
+  public static class Purchase
+  {
+    public const string NotFound = "PURCHASE_INVOICE_NOT_FOUND";
+    public const string DocumentNotDraft = "PURCHASE_INVOICE_NOT_DRAFT";
+    public const string DocumentNumberConflict = "PURCHASE_DOCUMENT_NUMBER_CONFLICT";
+    public const string SupplierInvalid = "PURCHASE_SUPPLIER_INVALID";
+    public const string BranchInvalid = "PURCHASE_BRANCH_INVALID";
+    public const string WarehouseInvalid = "PURCHASE_WAREHOUSE_INVALID";
+    public const string WarehouseBranchMismatch = "PURCHASE_WAREHOUSE_BRANCH_MISMATCH";
+    public const string CurrencyInvalid = "PURCHASE_CURRENCY_INVALID";
+    public const string ExchangeRateRequired = "PURCHASE_EXCHANGE_RATE_REQUIRED";
+    public const string BusinessNotConfigured = "PURCHASE_BUSINESS_NOT_CONFIGURED";
+    public const string LinesRequired = "PURCHASE_LINES_REQUIRED";
+    public const string DuplicateProduct = "PURCHASE_DUPLICATE_PRODUCT";
+    public const string ProductInvalid = "PURCHASE_PRODUCT_INVALID";
+    public const string UnitInvalid = "PURCHASE_UNIT_INVALID";
+    public const string QuantityInvalid = "PURCHASE_QUANTITY_INVALID";
+    public const string UnitCostInvalid = "PURCHASE_UNIT_COST_INVALID";
+    public const string AccountMappingInvalid = "PURCHASE_ACCOUNT_MAPPING_INVALID";
+    public const string JournalDirectReversalNotAllowed = "PURCHASE_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+  }
+
+  public static class Finance
+  {
+    public const string MoneyAccountNotFound = "FINANCE_MONEY_ACCOUNT_NOT_FOUND";
+    public const string MoneyAccountCodeTaken = "FINANCE_MONEY_ACCOUNT_CODE_TAKEN";
+    public const string MoneyAccountTypeInvalid = "FINANCE_MONEY_ACCOUNT_TYPE_INVALID";
+    public const string MoneyAccountInvalid = "FINANCE_MONEY_ACCOUNT_INVALID";
+    public const string MoneyAccountInactive = "FINANCE_MONEY_ACCOUNT_INACTIVE";
+    public const string MoneyAccountStructuralChangeNotAllowed = "FINANCE_MONEY_ACCOUNT_STRUCTURAL_CHANGE_NOT_ALLOWED";
+    public const string MoneyAccountAccessDenied = "FINANCE_MONEY_ACCOUNT_ACCESS_DENIED";
+    public const string AccessAssignmentDuplicate = "FINANCE_ACCESS_ASSIGNMENT_DUPLICATE";
+    public const string AccessLevelInvalid = "FINANCE_ACCESS_LEVEL_INVALID";
+    public const string AccessUserInvalid = "FINANCE_ACCESS_USER_INVALID";
+    public const string BranchInvalid = "FINANCE_BRANCH_INVALID";
+    public const string CurrencyInvalid = "FINANCE_CURRENCY_INVALID";
+    public const string BusinessNotConfigured = "FINANCE_BUSINESS_NOT_CONFIGURED";
+    public const string AccountMappingInvalid = "FINANCE_ACCOUNT_MAPPING_INVALID";
+    public const string OpeningBalanceAlreadyRecorded = "FINANCE_OPENING_BALANCE_ALREADY_RECORDED";
+    public const string ExchangeRateRequired = "FINANCE_EXCHANGE_RATE_REQUIRED";
+    public const string ExchangeRateNotFound = "FINANCE_EXCHANGE_RATE_NOT_FOUND";
+    public const string ExchangeRatePairInvalid = "FINANCE_EXCHANGE_RATE_PAIR_INVALID";
+    public const string ExchangeRateConflict = "FINANCE_EXCHANGE_RATE_CONFLICT";
+    public const string MoneyTransferNotFound = "FINANCE_MONEY_TRANSFER_NOT_FOUND";
+    public const string TransferSameAccount = "FINANCE_TRANSFER_SAME_ACCOUNT";
+    public const string TransferCurrencyMismatch = "FINANCE_TRANSFER_CURRENCY_MISMATCH";
+    public const string TransferBranchMismatch = "FINANCE_TRANSFER_BRANCH_MISMATCH";
+    public const string TransferDocumentNumberConflict = "FINANCE_TRANSFER_DOCUMENT_NUMBER_CONFLICT";
+    public const string SupplierPaymentNotFound = "FINANCE_SUPPLIER_PAYMENT_NOT_FOUND";
+    public const string SupplierPaymentDocumentNumberConflict = "FINANCE_SUPPLIER_PAYMENT_DOCUMENT_NUMBER_CONFLICT";
+    public const string SupplierInvalid = "FINANCE_SUPPLIER_INVALID";
+    public const string PurchaseInvoiceInvalid = "FINANCE_PURCHASE_INVOICE_INVALID";
+    public const string PaymentAllocationsRequired = "FINANCE_PAYMENT_ALLOCATIONS_REQUIRED";
+    public const string PaymentAllocationDuplicate = "FINANCE_PAYMENT_ALLOCATION_DUPLICATE";
+    public const string PaymentAllocationInvalid = "FINANCE_PAYMENT_ALLOCATION_INVALID";
+    public const string PaymentMustBeFullyAllocated = "FINANCE_PAYMENT_MUST_BE_FULLY_ALLOCATED";
+    public const string PaymentSupplierMismatch = "FINANCE_PAYMENT_SUPPLIER_MISMATCH";
+    public const string PaymentCurrencyMismatch = "FINANCE_PAYMENT_CURRENCY_MISMATCH";
+    public const string PaymentExchangeRateMismatch = "FINANCE_PAYMENT_EXCHANGE_RATE_MISMATCH";
+    public const string PaymentAllocationExceedsOutstanding = "FINANCE_PAYMENT_ALLOCATION_EXCEEDS_OUTSTANDING";
+    public const string InsufficientBalance = "FINANCE_INSUFFICIENT_BALANCE";
+    public const string DocumentNotDraft = "FINANCE_DOCUMENT_NOT_DRAFT";
+    public const string JournalDirectReversalNotAllowed = "FINANCE_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
   }
 
   public static class Common

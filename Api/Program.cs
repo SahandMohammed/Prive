@@ -9,6 +9,8 @@ using Api.Modules.Auth;
 using Api.Modules.Accounting;
 using Api.Modules.Inventory;
 using Api.Modules.Contact;
+using Api.Modules.Purchase;
+using Api.Modules.Finance;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -240,7 +242,9 @@ try
     .AddCurrencyModule()
     .AddAccountingModule()
     .AddInventoryModule()
-    .AddContactModule();
+    .AddContactModule()
+    .AddPurchaseModule(builder.Configuration)
+    .AddFinanceModule(builder.Configuration);
 
   var app = builder.Build();
 

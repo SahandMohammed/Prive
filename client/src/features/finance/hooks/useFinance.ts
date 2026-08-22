@@ -1,133 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { financeApi } from '../api/finance.api'
-import type {
-  CreateAccountRequest,
-  CreateCurrencyRequest,
-  CreateInvoiceRequest,
-  CreateContactRequest,
-  CreateVoucherRequest,
-  InvoiceType,
-  VoucherType,
-  ContactType,
-} from '../types/finance.types'
+import type { ExchangeRateInput, MoneyAccountAccessInput, MoneyAccountInput, MoneyTransferInput, OpeningBalanceInput, PageFilters, SupplierPaymentInput } from '../types/finance.types'
 
-// --- Currencies ---
-export function useCurrencies() {
-  return useQuery({
-    queryKey: ['currencies'],
-    queryFn: () => financeApi.getCurrencies(),
-  })
-}
-
-export function useCreateCurrency() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: CreateCurrencyRequest) => financeApi.createCurrency(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currencies'] })
-    },
-  })
-}
-
-// --- Accounts ---
-export function useAccounts() {
-  return useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => financeApi.getAccounts(),
-  })
-}
-
-export function useCreateAccount() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: CreateAccountRequest) => financeApi.createAccount(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-    },
-  })
-}
-
-export function useSeedAccounts() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: () => financeApi.seedAccounts(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-    },
-  })
-}
-
-// --- Contacts ---
-export function useContacts(type?: ContactType) {
-  return useQuery({
-    queryKey: ['contacts', type],
-    queryFn: () => financeApi.getContacts(type),
-  })
-}
-
-export function useCreateContact() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: CreateContactRequest) => financeApi.createContact(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] }) // Created a sub-ledger account
-    },
-  })
-}
-
-// --- Invoices ---
-export function useInvoices(
-  type?: InvoiceType,
-  search?: string,
-  startDate?: string,
-  endDate?: string,
-  page = 1,
-  pageSize = 10
-) {
-  return useQuery({
-    queryKey: ['invoices', type, search, startDate, endDate, page, pageSize],
-    queryFn: () => financeApi.getInvoices(type, search, startDate, endDate, page, pageSize),
-  })
-}
-
-export function useCreateInvoice() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: CreateInvoiceRequest) => financeApi.createInvoice(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['ledger'] })
-    },
-  })
-}
-
-// --- Vouchers ---
-export function useVouchers(type?: VoucherType) {
-  return useQuery({
-    queryKey: ['vouchers', type],
-    queryFn: () => financeApi.getVouchers(type),
-  })
-}
-
-export function useCreateVoucher() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: CreateVoucherRequest) => financeApi.createVoucher(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vouchers'] })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      queryClient.invalidateQueries({ queryKey: ['ledger'] })
-    },
-  })
-}
-
-// --- Ledger ---
-export function useLedger() {
-  return useQuery({
-    queryKey: ['ledger'],
-    queryFn: () => financeApi.getLedger(),
-  })
-}
+export const FINANCE_KEY = ['finance'] as const
+const refresh = (client: ReturnType<typeof useQueryClient>) => client.invalidateQueries({ queryKey: FINANCE_KEY })
+export function useMoneyAccounts(filters: PageFilters, management = false) { return useQuery({ queryKey: [...FINANCE_KEY, 'money-accounts', management, filters], queryFn: () => financeApi.moneyAccounts(filters, management) }) }
+export function useMoneyAccount(id?: string) { return useQuery({ queryKey: [...FINANCE_KEY, 'money-account', id], queryFn: () => financeApi.moneyAccount(id!), enabled: Boolean(id) }) }
+export function useSaveMoneyAccount(id?: string) { const client = useQueryClient(); return useMutation({ mutationFn: (body: MoneyAccountInput) => id ? financeApi.updateMoneyAccount(id, body) : financeApi.createMoneyAccount(body), onSuccess: () => refresh(client) }) }
+export function useMoneyAccountAccess(id?: string) { return useQuery({ queryKey: [...FINANCE_KEY, 'access', id], queryFn: () => financeApi.moneyAccountAccess(id!), enabled: Boolean(id) }) }
+export function useReplaceMoneyAccountAccess(id: string) { const client = useQueryClient(); return useMutation({ mutationFn: (assignments: MoneyAccountAccessInput[]) => financeApi.replaceMoneyAccountAccess(id, assignments), onSuccess: () => refresh(client) }) }
+export function useOpeningBalance(id: string) { const client = useQueryClient(); return useMutation({ mutationFn: (body: OpeningBalanceInput) => financeApi.openingBalance(id, body), onSuccess: () => { refresh(client); client.invalidateQueries({ queryKey: ['accounting'] }) } }) }
+export function useMoneyLedger(filters: PageFilters) { return useQuery({ queryKey: [...FINANCE_KEY, 'ledger', filters], queryFn: () => financeApi.ledger(filters) }) }
+export function useExchangeRates(filters: PageFilters) { return useQuery({ queryKey: [...FINANCE_KEY, 'exchange-rates', filters], queryFn: () => financeApi.exchangeRates(filters) }) }
+export function useExchangeRateActions() { const client = useQueryClient(); return { create: useMutation({ mutationFn: (body: ExchangeRateInput) => financeApi.createExchangeRate(body), onSuccess: () => refresh(client) }), deactivate: useMutation({ mutationFn: financeApi.deactivateExchangeRate, onSuccess: () => refresh(client) }) } }
+export function useMoneyTransfers(filters: PageFilters) { return useQuery({ queryKey: [...FINANCE_KEY, 'transfers', filters], queryFn: () => financeApi.transfers(filters) }) }
+export function useMoneyTransfer(id?: string) { return useQuery({ queryKey: [...FINANCE_KEY, 'transfer', id], queryFn: () => financeApi.transfer(id!), enabled: Boolean(id) }) }
+export function useTransferActions() { const client = useQueryClient(); const done = () => { refresh(client); client.invalidateQueries({ queryKey: ['accounting'] }) }; return { create: useMutation({ mutationFn: (body: MoneyTransferInput) => financeApi.createTransfer(body), onSuccess: done }), update: useMutation({ mutationFn: ({ id, body }: { id: string; body: MoneyTransferInput }) => financeApi.updateTransfer(id, body), onSuccess: done }), remove: useMutation({ mutationFn: financeApi.deleteTransfer, onSuccess: done }), post: useMutation({ mutationFn: financeApi.postTransfer, onSuccess: done }) } }
+export function useSupplierPayments(filters: PageFilters) { return useQuery({ queryKey: [...FINANCE_KEY, 'supplier-payments', filters], queryFn: () => financeApi.supplierPayments(filters) }) }
+export function useFinanceSuppliers() { return useQuery({ queryKey: [...FINANCE_KEY, 'suppliers'], queryFn: financeApi.suppliers }) }
+export function useSupplierPayment(id?: string) { return useQuery({ queryKey: [...FINANCE_KEY, 'supplier-payment', id], queryFn: () => financeApi.supplierPayment(id!), enabled: Boolean(id) }) }
+export function useOutstandingInvoices(supplierId?: string, currencyId?: string) { return useQuery({ queryKey: [...FINANCE_KEY, 'outstanding', supplierId, currencyId], queryFn: () => financeApi.outstandingInvoices(supplierId!, currencyId), enabled: Boolean(supplierId && currencyId) }) }
+export function useSupplierPaymentActions() { const client = useQueryClient(); const done = () => { refresh(client); client.invalidateQueries({ queryKey: ['accounting'] }) }; return { create: useMutation({ mutationFn: (body: SupplierPaymentInput) => financeApi.createSupplierPayment(body), onSuccess: done }), update: useMutation({ mutationFn: ({ id, body }: { id: string; body: SupplierPaymentInput }) => financeApi.updateSupplierPayment(id, body), onSuccess: done }), remove: useMutation({ mutationFn: financeApi.deleteSupplierPayment, onSuccess: done }), post: useMutation({ mutationFn: financeApi.postSupplierPayment, onSuccess: done }) } }

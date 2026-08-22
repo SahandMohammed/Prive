@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { 
   AlertCircle, 
   BookOpen, 
@@ -23,7 +23,8 @@ import { journalStatusLabels } from '../types/accounting.types'
 
 export function JournalEntriesPage() {
   const navigate = useNavigate()
-  const [search, setSearch] = useState('')
+  const [searchParams] = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [branchFilter, setBranchFilter] = useState<string>('all')
@@ -174,7 +175,7 @@ export function JournalEntriesPage() {
                       {journal.entryDate}
                     </TableCell>
                     <TableCell className="px-4 py-3.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {journal.reference || '—'}
+                      {journal.sourcePurchaseInvoiceId ? <Link className="text-[#d85430]" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.reference || '—'}
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
                       <div className="max-w-md truncate font-medium text-slate-800 dark:text-slate-200">
@@ -239,7 +240,7 @@ export function JournalEntriesPage() {
                             </Button>
                           </>
                         )}
-                        {journal.status === 1 && (
+                        {journal.status === 1 && !journal.sourcePurchaseInvoiceId && (
                           <Button
                             variant="ghost"
                             size="icon-sm"
@@ -254,6 +255,11 @@ export function JournalEntriesPage() {
                           >
                             <RotateCcw className="h-4 w-4" />
                           </Button>
+                        )}
+                        {journal.status === 1 && journal.sourcePurchaseInvoiceId && (
+                          <span className="text-[11px] font-medium text-slate-500" title="Correct this journal through its source Purchase Invoice">
+                            Source-owned
+                          </span>
                         )}
                       </div>
                     </TableCell>

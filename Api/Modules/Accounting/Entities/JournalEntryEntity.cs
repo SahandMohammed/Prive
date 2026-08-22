@@ -1,4 +1,6 @@
 using Api.Modules.Branch;
+using Api.Modules.Purchase;
+using Api.Modules.Finance;
 
 namespace Api.Modules.Accounting;
 
@@ -17,6 +19,9 @@ public sealed class JournalEntryEntity
   public JournalEntryEntity? ReversalOfJournal { get; set; }
   public ICollection<JournalEntryEntity> ReversalJournals { get; set; } = new List<JournalEntryEntity>();
   public ICollection<JournalLineEntity> Lines { get; set; } = new List<JournalLineEntity>();
+  public PurchaseInvoiceEntity? SourcePurchaseInvoice { get; set; }
+  public MoneyTransferEntity? SourceMoneyTransfer { get; set; }
+  public SupplierPaymentEntity? SourceSupplierPayment { get; set; }
 }
 
 public enum JournalEntryStatus

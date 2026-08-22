@@ -1,8 +1,8 @@
-export const InventoryDocumentType = { OpeningStock: 0, Adjustment: 1, Transfer: 2 } as const
+export const InventoryDocumentType = { OpeningStock: 0, Adjustment: 1, Transfer: 2, Purchase: 3 } as const
 export type InventoryDocumentType = typeof InventoryDocumentType[keyof typeof InventoryDocumentType]
 export const InventoryDocumentStatus = { Draft: 0, Posted: 1 } as const
 export type InventoryDocumentStatus = typeof InventoryDocumentStatus[keyof typeof InventoryDocumentStatus]
-export const StockMovementType = { OpeningStock: 0, PositiveAdjustment: 1, NegativeAdjustment: 2, TransferOut: 3, TransferIn: 4 } as const
+export const StockMovementType = { OpeningStock: 0, PositiveAdjustment: 1, NegativeAdjustment: 2, TransferOut: 3, TransferIn: 4, Purchase: 5 } as const
 export type StockMovementType = typeof StockMovementType[keyof typeof StockMovementType]
 
 export interface StockBalance { productId: string; productName: string; sku: string; categoryName: string; unitCode: string; warehouseId: string; warehouseCode: string; warehouseName: string; branchId: string; branchName: string; quantity: number; averageCostBase: number; totalValueBase: number }

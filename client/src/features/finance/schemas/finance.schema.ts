@@ -1,37 +1,6 @@
 import { z } from 'zod'
-
-export const createCurrencySchema = z.object({
-  code: z.string().min(1, 'Code is required').max(10),
-  name: z.string().min(1, 'Name is required').max(50),
-  symbol: z.string().max(10).optional().default(''),
-  exchangeRate: z.coerce.number().min(0.000001, 'Exchange rate must be positive'),
-  isBaseCurrency: z.boolean().default(false),
-})
-
-export const createMoneyBoxSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  currencyId: z.string().min(1, 'Currency is required'),
-})
-
-export const createAccountSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  type: z.coerce.number().int().min(1).max(5),
-  parentAccountId: z.string().optional(),
-  currencyId: z.string().optional(),
-})
-
-export const createInvoiceSchema = z.object({
-  type: z.coerce.number().int().min(1).max(3),
-  accountId: z.string().min(1, 'Account is required'),
-  title: z.string().min(1, 'Title is required').max(200),
-  totalAmount: z.coerce.number().min(0.01, 'Amount must be positive'),
-  currencyId: z.string().min(1, 'Currency is required'),
-  dueDateUtc: z.string().optional(),
-})
-
-export const payInvoiceSchema = z.object({
-  invoiceId: z.string().min(1, 'Invoice is required'),
-  moneyBoxId: z.string().min(1, 'Money box is required'),
-  amount: z.coerce.number().min(0.01, 'Amount must be positive'),
-  description: z.string().max(500).optional().default(''),
-})
+const id = z.string().uuid('Select a value')
+export const moneyAccountSchema = z.object({ code: z.string().min(1).max(32), name: z.string().min(1).max(200), type: z.union([z.literal(0), z.literal(1)]), branchId: id, currencyId: id, accountingAccountId: id, isActive: z.boolean(), notes: z.string().max(1000), bankName: z.string().max(200), accountNumberOrIban: z.string().max(100) })
+export const exchangeRateSchema = z.object({ fromCurrencyId: id, toCurrencyId: id, rate: z.number().positive(), effectiveAtUtc: z.string().min(1) }).refine((value) => value.fromCurrencyId !== value.toCurrencyId, { path: ['toCurrencyId'], message: 'Currencies must be different' })
+export const moneyTransferSchema = z.object({ transferDate: z.string().min(1), sourceMoneyAccountId: id, destinationMoneyAccountId: id, amount: z.number().positive(), notes: z.string().max(1000) }).refine((value) => value.sourceMoneyAccountId !== value.destinationMoneyAccountId, { path: ['destinationMoneyAccountId'], message: 'Choose a different destination' })
+export const supplierPaymentSchema = z.object({ supplierId: id, paymentDate: z.string().min(1), moneyAccountId: id, exchangeRate: z.number().positive().nullable(), totalAmount: z.number().positive(), notes: z.string().max(1000), allocations: z.array(z.object({ purchaseInvoiceId: id, amount: z.number().min(0) })).min(1) })

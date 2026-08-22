@@ -71,8 +71,7 @@ export function Sidebar() {
 
         {/* Purchase Module */}
         <NavGroup label="Purchases" icon={<ShoppingCartIcon className="w-4 h-4" />}>
-          <SubNavItem to="/purchases/invoices">Purchase Invoice</SubNavItem>
-          <SubNavItem to="/purchases/returns">Purchase Return</SubNavItem>
+          <SubNavItem to="/purchases/invoices">Purchase Invoices</SubNavItem>
         </NavGroup>
 
         {/* Accounting Module */}
@@ -86,9 +85,11 @@ export function Sidebar() {
 
         {/* Finance Module */}
         <NavGroup label="Finance" icon={<BanknoteIcon className="w-4 h-4" />}>
-          <SubNavItem to="/finance/treasury">Treasury (Safes)</SubNavItem>
-          <SubNavItem to="/finance/vouchers">Vouchers</SubNavItem>
-          <SubNavItem to="/finance/transfers">Internal Transfer</SubNavItem>
+          <SubNavItem to="/finance/money-accounts">Money Accounts</SubNavItem>
+          <SubNavItem to="/finance/money-ledger">Money Ledger</SubNavItem>
+          <SubNavItem to="/finance/exchange-rates">Exchange Rates</SubNavItem>
+          <SubNavItem to="/finance/transfers">Transfers</SubNavItem>
+          <SubNavItem to="/finance/supplier-payments">Supplier Payments</SubNavItem>
         </NavGroup>
 
         <NavGroup label="Inventory" icon={<ShoppingBagIcon className="w-4 h-4" />}>

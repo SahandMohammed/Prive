@@ -374,9 +374,8 @@ public sealed class InventoryService
         ErrorCodes.Inventory.ProductNotFound,
         "Product not found.");
 
-    if (await _db.StockMovements.AnyAsync(
-      x => x.ProductId == id,
-      ct))
+    if (await _db.StockMovements.AnyAsync(x => x.ProductId == id, ct) ||
+        await _db.PurchaseInvoiceLines.AnyAsync(x => x.ProductId == id, ct))
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.ProductHasHistory,
@@ -522,9 +521,8 @@ public sealed class InventoryService
         ErrorCodes.Inventory.WarehouseNotFound,
         "Warehouse not found.");
 
-    if (await _db.StockMovements.AnyAsync(
-      x => x.WarehouseId == id,
-      ct))
+    if (await _db.StockMovements.AnyAsync(x => x.WarehouseId == id, ct) ||
+        await _db.PurchaseInvoices.AnyAsync(x => x.WarehouseId == id, ct))
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.WarehouseHasHistory,
@@ -1485,6 +1483,7 @@ public sealed class InventoryService
       .Include(x => x.OpeningStockDocument)
       .Include(x => x.StockAdjustmentDocument)
       .Include(x => x.WarehouseTransferDocument)
+      .Include(x => x.PurchaseInvoice)
       .AsQueryable();
 
     if (query.ProductId is not null)
@@ -1541,6 +1540,12 @@ public sealed class InventoryService
         x => x.WarehouseTransferDocumentId != null);
     }
 
+    if (query.DocumentType is InventoryDocumentType.Purchase)
+    {
+      movementsQuery = movementsQuery.Where(
+        x => x.PurchaseInvoiceId != null);
+    }
+
     if (!string.IsNullOrWhiteSpace(query.DocumentNumber))
     {
       var documentNumber =
@@ -1557,6 +1562,10 @@ public sealed class InventoryService
            .Contains(documentNumber)) ||
         (x.WarehouseTransferDocument != null &&
          x.WarehouseTransferDocument.DocumentNumber
+           .ToLower()
+           .Contains(documentNumber)) ||
+        (x.PurchaseInvoice != null &&
+         x.PurchaseInvoice.DocumentNumber
            .ToLower()
            .Contains(documentNumber)));
     }
@@ -2242,22 +2251,27 @@ public sealed class InventoryService
           ? InventoryDocumentType.Adjustment
           : movement.WarehouseTransferDocumentId is not null
             ? InventoryDocumentType.Transfer
-            : null;
+            : movement.PurchaseInvoiceId is not null
+              ? InventoryDocumentType.Purchase
+              : null;
 
     var documentId =
       movement.OpeningStockDocumentId ??
       movement.StockAdjustmentDocumentId ??
-      movement.WarehouseTransferDocumentId;
+      movement.WarehouseTransferDocumentId ??
+      movement.PurchaseInvoiceId;
 
     var lineId =
       movement.OpeningStockLineId ??
       movement.StockAdjustmentLineId ??
-      movement.WarehouseTransferLineId;
+      movement.WarehouseTransferLineId ??
+      movement.PurchaseInvoiceLineId;
 
     var documentNumber =
       movement.OpeningStockDocument?.DocumentNumber ??
       movement.StockAdjustmentDocument?.DocumentNumber ??
-      movement.WarehouseTransferDocument?.DocumentNumber;
+      movement.WarehouseTransferDocument?.DocumentNumber ??
+      movement.PurchaseInvoice?.DocumentNumber;
 
     return new StockMovementResponse(
       movement.Id,

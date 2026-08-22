@@ -1,4 +1,5 @@
 using Api.Modules.Branch;
+using Api.Modules.Purchase;
 using Api.Modules.User;
 
 namespace Api.Modules.Inventory;
@@ -175,12 +176,16 @@ public sealed class StockMovementEntity
   public WarehouseTransferDocumentEntity? WarehouseTransferDocument { get; set; }
   public Guid? WarehouseTransferLineId { get; set; }
   public WarehouseTransferLineEntity? WarehouseTransferLine { get; set; }
+  public Guid? PurchaseInvoiceId { get; set; }
+  public PurchaseInvoiceEntity? PurchaseInvoice { get; set; }
+  public Guid? PurchaseInvoiceLineId { get; set; }
+  public PurchaseInvoiceLineEntity? PurchaseInvoiceLine { get; set; }
   public Guid PerformedByUserId { get; set; }
   public UserEntity PerformedByUser { get; set; } = null!;
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public enum ProductPurpose { Resale, Consumable, Both }
-public enum StockMovementType { OpeningStock, PositiveAdjustment, NegativeAdjustment, TransferOut, TransferIn }
-public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer }
+public enum StockMovementType { OpeningStock, PositiveAdjustment, NegativeAdjustment, TransferOut, TransferIn, Purchase }
+public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer, Purchase }
 public enum InventoryDocumentStatus { Draft, Posted }
