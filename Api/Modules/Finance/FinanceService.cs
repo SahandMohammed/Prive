@@ -3,6 +3,7 @@ using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Business;
 using Api.Modules.Purchase;
+using Api.Modules.Sales;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -568,6 +569,186 @@ public sealed class FinanceService
       .OrderBy(contact => contact.Name).ThenBy(contact => contact.Id)
       .Select(contact => new FinanceSupplierResponse(contact.Id, contact.Name)).ToListAsync(ct);
 
+  public async Task<PagedResult<CustomerReceiptListResponse>> GetCustomerReceiptsAsync(
+    CustomerReceiptListQuery request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    var query = _db.CustomerReceipts.AsNoTracking().Where(receipt =>
+      receipt.MoneyAccount.AccessAssignments.Any(access => access.UserId == userId));
+    if (!string.IsNullOrWhiteSpace(request.Search))
+    {
+      var search = request.Search.Trim().ToLower();
+      query = query.Where(receipt => receipt.DocumentNumber.ToLower().Contains(search)
+        || receipt.Customer.Name.ToLower().Contains(search));
+    }
+    if (request.CustomerId is not null) query = query.Where(receipt => receipt.CustomerId == request.CustomerId);
+    if (request.BranchId is not null) query = query.Where(receipt => receipt.MoneyAccount.BranchId == request.BranchId);
+    if (request.MoneyAccountId is not null) query = query.Where(receipt => receipt.MoneyAccountId == request.MoneyAccountId);
+    if (request.CurrencyId is not null) query = query.Where(receipt => receipt.CurrencyId == request.CurrencyId);
+    if (request.FromDate is not null) query = query.Where(receipt => receipt.ReceiptDate >= request.FromDate);
+    if (request.ToDate is not null) query = query.Where(receipt => receipt.ReceiptDate <= request.ToDate);
+    if (request.Status is not null) query = query.Where(receipt => receipt.Status == request.Status);
+
+    return await query.OrderByDescending(receipt => receipt.ReceiptDate)
+      .ThenByDescending(receipt => receipt.DocumentNumber)
+      .Select(receipt => new CustomerReceiptListResponse(
+        receipt.Id, receipt.DocumentNumber, receipt.CustomerId, receipt.Customer.Name, receipt.ReceiptDate,
+        receipt.MoneyAccountId, receipt.MoneyAccount.Code, receipt.MoneyAccount.Name,
+        receipt.MoneyAccount.BranchId, receipt.MoneyAccount.Branch.Name,
+        receipt.CurrencyId, receipt.Currency.Code, receipt.TotalAmount, receipt.Status,
+        receipt.CreatedByUserId, receipt.CreatedByUser.Username))
+      .ToPagedResultAsync(request, ct);
+  }
+
+  public async Task<CustomerReceiptResponse> GetCustomerReceiptAsync(
+    Guid id,
+    Guid userId,
+    CancellationToken ct)
+  {
+    var receipt = await CustomerReceiptSource().SingleOrDefaultAsync(item => item.Id == id, ct)
+      ?? throw CustomerReceiptNotFound();
+    await EnsureAccessAsync(receipt.MoneyAccountId, userId, MoneyAccountAccessLevel.View, ct);
+    var ledgerId = await _db.MoneyLedgerEntries.AsNoTracking()
+      .Where(entry => entry.SourceType == MoneyLedgerSourceType.CustomerReceipt
+        && entry.SourceDocumentId == receipt.Id)
+      .Select(entry => (Guid?)entry.Id)
+      .SingleOrDefaultAsync(ct);
+    return ToCustomerReceiptResponse(receipt, ledgerId);
+  }
+
+  public async Task<CustomerReceiptResponse> CreateCustomerReceiptAsync(
+    CustomerReceiptDraftRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    var validation = await ValidateCustomerReceiptAsync(request, userId, ct);
+    var receipt = new CustomerReceiptEntity
+    {
+      DocumentNumber = await NextCustomerReceiptNumberAsync(ct),
+      CreatedByUserId = userId
+    };
+    ApplyCustomerReceipt(receipt, request, validation);
+    ReplaceCustomerReceiptAllocations(receipt, request.Allocations, validation.Invoices);
+    _db.CustomerReceipts.Add(receipt);
+    await SaveDocumentAsync(ErrorCodes.Finance.CustomerReceiptDocumentNumberConflict,
+      "Could not allocate a unique Customer Receipt number. Try again.", ct);
+    return await GetCustomerReceiptAsync(receipt.Id, userId, ct);
+  }
+
+  public async Task<CustomerReceiptResponse> UpdateCustomerReceiptAsync(
+    Guid id,
+    CustomerReceiptDraftRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    var receipt = await _db.CustomerReceipts.Include(item => item.Allocations)
+      .SingleOrDefaultAsync(item => item.Id == id, ct) ?? throw CustomerReceiptNotFound();
+    EnsureDraft(receipt.Status, "Customer Receipt");
+    await EnsureAccessAsync(receipt.MoneyAccountId, userId, MoneyAccountAccessLevel.Operate, ct);
+    var validation = await ValidateCustomerReceiptAsync(request, userId, ct);
+    ApplyCustomerReceipt(receipt, request, validation);
+    ReplaceCustomerReceiptAllocations(receipt, request.Allocations, validation.Invoices);
+    receipt.UpdatedAtUtc = DateTime.UtcNow;
+    await SaveDocumentMutationAsync(ct);
+    return await GetCustomerReceiptAsync(id, userId, ct);
+  }
+
+  public async Task DeleteCustomerReceiptAsync(Guid id, Guid userId, CancellationToken ct)
+  {
+    var receipt = await _db.CustomerReceipts.SingleOrDefaultAsync(item => item.Id == id, ct)
+      ?? throw CustomerReceiptNotFound();
+    EnsureDraft(receipt.Status, "Customer Receipt");
+    await EnsureAccessAsync(receipt.MoneyAccountId, userId, MoneyAccountAccessLevel.Operate, ct);
+    _db.CustomerReceipts.Remove(receipt);
+    await SaveDocumentMutationAsync(ct);
+  }
+
+  public async Task<CustomerReceiptResponse> PostCustomerReceiptAsync(
+    Guid id,
+    Guid userId,
+    CancellationToken ct)
+  {
+    var receipt = await _db.CustomerReceipts.Include(item => item.Allocations)
+      .SingleOrDefaultAsync(item => item.Id == id, ct) ?? throw CustomerReceiptNotFound();
+    EnsureDraft(receipt.Status, "Customer Receipt");
+    await using var transaction = _db.Database.IsRelational()
+      ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
+      : null;
+
+    var request = new CustomerReceiptDraftRequest(
+      receipt.CustomerId,
+      receipt.ReceiptDate,
+      receipt.MoneyAccountId,
+      receipt.ExchangeRate,
+      receipt.TotalAmount,
+      receipt.Notes,
+      receipt.Allocations.Select(allocation => new CustomerReceiptAllocationRequest(
+        allocation.SalesInvoiceId, allocation.Amount)).ToList());
+    var validation = await ValidateCustomerReceiptAsync(request, userId, ct);
+    var receivableAccount = await GetPostingAccountAsync(
+      _options.AccountsReceivableAccountCode, AccountClassification.Asset, "accounts receivable", ct);
+    var postedAt = DateTime.UtcNow;
+    var journal = new JournalEntryEntity
+    {
+      EntryDate = receipt.ReceiptDate,
+      Reference = receipt.DocumentNumber,
+      Description = $"Customer receipt {receipt.DocumentNumber}",
+      BranchId = validation.Account.BranchId,
+      Status = JournalEntryStatus.Posted,
+      Type = JournalEntryType.Standard,
+      PostedAtUtc = postedAt,
+      Lines =
+      {
+        JournalLine(validation.Account.AccountingAccountId, receipt.CurrencyId, receipt.ExchangeRate,
+          receipt.TotalAmount, 0, receipt.BaseTotalAmount, 0, $"Received into {validation.Account.Code}"),
+        JournalLine(receivableAccount.Id, receipt.CurrencyId, receipt.ExchangeRate,
+          0, receipt.TotalAmount, 0, receipt.BaseTotalAmount, $"Receivable settled for {validation.CustomerName}")
+      }
+    };
+    receipt.JournalEntry = journal;
+    receipt.Status = FinanceDocumentStatus.Posted;
+    receipt.PostedAtUtc = postedAt;
+    receipt.UpdatedAtUtc = postedAt;
+    foreach (var allocation in receipt.Allocations)
+      allocation.BaseAmount = Money(allocation.Amount * receipt.ExchangeRate);
+    _db.JournalEntries.Add(journal);
+    _db.MoneyLedgerEntries.Add(LedgerEntry(validation.Account, receipt.ReceiptDate,
+      MoneyLedgerSourceType.CustomerReceipt, receipt.Id, receipt.DocumentNumber,
+      receipt.TotalAmount, receipt.BaseTotalAmount, receipt.BaseCurrencyId, receipt.ExchangeRate,
+      journal.Id, userId, receipt.Notes, postedAt));
+    await SaveDocumentMutationAsync(ct);
+    if (transaction is not null) await transaction.CommitAsync(ct);
+    return await GetCustomerReceiptAsync(id, userId, ct);
+  }
+
+  public async Task<List<OutstandingSalesInvoiceResponse>> GetOutstandingSalesInvoicesAsync(
+    Guid customerId,
+    Guid? currencyId,
+    CancellationToken ct)
+  {
+    var query = _db.SalesInvoices.AsNoTracking()
+      .Where(invoice => invoice.CustomerId == customerId && invoice.Status == SalesInvoiceStatus.Posted);
+    if (currencyId is not null) query = query.Where(invoice => invoice.CurrencyId == currencyId);
+    var rows = await query.OrderBy(invoice => invoice.InvoiceDate).ThenBy(invoice => invoice.DocumentNumber)
+      .Select(invoice => new OutstandingSalesInvoiceResponse(
+        invoice.Id, invoice.DocumentNumber, invoice.InvoiceDate, invoice.CustomerId!.Value, invoice.Customer!.Name,
+        invoice.CurrencyId, invoice.Currency.Code, invoice.ExchangeRate, invoice.Total,
+        _db.CustomerReceiptAllocations.Where(allocation => allocation.SalesInvoiceId == invoice.Id
+          && allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
+          .Sum(allocation => (decimal?)allocation.Amount) ?? 0,
+        invoice.Total - (_db.CustomerReceiptAllocations.Where(allocation => allocation.SalesInvoiceId == invoice.Id
+          && allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
+          .Sum(allocation => (decimal?)allocation.Amount) ?? 0)))
+      .ToListAsync(ct);
+    return rows.Where(invoice => invoice.OutstandingAmount > 0).ToList();
+  }
+
+  public Task<List<FinanceCustomerResponse>> GetCustomersAsync(CancellationToken ct) =>
+    _db.Contacts.AsNoTracking().Where(contact => contact.IsActive && contact.IsCustomer)
+      .OrderBy(contact => contact.Name).ThenBy(contact => contact.Id)
+      .Select(contact => new FinanceCustomerResponse(contact.Id, contact.Name)).ToListAsync(ct);
+
   private async Task<TransferValidation> ValidateTransferAsync(
     MoneyTransferDraftRequest request,
     Guid userId,
@@ -645,6 +826,66 @@ public sealed class FinanceService
           $"Allocation for Purchase Invoice '{invoices[allocation.PurchaseInvoiceId].DocumentNumber}' exceeds its outstanding amount.");
     }
     return new SupplierPaymentValidation(account, supplier.Name, business.BaseCurrencyId, rate, invoices);
+  }
+
+  private async Task<CustomerReceiptValidation> ValidateCustomerReceiptAsync(
+    CustomerReceiptDraftRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    if (request.Allocations.Count == 0)
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptAllocationsRequired,
+        "Allocate the receipt to at least one Sales Invoice.");
+    if (request.Allocations.Select(allocation => allocation.SalesInvoiceId).Distinct().Count() != request.Allocations.Count)
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptAllocationDuplicate,
+        "A Sales Invoice may be allocated only once per receipt.");
+    if (request.Allocations.Any(allocation => allocation.Amount <= 0))
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptAllocationInvalid,
+        "Allocation amounts must be greater than zero.");
+    if (Money(request.Allocations.Sum(allocation => allocation.Amount)) != Money(request.TotalAmount))
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptMustBeFullyAllocated,
+        "The Customer Receipt total must be fully allocated to Sales Invoices.");
+
+    await EnsureAccessAsync(request.MoneyAccountId, userId, MoneyAccountAccessLevel.Operate, ct);
+    var account = await _db.MoneyAccounts.AsNoTracking().Include(item => item.AccountingAccount)
+      .SingleOrDefaultAsync(item => item.Id == request.MoneyAccountId, ct) ?? throw MoneyAccountNotFound();
+    EnsureActive(account);
+    var customer = await _db.Contacts.AsNoTracking()
+      .SingleOrDefaultAsync(contact => contact.Id == request.CustomerId && contact.IsActive && contact.IsCustomer, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.CustomerInvalid, "Select an active customer contact.");
+    var business = await GetBusinessAsync(ct);
+    var rate = ResolveExplicitRate(account.CurrencyId, business.BaseCurrencyId, request.ExchangeRate);
+    var invoiceIds = request.Allocations.Select(allocation => allocation.SalesInvoiceId).ToList();
+    var invoices = await _db.SalesInvoices.AsNoTracking()
+      .Where(invoice => invoiceIds.Contains(invoice.Id)).ToDictionaryAsync(invoice => invoice.Id, ct);
+    if (invoices.Count != invoiceIds.Count || invoices.Values.Any(invoice => invoice.Status != SalesInvoiceStatus.Posted))
+      throw new BadRequestException(ErrorCodes.Finance.SalesInvoiceInvalid,
+        "Every allocation must reference a posted Sales Invoice.");
+    if (invoices.Values.Any(invoice => invoice.CustomerId != request.CustomerId))
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptCustomerMismatch,
+        "All allocated Sales Invoices must belong to the selected customer.");
+    if (invoices.Values.Any(invoice => invoice.CurrencyId != account.CurrencyId))
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptCurrencyMismatch,
+        "The Money Account and every allocated Sales Invoice must use the same currency.");
+    if (invoices.Values.Any(invoice => invoice.ExchangeRate != rate))
+      throw new BadRequestException(ErrorCodes.Finance.ReceiptExchangeRateMismatch,
+        "Foreign-currency receipts currently require the same historical exchange rate as every allocated Sales Invoice.");
+
+    var postedAllocations = await _db.CustomerReceiptAllocations.AsNoTracking()
+      .Where(allocation => invoiceIds.Contains(allocation.SalesInvoiceId)
+        && allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
+      .GroupBy(allocation => allocation.SalesInvoiceId)
+      .Select(group => new { SalesInvoiceId = group.Key, Amount = group.Sum(allocation => allocation.Amount) })
+      .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.Amount, ct);
+    foreach (var allocation in request.Allocations)
+    {
+      var received = postedAllocations.GetValueOrDefault(allocation.SalesInvoiceId);
+      var outstanding = invoices[allocation.SalesInvoiceId].Total - received;
+      if (allocation.Amount > outstanding)
+        throw new BadRequestException(ErrorCodes.Finance.ReceiptAllocationExceedsOutstanding,
+          $"Allocation for Sales Invoice '{invoices[allocation.SalesInvoiceId].DocumentNumber}' exceeds its outstanding amount.");
+    }
+    return new CustomerReceiptValidation(account, customer.Name, business.BaseCurrencyId, rate, invoices);
   }
 
   private async Task ValidateMoneyAccountReferencesAsync(MoneyAccountRequest request, CancellationToken ct)
@@ -735,6 +976,14 @@ public sealed class FinanceService
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("PAY-SUP-") && int.TryParse(last[8..], out var value) ? value + 1 : 1;
     return $"PAY-SUP-{next:000000}";
+  }
+
+  private async Task<string> NextCustomerReceiptNumberAsync(CancellationToken ct)
+  {
+    var last = await _db.CustomerReceipts.Select(receipt => receipt.DocumentNumber)
+      .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
+    var next = last is not null && last.StartsWith("REC-") && int.TryParse(last[4..], out var value) ? value + 1 : 1;
+    return $"REC-{next:000000}";
   }
 
   private async Task SaveDocumentAsync(string code, string message, CancellationToken ct)
@@ -832,6 +1081,30 @@ public sealed class FinanceService
       .Select(allocation => new SupplierPaymentAllocationResponse(allocation.Id, allocation.PurchaseInvoiceId,
         allocation.PurchaseInvoice.DocumentNumber, allocation.Amount, allocation.BaseAmount)).ToList());
 
+  private IQueryable<CustomerReceiptEntity> CustomerReceiptSource() => _db.CustomerReceipts.AsNoTracking()
+    .Include(receipt => receipt.Customer)
+    .Include(receipt => receipt.MoneyAccount).ThenInclude(account => account.Branch)
+    .Include(receipt => receipt.Currency)
+    .Include(receipt => receipt.BaseCurrency)
+    .Include(receipt => receipt.CreatedByUser)
+    .Include(receipt => receipt.Allocations).ThenInclude(allocation => allocation.SalesInvoice);
+
+  private static CustomerReceiptResponse ToCustomerReceiptResponse(
+    CustomerReceiptEntity receipt,
+    Guid? moneyLedgerEntryId) => new(
+    receipt.Id, receipt.DocumentNumber, receipt.CustomerId, receipt.Customer.Name, receipt.ReceiptDate,
+    receipt.MoneyAccountId, receipt.MoneyAccount.Code, receipt.MoneyAccount.Name,
+    receipt.MoneyAccount.BranchId, receipt.MoneyAccount.Branch.Name,
+    receipt.CurrencyId, receipt.Currency.Code, receipt.BaseCurrencyId, receipt.BaseCurrency.Code,
+    receipt.ExchangeRate, receipt.TotalAmount, receipt.BaseTotalAmount, receipt.Status, receipt.Notes,
+    receipt.CreatedByUserId, receipt.CreatedByUser.Username, receipt.CreatedAtUtc, receipt.UpdatedAtUtc,
+    receipt.PostedAtUtc, receipt.JournalEntryId, moneyLedgerEntryId,
+    receipt.Allocations.OrderBy(allocation => allocation.SalesInvoice.DocumentNumber)
+      .Select(allocation => new CustomerReceiptAllocationResponse(
+        allocation.Id, allocation.SalesInvoiceId, allocation.SalesInvoice.DocumentNumber,
+        allocation.SalesInvoice.InvoiceDate, allocation.SalesInvoice.Total,
+        allocation.Amount, allocation.BaseAmount)).ToList());
+
   private void ReplaceAllocations(
     SupplierPaymentEntity payment,
     List<SupplierPaymentAllocationRequest> requests,
@@ -849,6 +1122,31 @@ public sealed class FinanceService
       };
       payment.Allocations.Add(allocation);
     }
+  }
+
+  private void ReplaceCustomerReceiptAllocations(
+    CustomerReceiptEntity receipt,
+    List<CustomerReceiptAllocationRequest> requests,
+    IReadOnlyDictionary<Guid, SalesInvoiceEntity> invoices)
+  {
+    var retained = new HashSet<CustomerReceiptAllocationEntity>();
+    foreach (var request in requests)
+    {
+      var allocation = receipt.Allocations.SingleOrDefault(existing =>
+        existing.SalesInvoiceId == request.SalesInvoiceId && !retained.Contains(existing));
+      allocation ??= receipt.Allocations.FirstOrDefault(existing => !retained.Contains(existing));
+      if (allocation is null)
+      {
+        allocation = new CustomerReceiptAllocationEntity();
+        receipt.Allocations.Add(allocation);
+      }
+      allocation.SalesInvoiceId = request.SalesInvoiceId;
+      allocation.Amount = Money(request.Amount);
+      allocation.BaseAmount = Money(request.Amount * invoices[request.SalesInvoiceId].ExchangeRate);
+      retained.Add(allocation);
+    }
+    foreach (var removed in receipt.Allocations.Where(allocation => !retained.Contains(allocation)).ToList())
+      _db.CustomerReceiptAllocations.Remove(removed);
   }
 
   private static void ApplyMoneyAccount(MoneyAccountEntity account, MoneyAccountRequest request, string code)
@@ -895,6 +1193,22 @@ public sealed class FinanceService
     payment.TotalAmount = Money(request.TotalAmount);
     payment.BaseTotalAmount = Money(request.TotalAmount * validation.ExchangeRate);
     payment.Notes = Trim(request.Notes);
+  }
+
+  private static void ApplyCustomerReceipt(
+    CustomerReceiptEntity receipt,
+    CustomerReceiptDraftRequest request,
+    CustomerReceiptValidation validation)
+  {
+    receipt.CustomerId = request.CustomerId;
+    receipt.ReceiptDate = request.ReceiptDate;
+    receipt.MoneyAccountId = request.MoneyAccountId;
+    receipt.CurrencyId = validation.Account.CurrencyId;
+    receipt.BaseCurrencyId = validation.BaseCurrencyId;
+    receipt.ExchangeRate = validation.ExchangeRate;
+    receipt.TotalAmount = Money(request.TotalAmount);
+    receipt.BaseTotalAmount = Money(request.TotalAmount * validation.ExchangeRate);
+    receipt.Notes = Trim(request.Notes);
   }
 
   private static JournalLineEntity JournalLine(
@@ -991,6 +1305,8 @@ public sealed class FinanceService
     ErrorCodes.Finance.MoneyTransferNotFound, "Money Transfer not found.");
   private static NotFoundException SupplierPaymentNotFound() => new(
     ErrorCodes.Finance.SupplierPaymentNotFound, "Supplier Payment not found.");
+  private static NotFoundException CustomerReceiptNotFound() => new(
+    ErrorCodes.Finance.CustomerReceiptNotFound, "Customer Receipt not found.");
 
   private sealed record TransferValidation(
     Guid CurrencyId,
@@ -1004,4 +1320,11 @@ public sealed class FinanceService
     Guid BaseCurrencyId,
     decimal ExchangeRate,
     IReadOnlyDictionary<Guid, PurchaseInvoiceEntity> Invoices);
+
+  private sealed record CustomerReceiptValidation(
+    MoneyAccountEntity Account,
+    string CustomerName,
+    Guid BaseCurrencyId,
+    decimal ExchangeRate,
+    IReadOnlyDictionary<Guid, SalesInvoiceEntity> Invoices);
 }

@@ -4,6 +4,7 @@ public sealed class FinanceOptions
 {
   public const string SectionName = "Finance";
   public string AccountsPayableAccountCode { get; init; } = "23214";
+  public string AccountsReceivableAccountCode { get; init; } = "13214";
   public string OpeningBalanceEquityAccountCode { get; init; } = "261";
 }
 
@@ -15,6 +16,8 @@ public static class FinanceModule
       .Bind(configuration.GetSection(FinanceOptions.SectionName))
       .Validate(options => !string.IsNullOrWhiteSpace(options.AccountsPayableAccountCode),
         "Finance:AccountsPayableAccountCode is required.")
+      .Validate(options => !string.IsNullOrWhiteSpace(options.AccountsReceivableAccountCode),
+        "Finance:AccountsReceivableAccountCode is required.")
       .Validate(options => !string.IsNullOrWhiteSpace(options.OpeningBalanceEquityAccountCode),
         "Finance:OpeningBalanceEquityAccountCode is required.")
       .ValidateOnStart();

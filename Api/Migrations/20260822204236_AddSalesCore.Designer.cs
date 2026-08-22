@@ -3,6 +3,7 @@ using System;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260822204236_AddSalesCore")]
+    partial class AddSalesCore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -444,123 +447,6 @@ namespace api.Migrations
                         .IsUnique();
 
                     b.ToTable("currencies", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptAllocationEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("BaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("CustomerReceiptId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SalesInvoiceId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SalesInvoiceId");
-
-                    b.HasIndex("CustomerReceiptId", "SalesInvoiceId")
-                        .IsUnique();
-
-                    b.ToTable("customer_receipt_allocations", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BaseCurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("BaseTotalAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DocumentNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
-
-                    b.Property<Guid?>("JournalEntryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("MoneyAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("PostedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateOnly>("ReceiptDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Status")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BaseCurrencyId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("CurrencyId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("DocumentNumber")
-                        .IsUnique();
-
-                    b.HasIndex("JournalEntryId")
-                        .IsUnique()
-                        .HasFilter("\"JournalEntryId\" IS NOT NULL");
-
-                    b.HasIndex("MoneyAccountId");
-
-                    b.HasIndex("ReceiptDate", "Status");
-
-                    b.ToTable("customer_receipts", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.ExchangeRateEntity", b =>
@@ -1994,75 +1880,6 @@ namespace api.Migrations
                     b.Navigation("BaseCurrency");
                 });
 
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptAllocationEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Finance.CustomerReceiptEntity", "CustomerReceipt")
-                        .WithMany("Allocations")
-                        .HasForeignKey("CustomerReceiptId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
-                        .WithMany("ReceiptAllocations")
-                        .HasForeignKey("SalesInvoiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CustomerReceipt");
-
-                    b.Navigation("SalesInvoice");
-                });
-
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "BaseCurrency")
-                        .WithMany()
-                        .HasForeignKey("BaseCurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.User.UserEntity", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "Currency")
-                        .WithMany()
-                        .HasForeignKey("CurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Contact.ContactEntity", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Accounting.JournalEntryEntity", "JournalEntry")
-                        .WithOne("SourceCustomerReceipt")
-                        .HasForeignKey("Api.Modules.Finance.CustomerReceiptEntity", "JournalEntryId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Api.Modules.Finance.MoneyAccountEntity", "MoneyAccount")
-                        .WithMany()
-                        .HasForeignKey("MoneyAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("BaseCurrency");
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("Currency");
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("JournalEntry");
-
-                    b.Navigation("MoneyAccount");
-                });
-
             modelBuilder.Entity("Api.Modules.Finance.ExchangeRateEntity", b =>
                 {
                     b.HasOne("Api.Modules.User.UserEntity", "CreatedByUser")
@@ -2776,8 +2593,6 @@ namespace api.Migrations
 
                     b.Navigation("ReversalJournals");
 
-                    b.Navigation("SourceCustomerReceipt");
-
                     b.Navigation("SourceMoneyTransfer");
 
                     b.Navigation("SourcePurchaseInvoice");
@@ -2785,11 +2600,6 @@ namespace api.Migrations
                     b.Navigation("SourceSalesInvoice");
 
                     b.Navigation("SourceSupplierPayment");
-                });
-
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptEntity", b =>
-                {
-                    b.Navigation("Allocations");
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.MoneyAccountEntity", b =>
@@ -2877,8 +2687,6 @@ namespace api.Migrations
                     b.Navigation("Lines");
 
                     b.Navigation("Movements");
-
-                    b.Navigation("ReceiptAllocations");
                 });
 
             modelBuilder.Entity("Api.Modules.Sales.SalesInvoiceLineEntity", b =>

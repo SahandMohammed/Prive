@@ -11,6 +11,8 @@ import {
   ExchangeRatesPage,
   MoneyTransfersPage,
   SupplierPaymentsPage,
+  CustomerReceiptsPage,
+  CustomerReceiptPage,
 } from '@/features/finance'
 import { 
   AccountingDashboard, 
@@ -22,10 +24,8 @@ import {
   TrialBalancePage,
 } from '@/features/accounting'
 import { 
-  SalesDashboard, 
+  ServicesPage,
   SalesInvoicesPage, 
-  SalesReturnsPage, 
-  POSPage,
   CreateSalesInvoicePage
 } from '@/features/sales'
 import { 
@@ -79,6 +79,9 @@ export const router = createBrowserRouter([
           { path: '/finance/exchange-rates', element: <ExchangeRatesPage /> },
           { path: '/finance/transfers', element: <MoneyTransfersPage /> },
           { path: '/finance/supplier-payments', element: <SupplierPaymentsPage /> },
+          { path: '/finance/customer-receipts', element: <CustomerReceiptsPage /> },
+          { path: '/finance/customer-receipts/new', element: <CustomerReceiptPage /> },
+          { path: '/finance/customer-receipts/:id', element: <CustomerReceiptPage /> },
 
           // Accounting
           { path: '/accounting', element: <AccountingDashboard /> },
@@ -90,11 +93,11 @@ export const router = createBrowserRouter([
           { path: '/accounting/trial-balance', element: <TrialBalancePage /> },
 
           // Sales
-          { path: '/sales', element: <SalesDashboard /> },
+          { path: '/sales', element: <Navigate to="/sales/invoices" replace /> },
+          { path: '/sales/services', element: <ServicesPage /> },
           { path: '/sales/invoices', element: <SalesInvoicesPage /> },
           { path: '/sales/invoices/new', element: <CreateSalesInvoicePage /> },
-          { path: '/sales/returns', element: <SalesReturnsPage /> },
-          { path: '/sales/pos', element: <POSPage /> },
+          { path: '/sales/invoices/:id', element: <CreateSalesInvoicePage /> },
 
           // Purchases
           { path: '/purchases', element: <Navigate to="/purchases/invoices" replace /> },

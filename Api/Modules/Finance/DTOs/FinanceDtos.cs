@@ -241,3 +241,99 @@ public sealed record OutstandingPurchaseInvoiceResponse(
   decimal OutstandingAmount);
 
 public sealed record FinanceSupplierResponse(Guid Id, string Name);
+
+public sealed class CustomerReceiptListQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+  public Guid? CustomerId { get; init; }
+  public Guid? BranchId { get; init; }
+  public Guid? MoneyAccountId { get; init; }
+  public Guid? CurrencyId { get; init; }
+  public DateOnly? FromDate { get; init; }
+  public DateOnly? ToDate { get; init; }
+  public FinanceDocumentStatus? Status { get; init; }
+}
+
+public sealed record CustomerReceiptAllocationRequest(
+  [Required] Guid SalesInvoiceId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount);
+
+public sealed record CustomerReceiptDraftRequest(
+  [Required] Guid CustomerId,
+  [Required] DateOnly ReceiptDate,
+  [Required] Guid MoneyAccountId,
+  decimal? ExchangeRate,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal TotalAmount,
+  [MaxLength(1000)] string? Notes,
+  [Required, MinLength(1)] List<CustomerReceiptAllocationRequest> Allocations);
+
+public sealed record CustomerReceiptAllocationResponse(
+  Guid Id,
+  Guid SalesInvoiceId,
+  string SalesInvoiceDocumentNumber,
+  DateOnly SalesInvoiceDate,
+  decimal SalesInvoiceTotal,
+  decimal Amount,
+  decimal BaseAmount);
+
+public sealed record CustomerReceiptListResponse(
+  Guid Id,
+  string DocumentNumber,
+  Guid CustomerId,
+  string CustomerName,
+  DateOnly ReceiptDate,
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid BranchId,
+  string BranchName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal TotalAmount,
+  FinanceDocumentStatus Status,
+  Guid CreatedByUserId,
+  string CreatedByUsername);
+
+public sealed record CustomerReceiptResponse(
+  Guid Id,
+  string DocumentNumber,
+  Guid CustomerId,
+  string CustomerName,
+  DateOnly ReceiptDate,
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid BranchId,
+  string BranchName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  decimal ExchangeRate,
+  decimal TotalAmount,
+  decimal BaseTotalAmount,
+  FinanceDocumentStatus Status,
+  string? Notes,
+  Guid CreatedByUserId,
+  string CreatedByUsername,
+  DateTime CreatedAtUtc,
+  DateTime UpdatedAtUtc,
+  DateTime? PostedAtUtc,
+  Guid? JournalEntryId,
+  Guid? MoneyLedgerEntryId,
+  List<CustomerReceiptAllocationResponse> Allocations);
+
+public sealed record OutstandingSalesInvoiceResponse(
+  Guid Id,
+  string DocumentNumber,
+  DateOnly InvoiceDate,
+  Guid CustomerId,
+  string CustomerName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal ExchangeRate,
+  decimal OriginalTotal,
+  decimal ReceivedAmount,
+  decimal OutstandingAmount);
+
+public sealed record FinanceCustomerResponse(Guid Id, string Name);

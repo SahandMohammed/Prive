@@ -150,9 +150,57 @@ public static class ErrorCodes
     public const string PaymentCurrencyMismatch = "FINANCE_PAYMENT_CURRENCY_MISMATCH";
     public const string PaymentExchangeRateMismatch = "FINANCE_PAYMENT_EXCHANGE_RATE_MISMATCH";
     public const string PaymentAllocationExceedsOutstanding = "FINANCE_PAYMENT_ALLOCATION_EXCEEDS_OUTSTANDING";
+    public const string CustomerReceiptNotFound = "FINANCE_CUSTOMER_RECEIPT_NOT_FOUND";
+    public const string CustomerReceiptDocumentNumberConflict = "FINANCE_CUSTOMER_RECEIPT_DOCUMENT_NUMBER_CONFLICT";
+    public const string CustomerInvalid = "FINANCE_CUSTOMER_INVALID";
+    public const string SalesInvoiceInvalid = "FINANCE_SALES_INVOICE_INVALID";
+    public const string ReceiptAllocationsRequired = "FINANCE_RECEIPT_ALLOCATIONS_REQUIRED";
+    public const string ReceiptAllocationDuplicate = "FINANCE_RECEIPT_ALLOCATION_DUPLICATE";
+    public const string ReceiptAllocationInvalid = "FINANCE_RECEIPT_ALLOCATION_INVALID";
+    public const string ReceiptMustBeFullyAllocated = "FINANCE_RECEIPT_MUST_BE_FULLY_ALLOCATED";
+    public const string ReceiptCustomerMismatch = "FINANCE_RECEIPT_CUSTOMER_MISMATCH";
+    public const string ReceiptCurrencyMismatch = "FINANCE_RECEIPT_CURRENCY_MISMATCH";
+    public const string ReceiptExchangeRateMismatch = "FINANCE_RECEIPT_EXCHANGE_RATE_MISMATCH";
+    public const string ReceiptAllocationExceedsOutstanding = "FINANCE_RECEIPT_ALLOCATION_EXCEEDS_OUTSTANDING";
     public const string InsufficientBalance = "FINANCE_INSUFFICIENT_BALANCE";
     public const string DocumentNotDraft = "FINANCE_DOCUMENT_NOT_DRAFT";
     public const string JournalDirectReversalNotAllowed = "FINANCE_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+  }
+
+  public static class Sales
+  {
+    public const string ServiceCategoryNotFound = "SALES_SERVICE_CATEGORY_NOT_FOUND";
+    public const string ServiceCategoryNameTaken = "SALES_SERVICE_CATEGORY_NAME_TAKEN";
+    public const string ServiceCategoryInUse = "SALES_SERVICE_CATEGORY_IN_USE";
+    public const string ServiceCategoryInvalid = "SALES_SERVICE_CATEGORY_INVALID";
+    public const string ServiceNotFound = "SALES_SERVICE_NOT_FOUND";
+    public const string ServiceInvalid = "SALES_SERVICE_INVALID";
+    public const string ServiceHasHistory = "SALES_SERVICE_HAS_HISTORY";
+    public const string ServicePriceInvalid = "SALES_SERVICE_PRICE_INVALID";
+    public const string ServiceDurationInvalid = "SALES_SERVICE_DURATION_INVALID";
+    public const string ServiceRevenueAccountInvalid = "SALES_SERVICE_REVENUE_ACCOUNT_INVALID";
+    public const string InvoiceNotFound = "SALES_INVOICE_NOT_FOUND";
+    public const string DocumentNotDraft = "SALES_INVOICE_NOT_DRAFT";
+    public const string DocumentNumberConflict = "SALES_DOCUMENT_NUMBER_CONFLICT";
+    public const string CustomerRequired = "SALES_CUSTOMER_REQUIRED";
+    public const string CustomerInvalid = "SALES_CUSTOMER_INVALID";
+    public const string BranchInvalid = "SALES_BRANCH_INVALID";
+    public const string WarehouseRequired = "SALES_WAREHOUSE_REQUIRED";
+    public const string WarehouseInvalid = "SALES_WAREHOUSE_INVALID";
+    public const string WarehouseBranchMismatch = "SALES_WAREHOUSE_BRANCH_MISMATCH";
+    public const string CurrencyInvalid = "SALES_CURRENCY_INVALID";
+    public const string ExchangeRateRequired = "SALES_EXCHANGE_RATE_REQUIRED";
+    public const string BusinessNotConfigured = "SALES_BUSINESS_NOT_CONFIGURED";
+    public const string LinesRequired = "SALES_LINES_REQUIRED";
+    public const string LineTypeInvalid = "SALES_LINE_TYPE_INVALID";
+    public const string DuplicateLine = "SALES_DUPLICATE_LINE";
+    public const string ProductInvalid = "SALES_PRODUCT_INVALID";
+    public const string UnitInvalid = "SALES_UNIT_INVALID";
+    public const string QuantityInvalid = "SALES_QUANTITY_INVALID";
+    public const string UnitPriceInvalid = "SALES_UNIT_PRICE_INVALID";
+    public const string InsufficientStock = "SALES_INSUFFICIENT_STOCK";
+    public const string AccountMappingInvalid = "SALES_ACCOUNT_MAPPING_INVALID";
+    public const string JournalDirectReversalNotAllowed = "SALES_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
   }
 
   public static class Common

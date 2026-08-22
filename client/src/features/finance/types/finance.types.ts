@@ -4,7 +4,7 @@ export const MoneyAccountAccessLevel = { View: 0, Operate: 1 } as const
 export type MoneyAccountAccessLevel = typeof MoneyAccountAccessLevel[keyof typeof MoneyAccountAccessLevel]
 export const FinanceDocumentStatus = { Draft: 0, Posted: 1 } as const
 export type FinanceDocumentStatus = typeof FinanceDocumentStatus[keyof typeof FinanceDocumentStatus]
-export const MoneyLedgerSourceType = { OpeningBalance: 0, MoneyTransfer: 1, SupplierPayment: 2 } as const
+export const MoneyLedgerSourceType = { OpeningBalance: 0, MoneyTransfer: 1, SupplierPayment: 2, CustomerReceipt: 3 } as const
 export type MoneyLedgerSourceType = typeof MoneyLedgerSourceType[keyof typeof MoneyLedgerSourceType]
 
 export interface PageFilters { page: number; pageSize: number; [key: string]: string | number | boolean | undefined }
@@ -23,6 +23,12 @@ export interface SupplierPayment { id: string; documentNumber: string; supplierI
 export interface SupplierPaymentInput { supplierId: string; paymentDate: string; moneyAccountId: string; exchangeRate: number | null; totalAmount: number; notes: string | null; allocations: { purchaseInvoiceId: string; amount: number }[] }
 export interface OutstandingPurchaseInvoice { id: string; documentNumber: string; invoiceDate: string; supplierId: string; supplierName: string; currencyId: string; currencyCode: string; exchangeRate: number; originalTotal: number; paidAmount: number; outstandingAmount: number }
 export interface FinanceSupplier { id: string; name: string }
+export interface CustomerReceiptAllocation { id: string; salesInvoiceId: string; salesInvoiceDocumentNumber: string; salesInvoiceDate: string; salesInvoiceTotal: number; amount: number; baseAmount: number }
+export interface CustomerReceiptSummary { id: string; documentNumber: string; customerId: string; customerName: string; receiptDate: string; moneyAccountId: string; moneyAccountCode: string; moneyAccountName: string; branchId: string; branchName: string; currencyId: string; currencyCode: string; totalAmount: number; status: FinanceDocumentStatus; createdByUserId: string; createdByUsername: string }
+export interface CustomerReceipt { id: string; documentNumber: string; customerId: string; customerName: string; receiptDate: string; moneyAccountId: string; moneyAccountCode: string; moneyAccountName: string; branchId: string; branchName: string; currencyId: string; currencyCode: string; baseCurrencyId: string; baseCurrencyCode: string; exchangeRate: number; totalAmount: number; baseTotalAmount: number; status: FinanceDocumentStatus; notes: string | null; createdByUserId: string; createdByUsername: string; createdAtUtc: string; updatedAtUtc: string; postedAtUtc: string | null; journalEntryId: string | null; moneyLedgerEntryId: string | null; allocations: CustomerReceiptAllocation[] }
+export interface CustomerReceiptInput { customerId: string; receiptDate: string; moneyAccountId: string; exchangeRate: number | null; totalAmount: number; notes: string | null; allocations: { salesInvoiceId: string; amount: number }[] }
+export interface OutstandingSalesInvoice { id: string; documentNumber: string; invoiceDate: string; customerId: string; customerName: string; currencyId: string; currencyCode: string; exchangeRate: number; originalTotal: number; receivedAmount: number; outstandingAmount: number }
+export interface FinanceCustomer { id: string; name: string }
 
 // Legacy Sales prototype contracts retained until the Sales module is replaced.
 export const InvoiceType = { SalesInvoice: 1, SalesReturn: 2, PurchaseInvoice: 3, PurchaseReturn: 4 } as const

@@ -64,9 +64,8 @@ export function Sidebar() {
 
         {/* Sales Module */}
         <NavGroup label="Sales" icon={<ShoppingBagIcon className="w-4 h-4" />}>
-          <SubNavItem to="/sales/invoices">Sales Invoice</SubNavItem>
-          <SubNavItem to="/sales/returns">Sales Return</SubNavItem>
-          <SubNavItem to="/sales/pos">POS</SubNavItem>
+          <SubNavItem to="/sales/services">Services</SubNavItem>
+          <SubNavItem to="/sales/invoices">Sales Invoices</SubNavItem>
         </NavGroup>
 
         {/* Purchase Module */}
@@ -90,6 +89,7 @@ export function Sidebar() {
           <SubNavItem to="/finance/exchange-rates">Exchange Rates</SubNavItem>
           <SubNavItem to="/finance/transfers">Transfers</SubNavItem>
           <SubNavItem to="/finance/supplier-payments">Supplier Payments</SubNavItem>
+          <SubNavItem to="/finance/customer-receipts">Customer Receipts</SubNavItem>
         </NavGroup>
 
         <NavGroup label="Inventory" icon={<ShoppingBagIcon className="w-4 h-4" />}>

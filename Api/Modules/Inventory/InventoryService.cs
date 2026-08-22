@@ -375,7 +375,8 @@ public sealed class InventoryService
         "Product not found.");
 
     if (await _db.StockMovements.AnyAsync(x => x.ProductId == id, ct) ||
-        await _db.PurchaseInvoiceLines.AnyAsync(x => x.ProductId == id, ct))
+        await _db.PurchaseInvoiceLines.AnyAsync(x => x.ProductId == id, ct) ||
+        await _db.SalesInvoiceLines.AnyAsync(x => x.ProductId == id, ct))
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.ProductHasHistory,
@@ -1484,6 +1485,7 @@ public sealed class InventoryService
       .Include(x => x.StockAdjustmentDocument)
       .Include(x => x.WarehouseTransferDocument)
       .Include(x => x.PurchaseInvoice)
+      .Include(x => x.SalesInvoice)
       .AsQueryable();
 
     if (query.ProductId is not null)
@@ -1546,6 +1548,12 @@ public sealed class InventoryService
         x => x.PurchaseInvoiceId != null);
     }
 
+    if (query.DocumentType is InventoryDocumentType.SalesInvoice)
+    {
+      movementsQuery = movementsQuery.Where(
+        x => x.SalesInvoiceId != null);
+    }
+
     if (!string.IsNullOrWhiteSpace(query.DocumentNumber))
     {
       var documentNumber =
@@ -1566,6 +1574,10 @@ public sealed class InventoryService
            .Contains(documentNumber)) ||
         (x.PurchaseInvoice != null &&
          x.PurchaseInvoice.DocumentNumber
+           .ToLower()
+           .Contains(documentNumber)) ||
+        (x.SalesInvoice != null &&
+         x.SalesInvoice.DocumentNumber
            .ToLower()
            .Contains(documentNumber)));
     }
@@ -2253,25 +2265,30 @@ public sealed class InventoryService
             ? InventoryDocumentType.Transfer
             : movement.PurchaseInvoiceId is not null
               ? InventoryDocumentType.Purchase
+              : movement.SalesInvoiceId is not null
+                ? InventoryDocumentType.SalesInvoice
               : null;
 
     var documentId =
       movement.OpeningStockDocumentId ??
       movement.StockAdjustmentDocumentId ??
       movement.WarehouseTransferDocumentId ??
-      movement.PurchaseInvoiceId;
+      movement.PurchaseInvoiceId ??
+      movement.SalesInvoiceId;
 
     var lineId =
       movement.OpeningStockLineId ??
       movement.StockAdjustmentLineId ??
       movement.WarehouseTransferLineId ??
-      movement.PurchaseInvoiceLineId;
+      movement.PurchaseInvoiceLineId ??
+      movement.SalesInvoiceLineId;
 
     var documentNumber =
       movement.OpeningStockDocument?.DocumentNumber ??
       movement.StockAdjustmentDocument?.DocumentNumber ??
       movement.WarehouseTransferDocument?.DocumentNumber ??
-      movement.PurchaseInvoice?.DocumentNumber;
+      movement.PurchaseInvoice?.DocumentNumber ??
+      movement.SalesInvoice?.DocumentNumber;
 
     return new StockMovementResponse(
       movement.Id,
@@ -2594,6 +2611,7 @@ public sealed class InventoryService
     product.CategoryId = request.CategoryId;
     product.UnitOfMeasureId = request.UnitOfMeasureId;
     product.Purpose = request.Purpose;
+    product.SellingPriceBase = request.SellingPriceBase;
     product.TrackInventory = request.TrackInventory;
     product.IsActive = request.IsActive;
     product.Description = Trim(request.Description);
@@ -2613,6 +2631,7 @@ public sealed class InventoryService
         request.CategoryId,
         request.UnitOfMeasureId,
         request.Purpose,
+        request.SellingPriceBase,
         request.TrackInventory,
         request.IsActive,
         request.Description,
@@ -2633,6 +2652,7 @@ public sealed class InventoryService
       product.UnitOfMeasureId,
       product.UnitOfMeasure.Code,
       product.Purpose,
+      product.SellingPriceBase,
       product.TrackInventory,
       product.IsActive,
       product.Description,

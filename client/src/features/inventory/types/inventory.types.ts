@@ -1,12 +1,12 @@
-export const InventoryDocumentType = { OpeningStock: 0, Adjustment: 1, Transfer: 2, Purchase: 3 } as const
+export const InventoryDocumentType = { OpeningStock: 0, Adjustment: 1, Transfer: 2, Purchase: 3, SalesInvoice: 4 } as const
 export type InventoryDocumentType = typeof InventoryDocumentType[keyof typeof InventoryDocumentType]
 export const InventoryDocumentStatus = { Draft: 0, Posted: 1 } as const
 export type InventoryDocumentStatus = typeof InventoryDocumentStatus[keyof typeof InventoryDocumentStatus]
-export const StockMovementType = { OpeningStock: 0, PositiveAdjustment: 1, NegativeAdjustment: 2, TransferOut: 3, TransferIn: 4, Purchase: 5 } as const
+export const StockMovementType = { OpeningStock: 0, PositiveAdjustment: 1, NegativeAdjustment: 2, TransferOut: 3, TransferIn: 4, Purchase: 5, Sale: 6 } as const
 export type StockMovementType = typeof StockMovementType[keyof typeof StockMovementType]
 
 export interface StockBalance { productId: string; productName: string; sku: string; categoryName: string; unitCode: string; warehouseId: string; warehouseCode: string; warehouseName: string; branchId: string; branchName: string; quantity: number; averageCostBase: number; totalValueBase: number }
-export interface Product { id: string; name: string; sku: string; barcode: string | null; categoryId: string; categoryName: string; unitOfMeasureId: string; unitCode: string; purpose: number; trackInventory: boolean; isActive: boolean; description: string | null; totalQuantity: number; averageCostBase: number; totalValueBase: number }
+export interface Product { id: string; name: string; sku: string; barcode: string | null; categoryId: string; categoryName: string; unitOfMeasureId: string; unitCode: string; purpose: number; sellingPriceBase: number; trackInventory: boolean; isActive: boolean; description: string | null; totalQuantity: number; averageCostBase: number; totalValueBase: number }
 export interface Warehouse { id: string; code: string; name: string; branchId: string; branchCode: string; branchName: string; isActive: boolean }
 export interface Category { id: string; name: string; isActive: boolean }
 export interface Unit { id: string; name: string; code: string; isActive: boolean }
@@ -25,7 +25,7 @@ export interface AdjustmentDocument extends AdjustmentSummary { branchCode: stri
 export interface TransferLine { id: string; productId: string; productName: string; sku: string; unitCode: string; availableSourceQuantity: number; quantity: number }
 export interface TransferDocument extends TransferSummary { branchCode: string; sourceWarehouseCode: string; destinationWarehouseCode: string; notes: string | null; lines: TransferLine[] }
 
-export interface ProductInput { name: string; sku: string; barcode: string | null; categoryId: string; unitOfMeasureId: string; purpose: number; trackInventory: boolean; isActive: boolean; description: string | null; imageReference: string | null }
+export interface ProductInput { name: string; sku: string; barcode: string | null; categoryId: string; unitOfMeasureId: string; purpose: number; sellingPriceBase: number; trackInventory: boolean; isActive: boolean; description: string | null; imageReference: string | null }
 export interface WarehouseInput { code: string; name: string; branchId: string; isActive: boolean }
 export interface CategoryInput { name: string; isActive: boolean }
 export interface UnitInput { name: string; code: string; isActive: boolean }

@@ -3,6 +3,7 @@ using Api.Modules.Branch;
 using Api.Modules.Contact;
 using Api.Modules.Currency;
 using Api.Modules.Purchase;
+using Api.Modules.Sales;
 using Api.Modules.User;
 
 namespace Api.Modules.Finance;
@@ -144,7 +145,46 @@ public sealed class SupplierPaymentAllocationEntity
   public decimal BaseAmount { get; set; }
 }
 
+public sealed class CustomerReceiptEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public string DocumentNumber { get; set; } = string.Empty;
+  public Guid CustomerId { get; set; }
+  public ContactEntity Customer { get; set; } = null!;
+  public DateOnly ReceiptDate { get; set; }
+  public Guid MoneyAccountId { get; set; }
+  public MoneyAccountEntity MoneyAccount { get; set; } = null!;
+  public Guid CurrencyId { get; set; }
+  public CurrencyEntity Currency { get; set; } = null!;
+  public Guid BaseCurrencyId { get; set; }
+  public CurrencyEntity BaseCurrency { get; set; } = null!;
+  public decimal ExchangeRate { get; set; } = 1m;
+  public decimal TotalAmount { get; set; }
+  public decimal BaseTotalAmount { get; set; }
+  public FinanceDocumentStatus Status { get; set; } = FinanceDocumentStatus.Draft;
+  public string? Notes { get; set; }
+  public Guid CreatedByUserId { get; set; }
+  public UserEntity CreatedByUser { get; set; } = null!;
+  public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+  public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+  public DateTime? PostedAtUtc { get; set; }
+  public Guid? JournalEntryId { get; set; }
+  public JournalEntryEntity? JournalEntry { get; set; }
+  public ICollection<CustomerReceiptAllocationEntity> Allocations { get; set; } = new List<CustomerReceiptAllocationEntity>();
+}
+
+public sealed class CustomerReceiptAllocationEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public Guid CustomerReceiptId { get; set; }
+  public CustomerReceiptEntity CustomerReceipt { get; set; } = null!;
+  public Guid SalesInvoiceId { get; set; }
+  public SalesInvoiceEntity SalesInvoice { get; set; } = null!;
+  public decimal Amount { get; set; }
+  public decimal BaseAmount { get; set; }
+}
+
 public enum MoneyAccountType { Cashbox, Bank }
 public enum MoneyAccountAccessLevel { View, Operate }
-public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment }
+public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment, CustomerReceipt }
 public enum FinanceDocumentStatus { Draft, Posted }

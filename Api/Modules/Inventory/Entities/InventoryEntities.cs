@@ -1,5 +1,6 @@
 using Api.Modules.Branch;
 using Api.Modules.Purchase;
+using Api.Modules.Sales;
 using Api.Modules.User;
 
 namespace Api.Modules.Inventory;
@@ -32,6 +33,7 @@ public sealed class ProductEntity
   public Guid UnitOfMeasureId { get; set; }
   public UnitOfMeasureEntity UnitOfMeasure { get; set; } = null!;
   public ProductPurpose Purpose { get; set; }
+  public decimal SellingPriceBase { get; set; }
   public bool TrackInventory { get; set; } = true;
   public bool IsActive { get; set; } = true;
   public string? Description { get; set; }
@@ -180,12 +182,16 @@ public sealed class StockMovementEntity
   public PurchaseInvoiceEntity? PurchaseInvoice { get; set; }
   public Guid? PurchaseInvoiceLineId { get; set; }
   public PurchaseInvoiceLineEntity? PurchaseInvoiceLine { get; set; }
+  public Guid? SalesInvoiceId { get; set; }
+  public SalesInvoiceEntity? SalesInvoice { get; set; }
+  public Guid? SalesInvoiceLineId { get; set; }
+  public SalesInvoiceLineEntity? SalesInvoiceLine { get; set; }
   public Guid PerformedByUserId { get; set; }
   public UserEntity PerformedByUser { get; set; } = null!;
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public enum ProductPurpose { Resale, Consumable, Both }
-public enum StockMovementType { OpeningStock, PositiveAdjustment, NegativeAdjustment, TransferOut, TransferIn, Purchase }
-public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer, Purchase }
+public enum StockMovementType { OpeningStock, PositiveAdjustment, NegativeAdjustment, TransferOut, TransferIn, Purchase, Sale }
+public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer, Purchase, SalesInvoice }
 public enum InventoryDocumentStatus { Draft, Posted }

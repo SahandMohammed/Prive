@@ -11,6 +11,7 @@ using Api.Modules.Inventory;
 using Api.Modules.Contact;
 using Api.Modules.Purchase;
 using Api.Modules.Finance;
+using Api.Modules.Sales;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -244,7 +245,8 @@ try
     .AddInventoryModule()
     .AddContactModule()
     .AddPurchaseModule(builder.Configuration)
-    .AddFinanceModule(builder.Configuration);
+    .AddFinanceModule(builder.Configuration)
+    .AddSalesModule(builder.Configuration);
 
   var app = builder.Build();
 

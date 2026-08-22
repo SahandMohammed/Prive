@@ -106,8 +106,9 @@ public sealed class ContactService
         ErrorCodes.Contact.NotFound,
         $"Contact with id '{id}' was not found.");
 
-    if (await _db.PurchaseInvoices.AnyAsync(invoice => invoice.SupplierId == id, ct))
-      throw new BadRequestException(ErrorCodes.Contact.HasHistory, "A supplier with purchase history cannot be deleted. Deactivate it instead.");
+    if (await _db.PurchaseInvoices.AnyAsync(invoice => invoice.SupplierId == id, ct)
+      || await _db.SalesInvoices.AnyAsync(invoice => invoice.CustomerId == id, ct))
+      throw new BadRequestException(ErrorCodes.Contact.HasHistory, "A contact with purchase or sales history cannot be deleted. Deactivate it instead.");
 
     _db.Contacts.Remove(contact);
     await _db.SaveChangesAsync(ct);

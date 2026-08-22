@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient'
-import type { ExchangeRate, ExchangeRateInput, FinanceSupplier, MoneyAccount, MoneyAccountAccess, MoneyAccountAccessInput, MoneyAccountInput, MoneyLedgerEntry, MoneyTransfer, MoneyTransferInput, OpeningBalanceInput, OutstandingPurchaseInvoice, PageFilters, SupplierPayment, SupplierPaymentInput } from '../types/finance.types'
+import type { CustomerReceipt, CustomerReceiptInput, CustomerReceiptSummary, ExchangeRate, ExchangeRateInput, FinanceCustomer, FinanceSupplier, MoneyAccount, MoneyAccountAccess, MoneyAccountAccessInput, MoneyAccountInput, MoneyLedgerEntry, MoneyTransfer, MoneyTransferInput, OpeningBalanceInput, OutstandingPurchaseInvoice, OutstandingSalesInvoice, PageFilters, SupplierPayment, SupplierPaymentInput } from '../types/finance.types'
 
 function qs(filters: Record<string, string | number | boolean | undefined>) { const query = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) }); return query.toString() }
 
@@ -29,4 +29,12 @@ export const financeApi = {
   updateSupplierPayment: (id: string, body: SupplierPaymentInput) => apiClient.put<SupplierPayment>(`/finance/supplier-payments/${id}`, body),
   deleteSupplierPayment: (id: string) => apiClient.delete<void>(`/finance/supplier-payments/${id}`),
   postSupplierPayment: (id: string) => apiClient.post<SupplierPayment>(`/finance/supplier-payments/${id}/post`),
+  customerReceipts: (filters: PageFilters) => apiClient.getPaginated<CustomerReceiptSummary>(`/finance/customer-receipts?${qs(filters)}`),
+  customers: () => apiClient.get<FinanceCustomer[]>('/finance/customers'),
+  customerReceipt: (id: string) => apiClient.get<CustomerReceipt>(`/finance/customer-receipts/${id}`),
+  outstandingSalesInvoices: (customerId: string, currencyId?: string) => apiClient.get<OutstandingSalesInvoice[]>(`/finance/customer-receipts/outstanding-invoices?${qs({ customerId, currencyId })}`),
+  createCustomerReceipt: (body: CustomerReceiptInput) => apiClient.post<CustomerReceipt>('/finance/customer-receipts', body),
+  updateCustomerReceipt: (id: string, body: CustomerReceiptInput) => apiClient.put<CustomerReceipt>(`/finance/customer-receipts/${id}`, body),
+  deleteCustomerReceipt: (id: string) => apiClient.delete<void>(`/finance/customer-receipts/${id}`),
+  postCustomerReceipt: (id: string) => apiClient.post<CustomerReceipt>(`/finance/customer-receipts/${id}/post`),
 }

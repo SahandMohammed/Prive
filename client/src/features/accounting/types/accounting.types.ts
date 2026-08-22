@@ -61,8 +61,10 @@ export interface JournalEntry {
   postedAtUtc: string | null
   reversalOfJournalId: string | null
   sourcePurchaseInvoiceId: string | null
+  sourceSalesInvoiceId: string | null
   sourceMoneyTransferId: string | null
   sourceSupplierPaymentId: string | null
+  sourceCustomerReceiptId: string | null
   totalDebitBaseAmount: number
   totalCreditBaseAmount: number
   lines: JournalLine[]

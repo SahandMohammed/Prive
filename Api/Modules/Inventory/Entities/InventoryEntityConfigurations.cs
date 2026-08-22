@@ -23,7 +23,7 @@ public sealed class ProductEntityConfiguration : IEntityTypeConfiguration<Produc
 {
   public void Configure(EntityTypeBuilder<ProductEntity> b)
   {
-    b.ToTable("products"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(250).IsRequired(); b.Property(x => x.SKU).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.SKU).IsUnique(); b.Property(x => x.Barcode).HasMaxLength(64); b.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL"); b.Property(x => x.Purpose).HasConversion<string>().HasMaxLength(20).IsRequired(); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.ImageReference).HasMaxLength(2048); b.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.Products).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
+    b.ToTable("products"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(250).IsRequired(); b.Property(x => x.SKU).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.SKU).IsUnique(); b.Property(x => x.Barcode).HasMaxLength(64); b.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL"); b.Property(x => x.Purpose).HasConversion<string>().HasMaxLength(20).IsRequired(); b.Property(x => x.SellingPriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.ImageReference).HasMaxLength(2048); b.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.Products).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
   }
 }
 
@@ -102,5 +102,7 @@ public sealed class StockMovementEntityConfiguration : IEntityTypeConfiguration<
     b.HasOne(x => x.WarehouseTransferLine).WithMany(x => x.Movements).HasForeignKey(x => x.WarehouseTransferLineId).OnDelete(DeleteBehavior.Restrict);
     b.HasOne(x => x.PurchaseInvoice).WithMany(x => x.Movements).HasForeignKey(x => x.PurchaseInvoiceId).OnDelete(DeleteBehavior.Restrict);
     b.HasOne(x => x.PurchaseInvoiceLine).WithMany(x => x.Movements).HasForeignKey(x => x.PurchaseInvoiceLineId).OnDelete(DeleteBehavior.Restrict);
+    b.HasOne(x => x.SalesInvoice).WithMany(x => x.Movements).HasForeignKey(x => x.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+    b.HasOne(x => x.SalesInvoiceLine).WithMany(x => x.Movements).HasForeignKey(x => x.SalesInvoiceLineId).OnDelete(DeleteBehavior.Restrict);
   }
 }

@@ -138,3 +138,48 @@ public sealed class SupplierPaymentAllocationEntityConfiguration : IEntityTypeCo
     builder.HasOne(allocation => allocation.PurchaseInvoice).WithMany().HasForeignKey(allocation => allocation.PurchaseInvoiceId).OnDelete(DeleteBehavior.Restrict);
   }
 }
+
+public sealed class CustomerReceiptEntityConfiguration : IEntityTypeConfiguration<CustomerReceiptEntity>
+{
+  public void Configure(EntityTypeBuilder<CustomerReceiptEntity> builder)
+  {
+    builder.ToTable("customer_receipts");
+    builder.HasKey(receipt => receipt.Id);
+    builder.Property(receipt => receipt.DocumentNumber).HasMaxLength(20).IsRequired();
+    builder.HasIndex(receipt => receipt.DocumentNumber).IsUnique();
+    builder.Property(receipt => receipt.ExchangeRate).HasPrecision(19, 6).IsRequired();
+    builder.Property(receipt => receipt.TotalAmount).HasPrecision(19, 4).IsRequired();
+    builder.Property(receipt => receipt.BaseTotalAmount).HasPrecision(19, 4).IsRequired();
+    builder.Property(receipt => receipt.Status).HasConversion<string>().HasMaxLength(16).IsRequired().IsConcurrencyToken();
+    builder.Property(receipt => receipt.Notes).HasMaxLength(1000);
+    builder.HasIndex(receipt => new { receipt.ReceiptDate, receipt.Status });
+    builder.HasIndex(receipt => receipt.CustomerId);
+    builder.HasIndex(receipt => receipt.MoneyAccountId);
+    builder.HasIndex(receipt => receipt.CurrencyId);
+    builder.HasOne(receipt => receipt.Customer).WithMany().HasForeignKey(receipt => receipt.CustomerId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(receipt => receipt.MoneyAccount).WithMany().HasForeignKey(receipt => receipt.MoneyAccountId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(receipt => receipt.Currency).WithMany().HasForeignKey(receipt => receipt.CurrencyId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(receipt => receipt.BaseCurrency).WithMany().HasForeignKey(receipt => receipt.BaseCurrencyId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(receipt => receipt.CreatedByUser).WithMany().HasForeignKey(receipt => receipt.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(receipt => receipt.JournalEntry).WithOne(entry => entry.SourceCustomerReceipt)
+      .HasForeignKey<CustomerReceiptEntity>(receipt => receipt.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasIndex(receipt => receipt.JournalEntryId).IsUnique().HasFilter("\"JournalEntryId\" IS NOT NULL");
+  }
+}
+
+public sealed class CustomerReceiptAllocationEntityConfiguration : IEntityTypeConfiguration<CustomerReceiptAllocationEntity>
+{
+  public void Configure(EntityTypeBuilder<CustomerReceiptAllocationEntity> builder)
+  {
+    builder.ToTable("customer_receipt_allocations");
+    builder.HasKey(allocation => allocation.Id);
+    builder.Property(allocation => allocation.Amount).HasPrecision(19, 4).IsRequired();
+    builder.Property(allocation => allocation.BaseAmount).HasPrecision(19, 4).IsRequired();
+    builder.HasIndex(allocation => new { allocation.CustomerReceiptId, allocation.SalesInvoiceId }).IsUnique();
+    builder.HasIndex(allocation => allocation.SalesInvoiceId);
+    builder.HasOne(allocation => allocation.CustomerReceipt).WithMany(receipt => receipt.Allocations)
+      .HasForeignKey(allocation => allocation.CustomerReceiptId).OnDelete(DeleteBehavior.Cascade);
+    builder.HasOne(allocation => allocation.SalesInvoice).WithMany(invoice => invoice.ReceiptAllocations)
+      .HasForeignKey(allocation => allocation.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+  }
+}

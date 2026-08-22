@@ -52,7 +52,7 @@ export function PurchaseInvoicePage() {
   if (invoice && !activeSuppliers.some((item) => item.id === invoice.supplierId)) activeSuppliers.push({ id: invoice.supplierId, name: invoice.supplierName, kind: 1, isCustomer: false, isSupplier: true, primaryPhoneNumber: null, secondaryPhoneNumber: null, email: null, address: null, city: null, region: null, country: null, notes: null, isActive: false })
   const selectableProducts = [...products.filter((item) => item.isActive && item.trackInventory)]
   invoice?.lines.forEach((line) => {
-    if (!selectableProducts.some((item) => item.id === line.productId)) selectableProducts.push({ id: line.productId, name: line.productName, sku: line.sku, barcode: null, categoryId: '', categoryName: '', unitOfMeasureId: line.unitOfMeasureId, unitCode: line.unitCode, purpose: 0, trackInventory: true, isActive: false, description: null, totalQuantity: 0, averageCostBase: 0, totalValueBase: 0 })
+    if (!selectableProducts.some((item) => item.id === line.productId)) selectableProducts.push({ id: line.productId, name: line.productName, sku: line.sku, barcode: null, categoryId: '', categoryName: '', unitOfMeasureId: line.unitOfMeasureId, unitCode: line.unitCode, purpose: 0, sellingPriceBase: 0, trackInventory: true, isActive: false, description: null, totalQuantity: 0, averageCostBase: 0, totalValueBase: 0 })
   })
   const availableWarehouses = warehouses.filter((item) => (posted || item.isActive) && item.branchId === values.branchId)
   const subtotal = (values.lines ?? []).reduce((sum, line) => sum + (Number(line?.quantity) || 0) * (Number(line?.unitCost) || 0), 0)

@@ -208,6 +208,68 @@ public sealed class FinanceController : ControllerBase
   public async Task<IActionResult> PostSupplierPayment(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<SupplierPaymentResponse>.Ok(await _service.PostSupplierPaymentAsync(id, GetUserId(), ct)));
 
+  [HttpGet("customer-receipts")]
+  [ProducesResponseType(typeof(ApiResponse<List<CustomerReceiptListResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetCustomerReceipts([FromQuery] CustomerReceiptListQuery query, CancellationToken ct)
+  {
+    var result = await _service.GetCustomerReceiptsAsync(query, GetUserId(), ct);
+    return Ok(ApiResponse<List<CustomerReceiptListResponse>>.Ok(result.Items, result.ToMetadata()));
+  }
+
+  [HttpGet("customers")]
+  [ProducesResponseType(typeof(ApiResponse<List<FinanceCustomerResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetCustomers(CancellationToken ct) =>
+    Ok(ApiResponse<List<FinanceCustomerResponse>>.Ok(await _service.GetCustomersAsync(ct)));
+
+  [HttpGet("customer-receipts/outstanding-invoices")]
+  [ProducesResponseType(typeof(ApiResponse<List<OutstandingSalesInvoiceResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetOutstandingSalesInvoices(
+    [FromQuery] Guid customerId,
+    [FromQuery] Guid? currencyId,
+    CancellationToken ct) =>
+    Ok(ApiResponse<List<OutstandingSalesInvoiceResponse>>.Ok(
+      await _service.GetOutstandingSalesInvoicesAsync(customerId, currencyId, ct)));
+
+  [HttpGet("customer-receipts/{id:guid}", Name = nameof(GetCustomerReceipt))]
+  [ProducesResponseType(typeof(ApiResponse<CustomerReceiptResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetCustomerReceipt(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<CustomerReceiptResponse>.Ok(await _service.GetCustomerReceiptAsync(id, GetUserId(), ct)));
+
+  [HttpPost("customer-receipts")]
+  [ProducesResponseType(typeof(ApiResponse<CustomerReceiptResponse>), StatusCodes.Status201Created)]
+  public async Task<IActionResult> CreateCustomerReceipt(
+    [FromBody] CustomerReceiptDraftRequest request,
+    CancellationToken ct)
+  {
+    var receipt = await _service.CreateCustomerReceiptAsync(request, GetUserId(), ct);
+    var version = RouteData.Values["version"]?.ToString() ?? "1.0";
+    return CreatedAtAction(nameof(GetCustomerReceipt), new { receipt.Id, version },
+      ApiResponse<CustomerReceiptResponse>.Ok(receipt));
+  }
+
+  [HttpPut("customer-receipts/{id:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<CustomerReceiptResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> UpdateCustomerReceipt(
+    Guid id,
+    [FromBody] CustomerReceiptDraftRequest request,
+    CancellationToken ct) =>
+    Ok(ApiResponse<CustomerReceiptResponse>.Ok(
+      await _service.UpdateCustomerReceiptAsync(id, request, GetUserId(), ct)));
+
+  [HttpDelete("customer-receipts/{id:guid}")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeleteCustomerReceipt(Guid id, CancellationToken ct)
+  {
+    await _service.DeleteCustomerReceiptAsync(id, GetUserId(), ct);
+    return NoContent();
+  }
+
+  [HttpPost("customer-receipts/{id:guid}/post")]
+  [ProducesResponseType(typeof(ApiResponse<CustomerReceiptResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> PostCustomerReceipt(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<CustomerReceiptResponse>.Ok(
+      await _service.PostCustomerReceiptAsync(id, GetUserId(), ct)));
+
   private Guid GetUserId()
   {
     var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
