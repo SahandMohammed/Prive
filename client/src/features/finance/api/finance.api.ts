@@ -8,6 +8,7 @@ export const financeApi = {
   moneyAccount: (id: string) => apiClient.get<MoneyAccount>(`/finance/money-accounts/${id}`),
   createMoneyAccount: (body: MoneyAccountInput) => apiClient.post<MoneyAccount>('/finance/money-accounts', body),
   updateMoneyAccount: (id: string, body: MoneyAccountInput) => apiClient.put<MoneyAccount>(`/finance/money-accounts/${id}`, body),
+  deleteMoneyAccount: (id: string) => apiClient.delete<void>(`/finance/money-accounts/${id}`),
   moneyAccountAccess: (id: string) => apiClient.get<MoneyAccountAccess[]>(`/finance/money-accounts/${id}/access`),
   replaceMoneyAccountAccess: (id: string, assignments: MoneyAccountAccessInput[]) => apiClient.put<MoneyAccountAccess[]>(`/finance/money-accounts/${id}/access`, { assignments }),
   openingBalance: (id: string, body: OpeningBalanceInput) => apiClient.post<MoneyLedgerEntry>(`/finance/money-accounts/${id}/opening-balance`, body),

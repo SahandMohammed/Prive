@@ -35,6 +35,16 @@ export function useSaveMoneyAccount(id?: string) {
     onSuccess: () => refresh(client),
   })
 }
+export function useDeleteMoneyAccount() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => financeApi.deleteMoneyAccount(id),
+    onSuccess: () => {
+      refresh(client)
+      client.invalidateQueries({ queryKey: ['accounting'] })
+    },
+  })
+}
 export function useMoneyAccountAccess(id?: string) {
   return useQuery({
     queryKey: [...FINANCE_KEY, 'access', id],

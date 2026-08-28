@@ -64,6 +64,31 @@ public sealed class AccountingService
     if (code != account.Code && await _db.Accounts.AnyAsync(other => other.Code == code && other.Id != id, ct))
       throw new ConflictException(ErrorCodes.Accounting.AccountCodeTaken, $"Account code '{code}' is already in use.");
 
+    var isMoneyAccountGl = await _db.MoneyAccounts.AnyAsync(ma => ma.AccountingAccountId == id, ct);
+    if (isMoneyAccountGl)
+    {
+      if (code != account.Code)
+        throw new BadRequestException(
+          ErrorCodes.Accounting.FinanceOwnedAccountProtected,
+          "The account code of a Finance-managed Money Account GL cannot be edited directly.");
+      if (request.Classification != AccountClassification.Asset)
+        throw new BadRequestException(
+          ErrorCodes.Accounting.FinanceOwnedAccountProtected,
+          "A Finance-managed Money Account GL must remain an Asset account.");
+      if (request.IsGroup)
+        throw new BadRequestException(
+          ErrorCodes.Accounting.FinanceOwnedAccountProtected,
+          "A Finance-managed Money Account GL cannot be converted to a group account.");
+      if (request.ParentAccountId != account.ParentAccountId)
+        throw new BadRequestException(
+          ErrorCodes.Accounting.FinanceOwnedAccountProtected,
+          "The parent account of a Finance-managed Money Account GL cannot be changed directly.");
+      if (!request.IsActive && await _db.MoneyAccounts.AnyAsync(ma => ma.AccountingAccountId == id && ma.IsActive, ct))
+        throw new BadRequestException(
+          ErrorCodes.Accounting.FinanceOwnedAccountProtected,
+          "A Finance-managed Money Account GL cannot be deactivated while its Money Account is active.");
+    }
+
     var hasPostedHistory = await _db.JournalLines
       .AnyAsync(line => line.AccountId == id && line.JournalEntry.PostedAtUtc != null, ct);
     if (hasPostedHistory && (account.Classification != request.Classification
@@ -82,6 +107,8 @@ public sealed class AccountingService
   {
     var account = await _db.Accounts.SingleOrDefaultAsync(account => account.Id == id, ct)
       ?? throw new NotFoundException(ErrorCodes.Accounting.AccountNotFound, $"Account with id '{id}' was not found.");
+    if (await _db.MoneyAccounts.AnyAsync(ma => ma.AccountingAccountId == id, ct))
+      throw new BadRequestException(ErrorCodes.Accounting.AccountOwnedByMoneyAccount, "An account linked to a Money Account cannot be deleted directly from Accounting. Manage it from Finance.");
     if (await _db.Accounts.AnyAsync(child => child.ParentAccountId == id, ct))
       throw new BadRequestException(ErrorCodes.Accounting.AccountHasChildren, "An account with child accounts cannot be deleted.");
     if (await _db.JournalLines.AnyAsync(line => line.AccountId == id, ct))

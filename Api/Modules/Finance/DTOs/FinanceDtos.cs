@@ -12,17 +12,38 @@ public sealed class MoneyAccountListQuery : PaginationRequest
   public bool? IsActive { get; init; }
 }
 
+public sealed record CreateMoneyAccountRequest(
+  [Required, MaxLength(32)] string Code,
+  [Required, MaxLength(200)] string Name,
+  [Required] MoneyAccountType Type,
+  [Required] Guid BranchId,
+  [Required] Guid CurrencyId,
+  bool IsActive = true,
+  [MaxLength(1000)] string? Notes = null,
+  [MaxLength(200)] string? BankName = null,
+  [MaxLength(100)] string? AccountNumberOrIban = null);
+
+public sealed record UpdateMoneyAccountRequest(
+  [Required, MaxLength(32)] string Code,
+  [Required, MaxLength(200)] string Name,
+  [Required] MoneyAccountType Type,
+  [Required] Guid BranchId,
+  [Required] Guid CurrencyId,
+  bool IsActive = true,
+  [MaxLength(1000)] string? Notes = null,
+  [MaxLength(200)] string? BankName = null,
+  [MaxLength(100)] string? AccountNumberOrIban = null);
+
 public sealed record MoneyAccountRequest(
   [Required, MaxLength(32)] string Code,
   [Required, MaxLength(200)] string Name,
   [Required] MoneyAccountType Type,
   [Required] Guid BranchId,
   [Required] Guid CurrencyId,
-  [Required] Guid AccountingAccountId,
-  bool IsActive,
-  [MaxLength(1000)] string? Notes,
-  [MaxLength(200)] string? BankName,
-  [MaxLength(100)] string? AccountNumberOrIban);
+  bool IsActive = true,
+  [MaxLength(1000)] string? Notes = null,
+  [MaxLength(200)] string? BankName = null,
+  [MaxLength(100)] string? AccountNumberOrIban = null);
 
 public sealed record MoneyAccountResponse(
   Guid Id,

@@ -57,6 +57,15 @@ public sealed class FinanceController : ControllerBase
   public async Task<IActionResult> UpdateMoneyAccount(Guid id, [FromBody] MoneyAccountRequest request, CancellationToken ct) =>
     Ok(ApiResponse<MoneyAccountResponse>.Ok(await _service.UpdateMoneyAccountAsync(id, request, GetUserId(), ct)));
 
+  [HttpDelete("money-accounts/{id:guid}")]
+  [Authorize(Roles = Administrators)]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeleteMoneyAccount(Guid id, CancellationToken ct)
+  {
+    await _service.DeleteMoneyAccountAsync(id, GetUserId(), ct);
+    return NoContent();
+  }
+
   [HttpGet("money-accounts/{id:guid}/access")]
   [Authorize(Roles = Administrators)]
   [ProducesResponseType(typeof(ApiResponse<List<MoneyAccountAccessResponse>>), StatusCodes.Status200OK)]

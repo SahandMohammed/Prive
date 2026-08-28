@@ -67,19 +67,65 @@ public sealed class FinanceService
     var code = NormalizeCode(request.Code);
     if (await _db.MoneyAccounts.AnyAsync(account => account.Code == code, ct))
       throw new ConflictException(ErrorCodes.Finance.MoneyAccountCodeTaken, $"Money Account code '{code}' is already in use.");
-    await ValidateMoneyAccountReferencesAsync(request, ct);
 
-    var account = new MoneyAccountEntity();
-    ApplyMoneyAccount(account, request, code);
+    if (!await _db.Branches.AnyAsync(branch => branch.Id == request.BranchId && branch.IsActive, ct))
+      throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
+    var currency = await _db.Currencies.SingleOrDefaultAsync(c => c.Id == request.CurrencyId && c.IsActive, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.CurrencyInvalid, "Select an active currency.");
+
+    await using var transaction = _db.Database.IsRelational()
+      ? await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
+      : null;
+
+    var parentAccount = await ResolveUasParentAsync(request.Type, request.BranchId, request.CurrencyId, ct);
+
+    if (_db.Database.IsRelational())
+    {
+      await _db.Database.ExecuteSqlRawAsync(
+        "SELECT \"Id\" FROM accounts WHERE \"Id\" = {0} FOR UPDATE",
+        parentAccount.Id);
+    }
+
+    var glCode = await GenerateNextGlCodeAsync(parentAccount, ct);
+    var glName = $"{request.Name.Trim()} {currency.Code}";
+
+    var glAccount = new AccountEntity
+    {
+      Code = glCode,
+      Name = glName,
+      Classification = AccountClassification.Asset,
+      ParentAccountId = parentAccount.Id,
+      IsGroup = false,
+      IsActive = true
+    };
+    _db.Accounts.Add(glAccount);
+
+    var account = new MoneyAccountEntity
+    {
+      Code = code,
+      Name = request.Name.Trim(),
+      Type = request.Type,
+      BranchId = request.BranchId,
+      CurrencyId = request.CurrencyId,
+      AccountingAccount = glAccount,
+      IsActive = request.IsActive,
+      Notes = Trim(request.Notes),
+      BankName = request.Type == MoneyAccountType.Bank ? Trim(request.BankName) : null,
+      AccountNumberOrIban = request.Type == MoneyAccountType.Bank ? Trim(request.AccountNumberOrIban) : null
+    };
     _db.MoneyAccounts.Add(account);
     await _db.SaveChangesAsync(ct);
+    if (transaction is not null) await transaction.CommitAsync(ct);
     return await GetManagedMoneyAccountAsync(account.Id, userId, ct);
   }
 
   public async Task<MoneyAccountResponse> UpdateMoneyAccountAsync(Guid id, MoneyAccountRequest request, Guid userId, CancellationToken ct)
   {
     ValidateMoneyAccountType(request.Type);
-    var account = await _db.MoneyAccounts.SingleOrDefaultAsync(item => item.Id == id, ct)
+    var account = await _db.MoneyAccounts
+      .Include(item => item.AccountingAccount)
+      .Include(item => item.Currency)
+      .SingleOrDefaultAsync(item => item.Id == id, ct)
       ?? throw MoneyAccountNotFound();
     var code = NormalizeCode(request.Code);
     if (code != account.Code && await _db.MoneyAccounts.AnyAsync(item => item.Code == code && item.Id != id, ct))
@@ -87,15 +133,83 @@ public sealed class FinanceService
 
     var hasHistory = await _db.MoneyLedgerEntries.AnyAsync(entry => entry.MoneyAccountId == id, ct);
     if (hasHistory && (account.BranchId != request.BranchId || account.CurrencyId != request.CurrencyId
-      || account.AccountingAccountId != request.AccountingAccountId))
+      || account.Type != request.Type))
       throw new BadRequestException(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed,
-        "A Money Account with posted movements cannot change its branch, currency, or linked Accounting account.");
+        "A Money Account with posted movements cannot change its branch, currency, or type.");
 
-    await ValidateMoneyAccountReferencesAsync(request, ct);
-    ApplyMoneyAccount(account, request, code);
+    if (!await _db.Branches.AnyAsync(branch => branch.Id == request.BranchId && branch.IsActive, ct))
+      throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
+    var currency = await _db.Currencies.SingleOrDefaultAsync(c => c.Id == request.CurrencyId && c.IsActive, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.CurrencyInvalid, "Select an active currency.");
+
+    if (!hasHistory && (account.BranchId != request.BranchId || account.CurrencyId != request.CurrencyId || account.Type != request.Type))
+    {
+      var newParent = await ResolveUasParentAsync(request.Type, request.BranchId, request.CurrencyId, ct);
+      if (newParent.Id != account.AccountingAccount.ParentAccountId)
+      {
+        var newGlCode = await GenerateNextGlCodeAsync(newParent, ct);
+        account.AccountingAccount.ParentAccountId = newParent.Id;
+        account.AccountingAccount.Code = newGlCode;
+      }
+      account.BranchId = request.BranchId;
+      account.CurrencyId = request.CurrencyId;
+      account.Type = request.Type;
+    }
+
+    account.Code = code;
+    account.Name = request.Name.Trim();
+    account.AccountingAccount.Name = $"{request.Name.Trim()} {currency.Code}";
+    account.IsActive = request.IsActive;
+    account.Notes = Trim(request.Notes);
+    account.BankName = request.Type == MoneyAccountType.Bank ? Trim(request.BankName) : null;
+    account.AccountNumberOrIban = request.Type == MoneyAccountType.Bank ? Trim(request.AccountNumberOrIban) : null;
     account.UpdatedAtUtc = DateTime.UtcNow;
     await _db.SaveChangesAsync(ct);
     return await GetManagedMoneyAccountAsync(id, userId, ct);
+  }
+
+  public async Task DeleteMoneyAccountAsync(Guid id, Guid userId, CancellationToken ct)
+  {
+    var account = await _db.MoneyAccounts
+      .Include(item => item.AccountingAccount)
+      .SingleOrDefaultAsync(item => item.Id == id, ct)
+      ?? throw MoneyAccountNotFound();
+
+    await EnsureAccessAsync(id, userId, MoneyAccountAccessLevel.Operate, ct);
+
+    var hasLedger = await _db.MoneyLedgerEntries.AnyAsync(entry => entry.MoneyAccountId == id, ct);
+    var hasTransfers = await _db.MoneyTransfers.AnyAsync(t => t.SourceMoneyAccountId == id || t.DestinationMoneyAccountId == id, ct);
+    var hasSupplierPayments = await _db.SupplierPayments.AnyAsync(p => p.MoneyAccountId == id, ct);
+    var hasCustomerReceipts = await _db.CustomerReceipts.AnyAsync(r => r.MoneyAccountId == id, ct);
+    var hasPosTenders = await _db.PosTenders.AnyAsync(t => t.MoneyAccountId == id, ct);
+    var hasPosChanges = await _db.PosChanges.AnyAsync(c => c.MoneyAccountId == id, ct);
+
+    if (hasLedger || hasTransfers || hasSupplierPayments || hasCustomerReceipts || hasPosTenders || hasPosChanges)
+      throw new BadRequestException(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed,
+        "A Money Account with financial history cannot be deleted. Deactivate it instead.");
+
+    await using var transaction = _db.Database.IsRelational()
+      ? await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
+      : null;
+
+    var glAccountId = account.AccountingAccountId;
+    var glAccount = account.AccountingAccount;
+
+    var accessList = await _db.MoneyAccountAccess.Where(a => a.MoneyAccountId == id).ToListAsync(ct);
+    _db.MoneyAccountAccess.RemoveRange(accessList);
+    _db.MoneyAccounts.Remove(account);
+
+    var hasJournalLines = await _db.JournalLines.AnyAsync(line => line.AccountId == glAccountId, ct);
+    var hasChildAccounts = await _db.Accounts.AnyAsync(child => child.ParentAccountId == glAccountId, ct);
+    var isReferencedByOther = await _db.MoneyAccounts.AnyAsync(other => other.AccountingAccountId == glAccountId && other.Id != id, ct);
+
+    if (!hasJournalLines && !hasChildAccounts && !isReferencedByOther && glAccount is not null)
+    {
+      _db.Accounts.Remove(glAccount);
+    }
+
+    await _db.SaveChangesAsync(ct);
+    if (transaction is not null) await transaction.CommitAsync(ct);
   }
 
   public async Task<List<MoneyAccountAccessResponse>> GetMoneyAccountAccessAsync(Guid id, CancellationToken ct)
@@ -905,17 +1019,67 @@ public sealed class FinanceService
     return new CustomerReceiptValidation(account, customer.Name, business.BaseCurrencyId, rate, invoices);
   }
 
-  private async Task ValidateMoneyAccountReferencesAsync(MoneyAccountRequest request, CancellationToken ct)
+  private async Task<AccountEntity> ResolveUasParentAsync(
+    MoneyAccountType type,
+    Guid branchId,
+    Guid currencyId,
+    CancellationToken ct)
   {
-    if (!await _db.Branches.AnyAsync(branch => branch.Id == request.BranchId && branch.IsActive, ct))
-      throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
-    if (!await _db.Currencies.AnyAsync(currency => currency.Id == request.CurrencyId && currency.IsActive, ct))
-      throw new BadRequestException(ErrorCodes.Finance.CurrencyInvalid, "Select an active currency.");
-    var postingAccount = await _db.Accounts.AsNoTracking().SingleOrDefaultAsync(account => account.Id == request.AccountingAccountId, ct);
-    if (postingAccount is null || !postingAccount.IsActive || postingAccount.IsGroup
-      || postingAccount.Classification != AccountClassification.Asset)
-      throw new BadRequestException(ErrorCodes.Finance.AccountMappingInvalid,
-        "A Money Account must link to an active posting Asset account.");
+    var business = await GetBusinessAsync(ct);
+    string uasCode;
+
+    if (type == MoneyAccountType.Cashbox)
+    {
+      var branch = await _db.Branches.AsNoTracking().SingleOrDefaultAsync(b => b.Id == branchId && b.IsActive, ct)
+        ?? throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
+      var isMain = branch.IsMainBranch;
+      var isBase = currencyId == business.BaseCurrencyId;
+
+      uasCode = (isMain, isBase) switch
+      {
+        (true, true) => "134111",
+        (true, false) => "134112",
+        (false, true) => "134121",
+        (false, false) => "134122"
+      };
+    }
+    else if (type == MoneyAccountType.Bank)
+    {
+      var isBase = currencyId == business.BaseCurrencyId;
+      uasCode = isBase ? "13421" : "13422";
+    }
+    else
+    {
+      throw new BadRequestException(ErrorCodes.Finance.MoneyAccountTypeInvalid, "Select Cashbox or Bank.");
+    }
+
+    var parent = await _db.Accounts.SingleOrDefaultAsync(
+      a => a.Code == uasCode && a.IsActive && a.IsGroup && a.Classification == AccountClassification.Asset, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.AccountMappingInvalid,
+        $"Iraqi UAS parent account '{uasCode}' was not found or is not an active group Asset account.");
+
+    return parent;
+  }
+
+  private async Task<string> GenerateNextGlCodeAsync(AccountEntity parentAccount, CancellationToken ct)
+  {
+    var existingCodes = await _db.Accounts
+      .Where(a => a.Code.StartsWith(parentAccount.Code) && a.Code.Length > parentAccount.Code.Length)
+      .Select(a => a.Code)
+      .ToListAsync(ct);
+
+    var maxSeq = 0;
+    foreach (var existingCode in existingCodes)
+    {
+      var suffix = existingCode[parentAccount.Code.Length..];
+      if (int.TryParse(suffix, out var seq) && seq > maxSeq)
+      {
+        maxSeq = seq;
+      }
+    }
+
+    var nextSeq = maxSeq + 1;
+    return $"{parentAccount.Code}{nextSeq:D2}";
   }
 
   internal async Task EnsureAccessAsync(
@@ -1181,20 +1345,6 @@ public sealed class FinanceService
     }
     foreach (var removed in receipt.Allocations.Where(allocation => !retained.Contains(allocation)).ToList())
       _db.CustomerReceiptAllocations.Remove(removed);
-  }
-
-  private static void ApplyMoneyAccount(MoneyAccountEntity account, MoneyAccountRequest request, string code)
-  {
-    account.Code = code;
-    account.Name = request.Name.Trim();
-    account.Type = request.Type;
-    account.BranchId = request.BranchId;
-    account.CurrencyId = request.CurrencyId;
-    account.AccountingAccountId = request.AccountingAccountId;
-    account.IsActive = request.IsActive;
-    account.Notes = Trim(request.Notes);
-    account.BankName = request.Type == MoneyAccountType.Bank ? Trim(request.BankName) : null;
-    account.AccountNumberOrIban = request.Type == MoneyAccountType.Bank ? Trim(request.AccountNumberOrIban) : null;
   }
 
   private static void ApplyTransfer(

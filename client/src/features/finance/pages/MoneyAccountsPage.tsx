@@ -9,6 +9,7 @@ import {
   Plus,
   Scale,
   ShieldCheck,
+  Trash2,
   Wallet,
 } from 'lucide-react'
 import { useForm, useWatch } from 'react-hook-form'
@@ -39,6 +40,7 @@ import { useCurrentUser } from '@/features/auth'
 import { useBranches, useCurrencies } from '@/features/business'
 import { useUsers } from '@/features/users'
 import {
+  useDeleteMoneyAccount,
   useMoneyAccountAccess,
   useMoneyAccounts,
   useOpeningBalance,
@@ -103,6 +105,7 @@ export function MoneyAccountsPage() {
   const [openingAccount, setOpeningAccount] = useState<MoneyAccount | null>(null)
   const [detailAccount, setDetailAccount] = useState<MoneyAccount | null>(null)
 
+  const deleteAccount = useDeleteMoneyAccount()
   const branches = useBranches().data?.data ?? []
   const currencies = useCurrencies().data?.data ?? []
 
@@ -330,6 +333,29 @@ export function MoneyAccountsPage() {
                         >
                           <Scale className="size-4" />
                         </Button>
+                        {isManagement && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Delete ${account.code} (${account.name}) and its dedicated GL account? This is only permitted if no financial movements exist.`
+                                )
+                              ) {
+                                deleteAccount.mutate(account.id, {
+                                  onError: (err) => alert(err.message),
+                                })
+                              }
+                            }}
+                            aria-label={`Delete ${account.name}`}
+                            title="Delete money account"
+                            className="text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+                            disabled={deleteAccount.isPending}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -404,6 +430,7 @@ function MoneyAccountFormDialog({
   const branches = useBranches().data?.data ?? []
   const currencies = useCurrencies().data?.data ?? []
   const save = useSaveMoneyAccount(account?.id)
+  const deleteAccount = useDeleteMoneyAccount()
 
   const form = useForm<FormValue>({
     resolver: zodResolver(moneyAccountSchema),
@@ -568,14 +595,42 @@ function MoneyAccountFormDialog({
             </div>
           )}
 
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={closeDialog} disabled={save.isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" disabled={save.isPending}>
-              {save.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
-              {account ? 'Save changes' : 'Add account'}
-            </Button>
+          <DialogFooter className="flex items-center justify-between gap-2 pt-2 sm:justify-between">
+            {account ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Delete ${account.code} (${account.name}) and its dedicated GL account? This is only permitted if no financial movements exist.`
+                    )
+                  ) {
+                    deleteAccount.mutate(account.id, {
+                      onSuccess: closeDialog,
+                      onError: (err) => alert(err.message),
+                    })
+                  }
+                }}
+                disabled={deleteAccount.isPending || save.isPending}
+              >
+                <Trash2 className="mr-1.5 size-4" />
+                Delete
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={save.isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" disabled={save.isPending}>
+                {save.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+                {account ? 'Save changes' : 'Add account'}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -816,6 +871,8 @@ function AccountDetailDialog({
   onOpenChange: (open: boolean) => void
   onEdit: (account: MoneyAccount) => void
 }) {
+  const deleteAccount = useDeleteMoneyAccount()
+
   return (
     <Dialog open={account !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -888,10 +945,33 @@ function AccountDetailDialog({
               >
                 View related Money Ledger movements →
               </Link>
-              <Button variant="outline" size="sm" onClick={() => onEdit(account)}>
-                <Pencil className="mr-1.5 size-3.5" />
-                Edit Account
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${account.code} (${account.name}) and its dedicated GL account? This is only permitted if no financial movements exist.`
+                      )
+                    ) {
+                      deleteAccount.mutate(account.id, {
+                        onSuccess: () => onOpenChange(false),
+                        onError: (err) => alert(err.message),
+                      })
+                    }
+                  }}
+                  disabled={deleteAccount.isPending}
+                >
+                  <Trash2 className="mr-1.5 size-3.5" />
+                  Delete
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onEdit(account)}>
+                  <Pencil className="mr-1.5 size-3.5" />
+                  Edit Account
+                </Button>
+              </div>
             </div>
           </div>
         )}

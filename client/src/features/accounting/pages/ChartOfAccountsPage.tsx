@@ -1,27 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  ChevronsDownUp, 
-  ChevronsUpDown, 
-  Edit3, 
-  Folder, 
-  FolderOpen, 
-  FileText, 
-  Loader2, 
-  Plus, 
-  Search, 
-  Trash2 
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Edit3,
+  Folder,
+  FolderOpen,
+  FileText,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAccountTree, useDeleteAccount, useSaveAccount } from '../hooks/useAccounting'
 import { accountSchema } from '../schemas/accounting.schemas'
-import { accountClassificationLabels, type Account, type AccountInput } from '../types/accounting.types'
+import {
+  accountClassificationLabels,
+  type Account,
+  type AccountInput,
+} from '../types/accounting.types'
 
 const emptyAccount: AccountInput = {
   code: '',
@@ -38,29 +50,20 @@ export function ChartOfAccountsPage() {
   const [editing, setEditing] = useState<Account | null>(null)
   const [parentId, setParentId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
 
   const accountsQuery = useAccountTree({ search, classification: classification || undefined })
   const saveAccount = useSaveAccount(editing?.id ?? null)
   const deleteAccount = useDeleteAccount()
-  const form = useForm<AccountInput>({ resolver: zodResolver(accountSchema), defaultValues: emptyAccount })
+  const form = useForm<AccountInput>({
+    resolver: zodResolver(accountSchema),
+    defaultValues: emptyAccount,
+  })
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data])
 
-  // Automatically expand all group accounts by default when data loads
   useEffect(() => {
-    if (accounts.length > 0) {
-      setExpandedIds((prev) => {
-        if (prev.size === 0) {
-          const groupIds = new Set(accounts.filter((a) => a.isGroup).map((a) => a.id))
-          return groupIds
-        }
-        return prev
-      })
-    }
-  }, [accounts])
-
-  useEffect(() => {
-    const source = editing ?? (parentId ? accounts.find((account) => account.id === parentId) : null)
+    const source =
+      editing ?? (parentId ? accounts.find((account) => account.id === parentId) : null)
     form.reset(
       source
         ? {
@@ -76,7 +79,12 @@ export function ChartOfAccountsPage() {
   }, [accounts, editing, form, parentId])
 
   const roots = useMemo(
-    () => accounts.filter((account) => !account.parentAccountId || !accounts.some((parent) => parent.id === account.parentAccountId)),
+    () =>
+      accounts.filter(
+        (account) =>
+          !account.parentAccountId ||
+          !accounts.some((parent) => parent.id === account.parentAccountId)
+      ),
     [accounts]
   )
 
@@ -107,7 +115,7 @@ export function ChartOfAccountsPage() {
   }
 
   const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
+    setCollapsedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
@@ -119,19 +127,23 @@ export function ChartOfAccountsPage() {
   }
 
   const expandAll = () => {
-    const allGroupIds = new Set(accounts.filter((a) => a.isGroup).map((a) => a.id))
-    setExpandedIds(allGroupIds)
+    setCollapsedIds(new Set())
   }
 
   const collapseAll = () => {
-    setExpandedIds(new Set())
+    const allGroupIds = new Set(accounts.filter((a) => a.isGroup).map((a) => a.id))
+    setCollapsedIds(allGroupIds)
   }
 
   const save = form.handleSubmit((values) => {
     saveAccount.mutate(values, {
       onSuccess: (savedAccount) => {
         if (savedAccount?.parentAccountId) {
-          setExpandedIds((prev) => new Set(prev).add(savedAccount.parentAccountId!))
+          setCollapsedIds((prev) => {
+            const next = new Set(prev)
+            next.delete(savedAccount.parentAccountId!)
+            return next
+          })
         }
         closeModal()
       },
@@ -145,24 +157,31 @@ export function ChartOfAccountsPage() {
   }, [accounts, editing, parentId])
 
   return (
-    <div className="flex h-full w-full flex-col space-y-6">
+    <div className="w-full space-y-6 pb-12">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Chart of Accounts</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Chart of Accounts
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
             One shared, editable Iraqi IFRS-oriented chart of accounts.
           </p>
         </div>
-        <Button className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]" onClick={openCreateModal}>
+        <Button
+          className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]"
+          onClick={openCreateModal}
+        >
           <Plus className="h-4 w-4 stroke-[2.5]" />
           Add account
         </Button>
       </div>
 
-      <Card className="w-full border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <CardHeader className="border-b border-slate-100 pb-4 dark:border-slate-800">
+      <Card className="w-full border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <CardHeader className="border-b border-slate-100 dark:border-slate-800">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Account Hierarchy</CardTitle>
+            <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Account Hierarchy
+            </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -176,19 +195,33 @@ export function ChartOfAccountsPage() {
               <select
                 value={classification}
                 onChange={(event) => setClassification(event.target.value)}
-                className="h-9 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-xs shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+                className="h-9 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-xs shadow-xs outline-none focus:border-[#e05d38] focus:ring-1 focus:ring-[#e05d38] dark:border-slate-800 dark:bg-slate-900"
               >
                 <option value="">All classifications</option>
                 {Object.entries(accountClassificationLabels).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </select>
               <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={expandAll} title="Expand all groups">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1 text-xs"
+                  onClick={expandAll}
+                  title="Expand all groups"
+                >
                   <ChevronsUpDown className="h-3.5 w-3.5" />
                   Expand all
                 </Button>
-                <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={collapseAll} title="Collapse all groups">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1 text-xs"
+                  onClick={collapseAll}
+                  title="Collapse all groups"
+                >
                   <ChevronsDownUp className="h-3.5 w-3.5" />
                   Collapse all
                 </Button>
@@ -196,7 +229,23 @@ export function ChartOfAccountsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-4">
+        <CardContent className="overflow-x-auto">
+          {deleteAccount.isError && (
+            <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                <span>{deleteAccount.error.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => deleteAccount.reset()}
+                className="text-xs font-semibold text-red-600 hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {accountsQuery.isPending ? (
             <div className="flex min-h-64 flex-col items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin text-[#e05d38]" />
@@ -207,19 +256,22 @@ export function ChartOfAccountsPage() {
               <p className="text-sm font-medium">Could not load the Chart of Accounts.</p>
             </div>
           ) : roots.length ? (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {roots.map((account) => (
                 <AccountNode
                   key={account.id}
                   account={account}
                   accounts={accounts}
-                  depth={0}
-                  expandedIds={expandedIds}
+                  collapsedIds={collapsedIds}
                   onToggleExpand={toggleExpand}
                   onEdit={openEditModal}
                   onChild={openChildModal}
                   onDelete={(id) => {
-                    if (window.confirm('Delete this unused account?')) deleteAccount.mutate(id)
+                    if (window.confirm('Delete this unused account?')) {
+                      deleteAccount.mutate(id, {
+                        onError: (err) => alert(err.message),
+                      })
+                    }
                   }}
                 />
               ))}
@@ -232,32 +284,47 @@ export function ChartOfAccountsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isModalOpen} onOpenChange={(open) => (open ? setIsModalOpen(true) : closeModal())}>
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => (open ? setIsModalOpen(true) : closeModal())}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editing ? `Edit Account (${editing.code})` : parentId ? `Add Child Account` : 'Add Account'}
+              {editing
+                ? `Edit Account (${editing.code})`
+                : parentId
+                  ? `Add Child Account`
+                  : 'Add Account'}
             </DialogTitle>
             <DialogDescription>
               {editing
                 ? 'Update account details, classification, or status.'
                 : parentId
-                ? `Create a child account under ${parentAccount?.code} — ${parentAccount?.name}.`
-                : 'Create a new root or general ledger account.'}
+                  ? `Create a child account under ${parentAccount?.code} — ${parentAccount?.name}.`
+                  : 'Create a new root or general ledger account.'}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={save} className="space-y-4">
             {parentAccount && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">Parent Account:</span>{' '}
-                <span className="font-mono">{parentAccount.code}</span> — {parentAccount.name} ({accountClassificationLabels[parentAccount.classification]})
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  Parent Account:
+                </span>{' '}
+                <span className="font-mono font-medium">{parentAccount.code}</span> —{' '}
+                {parentAccount.name} ({accountClassificationLabels[parentAccount.classification]})
               </div>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Account Code" error={form.formState.errors.code?.message}>
-                <Input placeholder="e.g. 1010" className="font-mono uppercase" {...form.register('code')} autoFocus />
+                <Input
+                  placeholder="e.g. 1010"
+                  className="font-mono uppercase"
+                  {...form.register('code')}
+                  autoFocus
+                />
               </Field>
               <Field label="Account Name" error={form.formState.errors.name?.message}>
                 <Input placeholder="e.g. Cash on Hand" {...form.register('name')} />
@@ -268,21 +335,31 @@ export function ChartOfAccountsPage() {
               <select
                 {...form.register('classification', { valueAsNumber: true })}
                 disabled={Boolean(parentId)}
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:disabled:bg-slate-800"
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-[#e05d38] focus:ring-1 focus:ring-[#e05d38] disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:disabled:bg-slate-800"
               >
                 {Object.entries(accountClassificationLabels).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </select>
             </Field>
 
             <div className="flex flex-wrap gap-6 pt-1">
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" className="rounded border-slate-300 text-[#e05d38] focus:ring-[#e05d38]" {...form.register('isGroup')} />
+                <input
+                  type="checkbox"
+                  className="size-4 rounded border-slate-300 accent-[#e05d38]"
+                  {...form.register('isGroup')}
+                />
                 <span>Group / Summary account</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" className="rounded border-slate-300 text-[#e05d38] focus:ring-[#e05d38]" {...form.register('isActive')} />
+                <input
+                  type="checkbox"
+                  className="size-4 rounded border-slate-300 accent-[#e05d38]"
+                  {...form.register('isActive')}
+                />
                 <span>Active</span>
               </label>
             </div>
@@ -292,10 +369,19 @@ export function ChartOfAccountsPage() {
             )}
 
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={closeModal} disabled={saveAccount.isPending}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeModal}
+                disabled={saveAccount.isPending}
+              >
                 Cancel
               </Button>
-              <Button type="submit" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" disabled={saveAccount.isPending}>
+              <Button
+                type="submit"
+                className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                disabled={saveAccount.isPending}
+              >
                 {saveAccount.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                 {editing ? 'Save changes' : 'Create account'}
               </Button>
@@ -310,8 +396,7 @@ export function ChartOfAccountsPage() {
 interface AccountNodeProps {
   account: Account
   accounts: Account[]
-  depth: number
-  expandedIds: Set<string>
+  collapsedIds: Set<string>
   onToggleExpand: (id: string) => void
   onEdit: (account: Account) => void
   onChild: (account: Account) => void
@@ -321,25 +406,24 @@ interface AccountNodeProps {
 function AccountNode({
   account,
   accounts,
-  depth,
-  expandedIds,
+  collapsedIds,
   onToggleExpand,
   onEdit,
   onChild,
   onDelete,
 }: AccountNodeProps) {
-  const children = useMemo(() => accounts.filter((child) => child.parentAccountId === account.id), [accounts, account.id])
+  const children = useMemo(
+    () => accounts.filter((child) => child.parentAccountId === account.id),
+    [accounts, account.id]
+  )
   const hasChildren = children.length > 0
-  const isExpanded = expandedIds.has(account.id)
+  const isExpanded = collapsedIds.has(account.id)
 
   const classificationColor = getClassificationBadgeClass(account.classification)
 
   return (
-    <div>
-      <div
-        className="group flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
-        style={{ paddingLeft: `${Math.max(8, depth * 22 + 8)}px` }}
-      >
+    <div className="select-none">
+      <div className="group flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/50">
         <div className="flex min-w-0 items-center gap-2">
           {hasChildren ? (
             <button
@@ -348,7 +432,11 @@ function AccountNode({
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
               aria-label={isExpanded ? `Collapse ${account.name}` : `Expand ${account.name}`}
             >
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
             </button>
           ) : (
             <span className="w-5 shrink-0" />
@@ -370,15 +458,21 @@ function AccountNode({
             {account.code}
           </span>
 
-          <span className={`truncate text-sm ${account.isGroup ? 'font-semibold text-slate-900 dark:text-slate-100' : 'font-normal text-slate-700 dark:text-slate-300'}`}>
+          <span
+            className={`text-sm ${account.isGroup ? 'font-semibold text-slate-900 dark:text-slate-100' : 'font-normal text-slate-700 dark:text-slate-300'}`}
+          >
             {account.name}
           </span>
 
           <div className="hidden items-center gap-1.5 sm:flex">
-            <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${classificationColor}`}>
+            <span
+              className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${classificationColor}`}
+            >
               {accountClassificationLabels[account.classification]}
             </span>
-            <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${account.isGroup ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'}`}>
+            <span
+              className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${account.isGroup ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'}`}
+            >
               {account.isGroup ? 'Group' : 'Posting'}
             </span>
             {!account.isActive && (
@@ -389,7 +483,7 @@ function AccountNode({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 opacity-80 group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {account.isGroup && (
             <Button
               size="icon-sm"
@@ -423,14 +517,13 @@ function AccountNode({
       </div>
 
       {hasChildren && isExpanded && (
-        <div className="border-l border-slate-100 dark:border-slate-800/60" style={{ marginLeft: `${Math.max(16, depth * 22 + 16)}px` }}>
+        <div className="ml-5 border-l border-slate-200 pl-2.5 dark:border-slate-800">
           {children.map((child) => (
             <AccountNode
               key={child.id}
               account={child}
               accounts={accounts}
-              depth={depth + 1}
-              expandedIds={expandedIds}
+              collapsedIds={collapsedIds}
               onToggleExpand={onToggleExpand}
               onEdit={onEdit}
               onChild={onChild}
@@ -462,12 +555,20 @@ function getClassificationBadgeClass(classification: number): string {
   }
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string
+  error?: string
+  children: React.ReactNode
+}) {
   return (
-    <label className="block space-y-1 text-sm font-medium text-slate-700 dark:text-slate-300">
-      <span>{label}</span>
+    <div className="grid gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
       {children}
       {error && <span className="text-xs font-normal text-red-600">{error}</span>}
-    </label>
+    </div>
   )
 }

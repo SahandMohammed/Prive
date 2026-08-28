@@ -18,7 +18,7 @@ public sealed class MoneyAccountEntityConfiguration : IEntityTypeConfiguration<M
     builder.Property(account => account.AccountNumberOrIban).HasMaxLength(100);
     builder.HasIndex(account => account.BranchId);
     builder.HasIndex(account => account.CurrencyId);
-    builder.HasIndex(account => account.AccountingAccountId);
+    builder.HasIndex(account => account.AccountingAccountId).IsUnique();
     builder.HasOne(account => account.Branch).WithMany().HasForeignKey(account => account.BranchId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(account => account.Currency).WithMany().HasForeignKey(account => account.CurrencyId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(account => account.AccountingAccount).WithMany().HasForeignKey(account => account.AccountingAccountId).OnDelete(DeleteBehavior.Restrict);

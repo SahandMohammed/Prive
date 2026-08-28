@@ -49,7 +49,6 @@ public sealed class FinanceWorkflowTests
       MoneyAccountType.Bank,
       data.BranchId,
       data.BaseCurrencyId,
-      data.SourceGlAccountId,
       true,
       "Operational notes",
       "Trade Bank",
@@ -233,8 +232,13 @@ public sealed class FinanceWorkflowTests
     await using var db = CreateDb();
     var data = await SeedAsync(db);
     var service = CreateService(db);
-    var invalid = new MoneyAccountRequest("INVALID", "Invalid", MoneyAccountType.Cashbox,
-      data.BranchId, data.BaseCurrencyId, data.PayableAccountId, true, null, null, null);
+
+    var uasBank = await db.Accounts.SingleAsync(a => a.Code == "13421");
+    uasBank.IsActive = false;
+    await db.SaveChangesAsync();
+
+    var invalid = new MoneyAccountRequest("INVALID", "Invalid", MoneyAccountType.Bank,
+      data.BranchId, data.BaseCurrencyId, true, null, null, null);
     var exception = await Assert.ThrowsAsync<BadRequestException>(() =>
       service.CreateMoneyAccountAsync(invalid, data.OperatorUserId, default));
     Assert.Equal(ErrorCodes.Finance.AccountMappingInvalid, exception.Code);
@@ -301,10 +305,14 @@ public sealed class FinanceWorkflowTests
     };
     var supplier = new ContactEntity { Name = "Supplier", IsSupplier = true };
     var otherSupplier = new ContactEntity { Name = "Other supplier", IsSupplier = true };
-    var sourceGl = new AccountEntity { Code = "134111", Name = "Cash", Classification = AccountClassification.Asset };
-    var destinationGl = new AccountEntity { Code = "13421", Name = "Bank", Classification = AccountClassification.Asset };
-    var foreignSourceGl = new AccountEntity { Code = "134112", Name = "USD Cash", Classification = AccountClassification.Asset };
-    var foreignDestinationGl = new AccountEntity { Code = "13422", Name = "USD Bank", Classification = AccountClassification.Asset };
+    var uasCashLocal = new AccountEntity { Code = "134111", Name = "Central Cash Local", Classification = AccountClassification.Asset, IsGroup = true };
+    var uasCashForeign = new AccountEntity { Code = "134112", Name = "Central Cash Foreign", Classification = AccountClassification.Asset, IsGroup = true };
+    var uasBankLocal = new AccountEntity { Code = "13421", Name = "Bank Local", Classification = AccountClassification.Asset, IsGroup = true };
+    var uasBankForeign = new AccountEntity { Code = "13422", Name = "Bank Foreign", Classification = AccountClassification.Asset, IsGroup = true };
+    var sourceGl = new AccountEntity { Code = "13411101", Name = "Cash IQD", Classification = AccountClassification.Asset, ParentAccount = uasCashLocal, IsGroup = false };
+    var destinationGl = new AccountEntity { Code = "1342101", Name = "Bank IQD", Classification = AccountClassification.Asset, ParentAccount = uasBankLocal, IsGroup = false };
+    var foreignSourceGl = new AccountEntity { Code = "13411201", Name = "USD Cash", Classification = AccountClassification.Asset, ParentAccount = uasCashForeign, IsGroup = false };
+    var foreignDestinationGl = new AccountEntity { Code = "1342201", Name = "USD Bank", Classification = AccountClassification.Asset, ParentAccount = uasBankForeign, IsGroup = false };
     var payable = new AccountEntity { Code = "23214", Name = "AP", Classification = AccountClassification.Liability };
     var equity = new AccountEntity { Code = "261", Name = "Capital", Classification = AccountClassification.Equity };
     var warehouse = new WarehouseEntity { Code = "MAIN", Name = "Main", Branch = branch };
@@ -329,6 +337,7 @@ public sealed class FinanceWorkflowTests
       Branch = branch, Currency = usd, AccountingAccount = foreignDestinationGl
     };
     db.AddRange(manager, viewer, outsider, iqd, usd, business, branch, supplier, otherSupplier,
+      uasCashLocal, uasCashForeign, uasBankLocal, uasBankForeign,
       sourceGl, destinationGl, foreignSourceGl, foreignDestinationGl, payable, equity, warehouse,
       source, destination, foreignSource, foreignDestination);
     await db.SaveChangesAsync();

@@ -71,6 +71,8 @@ public static class ErrorCodes
     public const string InvalidJournalLine = "ACCOUNTING_INVALID_JOURNAL_LINE";
     public const string JournalUnbalanced = "ACCOUNTING_JOURNAL_UNBALANCED";
     public const string JournalTypeInvalid = "ACCOUNTING_JOURNAL_TYPE_INVALID";
+    public const string AccountOwnedByMoneyAccount = "ACCOUNTING_ACCOUNT_OWNED_BY_MONEY_ACCOUNT";
+    public const string FinanceOwnedAccountProtected = "ACCOUNTING_FINANCE_OWNED_ACCOUNT_PROTECTED";
   }
 
   public static class Inventory
