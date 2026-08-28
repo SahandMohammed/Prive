@@ -1,28 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { 
-  AlertCircle, 
-  ArrowLeft, 
-  CheckCircle2, 
-  Info, 
-  Loader2, 
-  Plus, 
-  Save, 
-  Send, 
-  Trash2 
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  Info,
+  Loader2,
+  Plus,
+  Save,
+  Scale,
+  Send,
+  Trash2,
 } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { useBranches, useCurrencies, useCurrentBusiness } from '@/features/business'
-import { 
-  useAccountTree, 
-  useJournal, 
-  useJournalActions, 
-  useSaveJournal 
+import { financeApi } from '@/features/finance'
+import { AccountCombobox } from '../components/AccountCombobox'
+import {
+  useAccountTree,
+  useJournal,
+  useJournalActions,
+  useSaveJournal,
 } from '../hooks/useAccounting'
 import { journalSchema } from '../schemas/accounting.schemas'
 import type { JournalInput } from '../types/accounting.types'
@@ -37,15 +48,6 @@ const blankLine = (defaultCurrencyId: string = '') => ({
   originalCreditAmount: 0,
   exchangeRate: 1,
 })
-
-const defaultValues: JournalInput = {
-  entryDate: today,
-  reference: null,
-  description: '',
-  branchId: '',
-  type: 0,
-  lines: [blankLine(), blankLine()],
-}
 
 export function CreateJournalEntryPage() {
   const navigate = useNavigate()
@@ -63,9 +65,28 @@ export function CreateJournalEntryPage() {
   const [isPostingDirectly, setIsPostingDirectly] = useState(false)
 
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data])
-  const branches = useMemo(() => branchesQuery.data?.data.filter((b) => b.isActive) ?? [], [branchesQuery.data])
-  const currencies = useMemo(() => currenciesQuery.data?.data.filter((c) => c.isActive) ?? [], [currenciesQuery.data])
+  const branches = useMemo(
+    () => branchesQuery.data?.data.filter((b) => b.isActive) ?? [],
+    [branchesQuery.data]
+  )
+  const currencies = useMemo(
+    () => currenciesQuery.data?.data.filter((c) => c.isActive) ?? [],
+    [currenciesQuery.data]
+  )
   const baseCurrencyId = businessQuery.data?.baseCurrencyId ?? ''
+  const currencyCode = businessQuery.data?.baseCurrencyCode ?? 'IQD'
+
+  const defaultValues: JournalInput = useMemo(
+    () => ({
+      entryDate: today,
+      reference: null,
+      description: '',
+      branchId: '',
+      type: 0,
+      lines: [blankLine(baseCurrencyId)],
+    }),
+    [baseCurrencyId]
+  )
 
   const form = useForm<JournalInput>({
     resolver: zodResolver(journalSchema),
@@ -75,6 +96,7 @@ export function CreateJournalEntryPage() {
   const lines = useFieldArray({ control: form.control, name: 'lines' })
   const watchedLines = useWatch({ control: form.control, name: 'lines' }) ?? []
   const branchId = useWatch({ control: form.control, name: 'branchId' })
+  const entryDate = useWatch({ control: form.control, name: 'entryDate' })
 
   // Auto-fill default branch & currencies when creating new
   useEffect(() => {
@@ -83,6 +105,34 @@ export function CreateJournalEntryPage() {
       form.setValue('branchId', mainBranch.id)
     }
   }, [branches, branchId, editId, form])
+
+  // Update initial line currency when baseCurrencyId loads
+  useEffect(() => {
+    if (!editId && baseCurrencyId && watchedLines.length === 1 && !watchedLines[0].currencyId) {
+      form.setValue('lines.0.currencyId', baseCurrencyId)
+      form.setValue('lines.0.exchangeRate', 1)
+    }
+  }, [baseCurrencyId, editId, form, watchedLines])
+
+  // When entryDate changes, refresh exchange rates for any foreign currency lines
+  useEffect(() => {
+    if (!entryDate) return
+    watchedLines.forEach(async (line, index) => {
+      if (line.currencyId && line.currencyId !== baseCurrencyId) {
+        try {
+          const effectiveRate = await financeApi.effectiveExchangeRate(line.currencyId, entryDate)
+          if (effectiveRate?.rate) {
+            form.setValue(`lines.${index}.exchangeRate`, effectiveRate.rate, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
+        } catch {
+          // Ignore if exchange rate lookup fails
+        }
+      }
+    })
+  }, [entryDate, baseCurrencyId, form])
 
   // Populate when editing existing draft
   useEffect(() => {
@@ -106,33 +156,50 @@ export function CreateJournalEntryPage() {
     }
   }, [journalQuery.data, editId, form])
 
-  const calculateBase = (amount: number, currencyId: string, rate: number) => {
-    const isBase = currencyId === baseCurrencyId || !currencyId
+  const calculateBase = (amount: number, currId: string, rate: number) => {
+    const isBase = currId === baseCurrencyId || !currId
     return isBase ? amount : amount * (rate || 1)
   }
 
   const debitTotal = useMemo(() => {
     return watchedLines.reduce((total, line) => {
-      const amt = Number(line.originalDebitAmount) || 0
-      return total + calculateBase(amt, line.currencyId, Number(line.exchangeRate) || 1)
+      const amt = Number(line?.originalDebitAmount) || 0
+      return total + calculateBase(amt, line?.currencyId, Number(line?.exchangeRate) || 1)
     }, 0)
   }, [watchedLines, baseCurrencyId])
 
   const creditTotal = useMemo(() => {
     return watchedLines.reduce((total, line) => {
-      const amt = Number(line.originalCreditAmount) || 0
-      return total + calculateBase(amt, line.currencyId, Number(line.exchangeRate) || 1)
+      const amt = Number(line?.originalCreditAmount) || 0
+      return total + calculateBase(amt, line?.currencyId, Number(line?.exchangeRate) || 1)
     }, 0)
   }, [watchedLines, baseCurrencyId])
 
   const difference = Math.abs(debitTotal - creditTotal)
-  const isBalanced = debitTotal > 0 && Math.abs(debitTotal - creditTotal) < 0.0001
+  const isBalanced =
+    watchedLines.length >= 2 &&
+    debitTotal > 0 &&
+    difference < 0.0001
   const isPending = saveJournal.isPending || actions.post.isPending
 
-  const handleCurrencyChange = (index: number, newCurrencyId: string) => {
-    form.setValue(`lines.${index}.currencyId`, newCurrencyId)
-    if (newCurrencyId === baseCurrencyId) {
-      form.setValue(`lines.${index}.exchangeRate`, 1)
+  const handleCurrencyChange = async (index: number, newCurrencyId: string) => {
+    form.setValue(`lines.${index}.currencyId`, newCurrencyId, { shouldValidate: true })
+
+    if (newCurrencyId === baseCurrencyId || !newCurrencyId) {
+      form.setValue(`lines.${index}.exchangeRate`, 1, { shouldValidate: true, shouldDirty: true })
+    } else {
+      try {
+        const currentDate = form.getValues('entryDate') || today
+        const effectiveRate = await financeApi.effectiveExchangeRate(newCurrencyId, currentDate)
+        if (effectiveRate?.rate) {
+          form.setValue(`lines.${index}.exchangeRate`, effectiveRate.rate, {
+            shouldValidate: true,
+            shouldDirty: true,
+          })
+        }
+      } catch {
+        // Keep current rate or 1 if no configured rate
+      }
     }
   }
 
@@ -148,6 +215,60 @@ export function CreateJournalEntryPage() {
     if (value > 0) {
       form.setValue(`lines.${index}.originalDebitAmount`, 0)
     }
+  }
+
+  const handleAutoBalance = () => {
+    if (difference < 0.0001) return
+
+    const diff = Number(difference.toFixed(4))
+    const lastIndex = watchedLines.length - 1
+    const lastLine = watchedLines[lastIndex]
+
+    // If last line has no debit and no credit and no account, populate it
+    if (
+      lastLine &&
+      !lastLine.accountId &&
+      lastLine.originalDebitAmount === 0 &&
+      lastLine.originalCreditAmount === 0
+    ) {
+      const rate = Number(lastLine.exchangeRate) || 1
+      const isBase = lastLine.currencyId === baseCurrencyId || !lastLine.currencyId
+      const txAmount = isBase ? diff : Number((diff / rate).toFixed(4))
+
+      if (debitTotal > creditTotal) {
+        form.setValue(`lines.${lastIndex}.originalCreditAmount`, txAmount)
+      } else {
+        form.setValue(`lines.${lastIndex}.originalDebitAmount`, txAmount)
+      }
+    } else {
+      // Append a new balancing line
+      if (debitTotal > creditTotal) {
+        lines.append({
+          ...blankLine(baseCurrencyId),
+          originalCreditAmount: diff,
+          originalDebitAmount: 0,
+        })
+      } else {
+        lines.append({
+          ...blankLine(baseCurrencyId),
+          originalDebitAmount: diff,
+          originalCreditAmount: 0,
+        })
+      }
+    }
+  }
+
+  const handleDuplicateLine = (index: number) => {
+    const lineToCopy = watchedLines[index]
+    if (!lineToCopy) return
+    lines.append({
+      accountId: lineToCopy.accountId,
+      description: lineToCopy.description,
+      currencyId: lineToCopy.currencyId || baseCurrencyId,
+      originalDebitAmount: 0,
+      originalCreditAmount: 0,
+      exchangeRate: lineToCopy.exchangeRate || 1,
+    })
   }
 
   const handleSave = (shouldPost = false) => {
@@ -200,7 +321,7 @@ export function CreateJournalEntryPage() {
               {editId ? 'Edit Journal Entry' : 'Create Journal Entry'}
             </h1>
             <p className="text-xs text-slate-500">
-              Double-entry financial voucher with automated base currency balance validation.
+              Double-entry financial voucher with automated base currency exchange rate validation.
             </p>
           </div>
         </div>
@@ -230,7 +351,11 @@ export function CreateJournalEntryPage() {
             className="h-9 gap-1.5 bg-[#e05d38] font-medium text-white shadow-sm hover:bg-[#c94f2d]"
             disabled={isPending || !isBalanced}
             onClick={() => handleSave(true)}
-            title={!isBalanced ? 'Journal must be balanced before posting' : 'Save and post to general ledger'}
+            title={
+              !isBalanced
+                ? 'Journal must have at least 2 balanced lines before posting'
+                : 'Save and post to general ledger'
+            }
           >
             {isPending && isPostingDirectly ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -309,74 +434,109 @@ export function CreateJournalEntryPage() {
               Journal Lines
             </CardTitle>
             <CardDescription>
-              Each line must balance: Total Debits must equal Total Credits.
+              Double-entry posting: Total debits must equal total credits in base currency ({currencyCode}).
             </CardDescription>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1 text-xs"
-            onClick={() => lines.append(blankLine(baseCurrencyId))}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Line
-          </Button>
+          <div className="flex items-center gap-2">
+            {difference > 0.0001 && (debitTotal > 0 || creditTotal > 0) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/5"
+                onClick={handleAutoBalance}
+              >
+                <Scale className="size-3.5" />
+                Auto-Balance ({difference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 text-xs"
+              onClick={() => lines.append(blankLine(baseCurrencyId))}
+            >
+              <Plus className="size-3.5" />
+              Add Line
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
-                  <TableHead className="w-12 px-3 text-center">#</TableHead>
-                  <TableHead className="min-w-64 px-3 font-semibold text-slate-600 dark:text-slate-300">Account</TableHead>
-                  <TableHead className="min-w-48 px-3 font-semibold text-slate-600 dark:text-slate-300">Description / Note</TableHead>
-                  <TableHead className="w-32 px-3 font-semibold text-slate-600 dark:text-slate-300">Currency</TableHead>
-                  <TableHead className="w-28 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">Ex. Rate</TableHead>
-                  <TableHead className="w-36 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">Debit (Tx)</TableHead>
-                  <TableHead className="w-36 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">Credit (Tx)</TableHead>
-                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">Debit (Base)</TableHead>
-                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">Credit (Base)</TableHead>
-                  <TableHead className="w-12 px-2" />
+                  <TableHead className="w-10 px-2 text-center">#</TableHead>
+                  <TableHead className="min-w-64 px-3 font-semibold text-slate-600 dark:text-slate-300">
+                    Account (ComboBox)
+                  </TableHead>
+                  <TableHead className="min-w-44 px-3 font-semibold text-slate-600 dark:text-slate-300">
+                    Description / Note
+                  </TableHead>
+                  <TableHead className="w-32 px-3 font-semibold text-slate-600 dark:text-slate-300">
+                    Currency
+                  </TableHead>
+                  <TableHead className="w-36 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                    Rate (1 Curr in {currencyCode})
+                  </TableHead>
+                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                    Debit (Tx)
+                  </TableHead>
+                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                    Credit (Tx)
+                  </TableHead>
+                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                    Debit ({currencyCode})
+                  </TableHead>
+                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                    Credit ({currencyCode})
+                  </TableHead>
+                  <TableHead className="w-16 px-2 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 {lines.fields.map((field, index) => {
                   const line = watchedLines[index] ?? {}
+                  const isForeign = line.currencyId && line.currencyId !== baseCurrencyId
                   const debitTx = Number(line.originalDebitAmount) || 0
                   const creditTx = Number(line.originalCreditAmount) || 0
                   const exRate = Number(line.exchangeRate) || 1
                   const baseDebit = calculateBase(debitTx, line.currencyId, exRate)
                   const baseCredit = calculateBase(creditTx, line.currencyId, exRate)
+                  const currObj = currencies.find((c) => c.id === line.currencyId)
 
                   return (
                     <TableRow key={field.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
-                      <TableCell className="px-3 py-2 text-center text-xs font-mono text-slate-400">
+                      <TableCell className="px-2 py-2 text-center text-xs font-mono text-slate-400">
                         {index + 1}
                       </TableCell>
+
+                      {/* Account Searchable ComboBox */}
                       <TableCell className="px-3 py-2">
-                        <select
-                          className="h-8.5 w-full rounded-md border border-slate-200 bg-white px-2 text-xs shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
-                          {...form.register(`lines.${index}.accountId`)}
-                        >
-                          <option value="">Select Posting Account</option>
-                          {accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.code} — {acc.name}
-                            </option>
-                          ))}
-                        </select>
+                        <AccountCombobox
+                          accounts={accounts}
+                          value={line.accountId || ''}
+                          onChange={(val) =>
+                            form.setValue(`lines.${index}.accountId`, val, { shouldValidate: true })
+                          }
+                          placeholder="Select posting account..."
+                        />
                       </TableCell>
+
+                      {/* Line Memo */}
                       <TableCell className="px-3 py-2">
                         <Input
-                          placeholder="Optional line memo"
-                          className="h-8.5 text-xs"
+                          placeholder="Line description"
+                          className="h-9 text-xs"
                           {...form.register(`lines.${index}.description`)}
                         />
                       </TableCell>
+
+                      {/* Currency */}
                       <TableCell className="px-3 py-2">
                         <select
-                          className="h-8.5 w-full rounded-md border border-slate-200 bg-white px-2 text-xs shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
                           value={line.currencyId || baseCurrencyId}
                           onChange={(e) => handleCurrencyChange(index, e.target.value)}
                         >
@@ -387,55 +547,103 @@ export function CreateJournalEntryPage() {
                           ))}
                         </select>
                       </TableCell>
+
+                      {/* Exchange Rate */}
                       <TableCell className="px-3 py-2">
-                        <Input
-                          type="number"
-                          step="0.000001"
-                          min="0.000001"
-                          disabled={line.currencyId === baseCurrencyId || !line.currencyId}
-                          className="h-8.5 text-right font-mono text-xs"
-                          {...form.register(`lines.${index}.exchangeRate`, { valueAsNumber: true })}
-                        />
+                        {isForeign ? (
+                          <div className="space-y-0.5">
+                            <Input
+                              type="number"
+                              min="0.000001"
+                              step="0.000001"
+                              className="h-9 text-right font-mono text-xs"
+                              {...form.register(`lines.${index}.exchangeRate`, {
+                                valueAsNumber: true,
+                              })}
+                            />
+                            {currObj && (
+                              <p className="text-[10px] text-right font-mono text-slate-400">
+                                1 {currObj.code} = {exRate.toLocaleString()} {currencyCode}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex h-9 items-center justify-end rounded-md border border-slate-100 bg-slate-50/80 px-2.5 font-mono text-xs text-slate-400 dark:border-slate-800 dark:bg-slate-800/40">
+                            1.000000 <span className="ml-1 text-[10px] text-slate-400">(Base)</span>
+                          </div>
+                        )}
                       </TableCell>
+
+                      {/* Debit Tx */}
                       <TableCell className="px-3 py-2">
                         <Input
                           type="number"
                           step="0.0001"
                           min="0"
                           placeholder="0.00"
-                          className="h-8.5 text-right font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
+                          className="h-9 text-right font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
                           value={line.originalDebitAmount ?? 0}
                           onChange={(e) => handleDebitChange(index, Number(e.target.value))}
                         />
                       </TableCell>
+
+                      {/* Credit Tx */}
                       <TableCell className="px-3 py-2">
                         <Input
                           type="number"
                           step="0.0001"
                           min="0"
                           placeholder="0.00"
-                          className="h-8.5 text-right font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
+                          className="h-9 text-right font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
                           value={line.originalCreditAmount ?? 0}
                           onChange={(e) => handleCreditChange(index, Number(e.target.value))}
                         />
                       </TableCell>
+
+                      {/* Debit Base */}
                       <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                        {baseDebit > 0 ? baseDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : '—'}
+                        {baseDebit > 0
+                          ? baseDebit.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 4,
+                            })
+                          : '—'}
                       </TableCell>
+
+                      {/* Credit Base */}
                       <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
-                        {baseCredit > 0 ? baseCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : '—'}
+                        {baseCredit > 0
+                          ? baseCredit.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 4,
+                            })
+                          : '—'}
                       </TableCell>
+
+                      {/* Actions */}
                       <TableCell className="px-2 py-2 text-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="h-7 w-7 text-slate-400 hover:text-red-600"
-                          disabled={lines.fields.length <= 2}
-                          onClick={() => lines.remove(index)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-slate-400 hover:text-slate-600"
+                            title="Duplicate line"
+                            onClick={() => handleDuplicateLine(index)}
+                          >
+                            <Copy className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-slate-400 hover:text-red-600"
+                            title="Delete line"
+                            onClick={() => lines.remove(index)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -445,7 +653,7 @@ export function CreateJournalEntryPage() {
           </div>
 
           {form.formState.errors.lines?.message && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/30 text-xs text-red-600 border-t border-red-200 dark:border-red-900">
+            <div className="border-t border-red-200 bg-red-50 p-3 text-xs text-red-600 dark:border-red-900 dark:bg-red-950/30">
               {form.formState.errors.lines.message}
             </div>
           )}
@@ -455,41 +663,61 @@ export function CreateJournalEntryPage() {
             <div className="flex items-center gap-3">
               {isBalanced ? (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  Journal Balanced
+                  <CheckCircle2 className="size-4 text-emerald-600" />
+                  Journal Balanced ({watchedLines.length} lines)
                 </div>
               ) : debitTotal === 0 && creditTotal === 0 ? (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                  <Info className="h-4 w-4" />
-                  Enter debit and credit amounts
+                  <Info className="size-4" />
+                  Enter debit and credit amounts (minimum 2 lines required)
                 </div>
               ) : (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-                  <AlertCircle className="h-4 w-4 text-rose-600" />
-                  Out of Balance: Difference {difference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                  <AlertCircle className="size-4 text-rose-600" />
+                  Out of Balance: Difference{' '}
+                  {difference.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 4,
+                  })}{' '}
+                  {currencyCode}
                 </div>
               )}
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-6 text-sm">
               <div className="text-right">
-                <p className="text-xs text-slate-500">Total Debit (Base)</p>
+                <p className="text-xs text-slate-500">Total Debit ({currencyCode})</p>
                 <p className="font-mono text-base font-bold text-emerald-600 dark:text-emerald-400">
-                  {debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                  {debitTotal.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 4,
+                  })}
                 </p>
               </div>
 
               <div className="text-right">
-                <p className="text-xs text-slate-500">Total Credit (Base)</p>
+                <p className="text-xs text-slate-500">Total Credit ({currencyCode})</p>
                 <p className="font-mono text-base font-bold text-blue-600 dark:text-blue-400">
-                  {creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                  {creditTotal.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 4,
+                  })}
                 </p>
               </div>
 
-              <div className="text-right border-l border-slate-200 pl-6 dark:border-slate-700">
+              <div className="border-l border-slate-200 pl-6 text-right dark:border-slate-700">
                 <p className="text-xs text-slate-500">Difference</p>
-                <p className={`font-mono text-base font-bold ${difference === 0 ? 'text-slate-600 dark:text-slate-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                  {difference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                <p
+                  className={`font-mono text-base font-bold ${
+                    difference === 0
+                      ? 'text-slate-600 dark:text-slate-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                >
+                  {difference.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 4,
+                  })}
                 </p>
               </div>
             </div>
@@ -507,7 +735,15 @@ export function CreateJournalEntryPage() {
   )
 }
 
-function FormField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function FormField({
+  label,
+  error,
+  children,
+}: {
+  label: string
+  error?: string
+  children: React.ReactNode
+}) {
   return (
     <label className="block space-y-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
       <span>{label}</span>

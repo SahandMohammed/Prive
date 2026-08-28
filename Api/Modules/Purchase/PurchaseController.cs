@@ -24,7 +24,7 @@ public sealed class PurchaseController : ControllerBase
     return Ok(ApiResponse<List<PurchaseInvoiceListResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
-  [HttpGet("{id:guid}", Name = nameof(GetById))]
+  [HttpGet("{id:guid}")]
   [ProducesResponseType(typeof(ApiResponse<PurchaseInvoiceResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetById(Guid id, CancellationToken ct) =>

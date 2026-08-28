@@ -1,6 +1,7 @@
 export * from './types/finance.types'
 export * from './hooks/useFinance'
 export * from './schemas/finance.schema'
+export { financeApi } from './api/finance.api'
 export { MoneyAccountsPage } from './pages/MoneyAccountsPage'
 export { MoneyLedgerPage } from './pages/MoneyLedgerPage'
 export { ExchangeRatesPage } from './pages/ExchangeRatesPage'
@@ -8,4 +9,3 @@ export { MoneyTransfersPage } from './pages/MoneyTransfersPage'
 export { SupplierPaymentsPage } from './pages/SupplierPaymentsPage'
 export { CustomerReceiptsPage } from './pages/CustomerReceiptsPage'
 export { CustomerReceiptPage } from './pages/CustomerReceiptPage'
-

@@ -40,7 +40,7 @@ public sealed class ExpensesController : ControllerBase
     return Ok(ApiResponse<List<ExpenseCategoryOptionResponse>>.Ok(result));
   }
 
-  [HttpGet("categories/{id:guid}", Name = nameof(GetCategoryById))]
+  [HttpGet("categories/{id:guid}")]
   [ProducesResponseType(typeof(ApiResponse<ExpenseCategoryResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetCategoryById(Guid id, CancellationToken ct)
@@ -97,7 +97,7 @@ public sealed class ExpensesController : ControllerBase
     return Ok(ApiResponse<ExpenseSummaryResponse>.Ok(result));
   }
 
-  [HttpGet("{id:guid}", Name = nameof(GetById))]
+  [HttpGet("{id:guid}")]
   [ProducesResponseType(typeof(ApiResponse<ExpenseResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetById(Guid id, CancellationToken ct)

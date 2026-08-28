@@ -9,7 +9,7 @@ namespace Api.Modules.Pos;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/pos")]
-[Authorize(Roles = "SuperAdmin,Manager,Cashier")]
+[Authorize(Roles = "SuperAdmin,Manager,Owner,Cashier")]
 public sealed class PosController : ControllerBase
 {
   private readonly PosService _service;

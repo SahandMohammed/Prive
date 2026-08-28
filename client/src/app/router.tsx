@@ -126,6 +126,7 @@ export const router = createBrowserRouter([
           { path: '/settings/items', element: <ItemsPage /> },
           { path: '/settings/items/new', element: <CreateItemPage /> },
           { path: '/settings/items/:id', element: <CreateItemPage /> },
+          { path: '/settings/services', element: <ServicesPage /> },
           { path: '/settings/warehouses', element: <WarehousesPage /> },
           { path: '/inventory', element: <InventoryOverviewPage /> },
           { path: '/inventory/opening-stock', element: <OpeningStockListPage /> },

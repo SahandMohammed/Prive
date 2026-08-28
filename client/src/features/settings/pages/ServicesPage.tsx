@@ -1,4 +1,4 @@
-import { ServiceDefinitionsPage } from './ServiceDefinitionsPage'
+import { ServiceDefinitionsPage } from '@/features/sales'
 
 export function ServicesPage() {
   return <ServiceDefinitionsPage />

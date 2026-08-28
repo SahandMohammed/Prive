@@ -13,6 +13,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Settings,
+  StoreIcon,
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '@/features/auth'
 import { cn } from '@/lib/utils'
@@ -21,22 +22,6 @@ export function Sidebar() {
   const { data: user, isPending } = useCurrentUser()
   const logout = useLogout()
   const role = user?.role
-
-  if (isPending) {
-    return (
-      <aside className="w-64 bg-card border-r border-border h-full flex flex-col shrink-0">
-        <div className="p-6">
-          <h1 className="text-xl font-heading font-bold text-foreground">Prive MVP</h1>
-          <p className="text-xs text-muted-foreground mt-1">Management System</p>
-        </div>
-        <div className="flex-1 p-4">
-          <p className="text-sm text-muted-foreground">Loading menu...</p>
-        </div>
-      </aside>
-    )
-  }
-
-  if (!user) return null
 
   return (
     <aside className="w-64 bg-card border-r border-border h-full flex flex-col shrink-0">
@@ -50,11 +35,9 @@ export function Sidebar() {
           Dashboard
         </NavItem>
 
-        {(role === 'SuperAdmin' || role === 'Manager' || role === 'Cashier') && (
-          <NavItem to="/pos" icon={<ShoppingCartIcon className="w-4 h-4" />}>
-            POS
-          </NavItem>
-        )}
+        <NavItem to="/pos" icon={<StoreIcon className="w-4 h-4" />}>
+          POS
+        </NavItem>
 
         <NavItem to="/contacts" icon={<UsersIcon className="w-4 h-4" />}>
           Contacts
@@ -70,6 +53,7 @@ export function Sidebar() {
 
         {/* Sales Module */}
         <NavGroup label="Sales" icon={<ShoppingBagIcon className="w-4 h-4" />}>
+          <SubNavItem to="/pos">POS Terminal</SubNavItem>
           <SubNavItem to="/sales/services">Services</SubNavItem>
           <SubNavItem to="/sales/invoices">Sales Invoices</SubNavItem>
         </NavGroup>
@@ -118,6 +102,7 @@ export function Sidebar() {
           <SubNavItem to="/settings/branches">Branches</SubNavItem>
           <SubNavItem to="/settings/currencies">Currencies</SubNavItem>
           <SubNavItem to="/settings/items">Items</SubNavItem>
+          <SubNavItem to="/settings/services">Services</SubNavItem>
           <SubNavItem to="/settings/warehouses">Warehouses</SubNavItem>
         </NavGroup>
 
@@ -136,15 +121,19 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-border mt-auto">
-        <div className="flex items-center gap-3 px-2 mb-4">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-            {user.username.charAt(0).toUpperCase()}
+        {user ? (
+          <div className="flex items-center gap-3 px-2 mb-4">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+              {user.username ? user.username.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{user.username}</p>
+              <p className="text-xs text-muted-foreground">{role}</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{user.username}</p>
-            <p className="text-xs text-muted-foreground">{role}</p>
-          </div>
-        </div>
+        ) : isPending ? (
+          <div className="px-2 mb-4 text-xs text-muted-foreground">Loading profile...</div>
+        ) : null}
         <button
           onClick={() => logout.mutate()}
           disabled={logout.isPending}

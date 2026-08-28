@@ -71,7 +71,8 @@ public sealed class AuthController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
   public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
   {
-    var userId = Guid.TryParse(User.FindFirstValue("sub"), out var id)
+    var subject = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+    var userId = Guid.TryParse(subject, out var id)
       ? id
       : throw new UnauthorizedException(ErrorCodes.Common.Unauthorized, "Invalid token subject.");
 

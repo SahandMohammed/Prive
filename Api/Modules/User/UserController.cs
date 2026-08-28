@@ -33,7 +33,8 @@ public sealed class UserController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetMe()
   {
-    var userId = Guid.TryParse(User.FindFirstValue("sub"), out var id)
+    var subject = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+    var userId = Guid.TryParse(subject, out var id)
       ? id
       : throw new UnauthorizedException(ErrorCodes.Common.Unauthorized, "Invalid token subject.");
 
