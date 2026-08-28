@@ -27,48 +27,47 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { useCurrentBusiness } from '@/features/business'
-import { CustomerReceiptInvoiceDialog } from '../components/CustomerReceiptInvoiceDialog'
+import { SupplierPaymentInvoiceDialog } from '../components/SupplierPaymentInvoiceDialog'
 import {
-  useCustomerReceipt,
-  useCustomerReceiptActions,
-  useFinanceCustomers,
+  useFinanceSuppliers,
   useMoneyAccounts,
-  useOutstandingSalesInvoices,
+  useOutstandingInvoices,
+  useSupplierPayment,
+  useSupplierPaymentActions,
 } from '../hooks/useFinance'
-import { customerReceiptSchema } from '../schemas/finance.schema'
+import { supplierPaymentSchema } from '../schemas/finance.schema'
 import { FinanceDocumentStatus, MoneyAccountAccessLevel } from '../types/finance.types'
 import type {
-  CustomerReceipt,
-  CustomerReceiptInput,
-  OutstandingSalesInvoice,
+  OutstandingPurchaseInvoice,
+  SupplierPayment,
+  SupplierPaymentInput,
 } from '../types/finance.types'
-import { ReceiptStatus } from './CustomerReceiptsPage'
 
-type FormValue = Omit<CustomerReceiptInput, 'notes'> & { notes: string }
+type FormValue = Omit<SupplierPaymentInput, 'notes'> & { notes: string }
 
-export function CustomerReceiptPage() {
+export function SupplierPaymentPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
 
-  const receiptQuery = useCustomerReceipt(id)
-  const actions = useCustomerReceiptActions()
-  const customers = useFinanceCustomers().data ?? []
+  const paymentQuery = useSupplierPayment(id)
+  const actions = useSupplierPaymentActions()
+  const suppliers = useFinanceSuppliers().data ?? []
   const accounts =
     useMoneyAccounts({ page: 1, pageSize: 100, isActive: true }).data?.data.filter(
       (account) => account.currentUserAccess === MoneyAccountAccessLevel.Operate
     ) ?? []
   const business = useCurrentBusiness().data
-  const receipt = receiptQuery.data
-  const posted = receipt?.status === FinanceDocumentStatus.Posted
+  const payment = paymentQuery.data
+  const posted = payment?.status === FinanceDocumentStatus.Posted
 
   const form = useForm<FormValue>({
-    resolver: zodResolver(customerReceiptSchema),
+    resolver: zodResolver(supplierPaymentSchema),
     defaultValues: {
-      customerId: '',
-      receiptDate: today(),
+      supplierId: '',
+      paymentDate: today(),
       moneyAccountId: '',
-      exchangeRate: 1,
+      exchangeRate: null,
       totalAmount: 0,
       notes: '',
       allocations: [],
@@ -77,37 +76,37 @@ export function CustomerReceiptPage() {
 
   const values = useWatch({ control: form.control })
   const selectedAccount = accounts.find((account) => account.id === values.moneyAccountId)
-  const selectedCustomer = customers.find((customer) => customer.id === values.customerId)
-  const currencyId = selectedAccount?.currencyId ?? receipt?.currencyId
-  const currencyCode = selectedAccount?.currencyCode ?? receipt?.currencyCode ?? 'IQD'
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === values.supplierId)
+  const currencyId = selectedAccount?.currencyId ?? payment?.currencyId
+  const currencyCode = selectedAccount?.currencyCode ?? payment?.currencyCode ?? 'IQD'
   const isForeign = Boolean(currencyId && business && currencyId !== business.baseCurrencyId)
 
-  const outstandingQuery = useOutstandingSalesInvoices(
-    posted ? undefined : values.customerId,
+  const outstandingQuery = useOutstandingInvoices(
+    posted ? undefined : values.supplierId,
     posted ? undefined : currencyId
   )
   const outstanding = outstandingQuery.data ?? []
 
   useEffect(() => {
-    if (!receipt) return
+    if (!payment) return
     form.reset({
-      customerId: receipt.customerId,
-      receiptDate: receipt.receiptDate,
-      moneyAccountId: receipt.moneyAccountId,
-      exchangeRate: receipt.exchangeRate,
-      totalAmount: receipt.totalAmount,
-      notes: receipt.notes ?? '',
-      allocations: receipt.allocations.map((allocation) => ({
-        salesInvoiceId: allocation.salesInvoiceId,
+      supplierId: payment.supplierId,
+      paymentDate: payment.paymentDate,
+      moneyAccountId: payment.moneyAccountId,
+      exchangeRate: payment.exchangeRate,
+      totalAmount: payment.totalAmount,
+      notes: payment.notes ?? '',
+      allocations: payment.allocations.map((allocation) => ({
+        purchaseInvoiceId: allocation.purchaseInvoiceId,
         amount: allocation.amount,
       })),
     })
-  }, [form, receipt])
+  }, [form, payment])
 
   const activeAllocations = useMemo(() => {
     return (values.allocations ?? []).filter(
-      (item): item is { salesInvoiceId: string; amount: number } =>
-        Boolean(item && item.salesInvoiceId && (Number(item.amount) || 0) > 0)
+      (item): item is { purchaseInvoiceId: string; amount: number } =>
+        Boolean(item && item.purchaseInvoiceId && (Number(item.amount) || 0) > 0)
     )
   }, [values.allocations])
 
@@ -115,13 +114,13 @@ export function CustomerReceiptPage() {
     (sum, allocation) => sum + (Number(allocation.amount) || 0),
     0
   )
-  const draftRows = mergeOutstanding(outstanding, receipt)
+  const draftRows = mergeOutstanding(outstanding, payment)
   const totalAmountNum = Number(values.totalAmount) || 0
   const unallocatedAmount = round4(totalAmountNum - allocated)
   const isBalanced = totalAmountNum > 0 && Math.abs(unallocatedAmount) < 0.0001
 
   const handleApplyAllocationsFromDialog = (
-    newAllocations: { salesInvoiceId: string; amount: number }[],
+    newAllocations: { purchaseInvoiceId: string; amount: number }[],
     newTotal: number
   ) => {
     form.setValue('allocations', newAllocations, { shouldDirty: true, shouldValidate: true })
@@ -130,32 +129,32 @@ export function CustomerReceiptPage() {
 
   const handleRemoveAllocation = (invoiceId: string) => {
     const current = [...(form.getValues('allocations') ?? [])]
-    const updated = current.filter((item) => item?.salesInvoiceId !== invoiceId)
+    const updated = current.filter((item) => item?.purchaseInvoiceId !== invoiceId)
     form.setValue('allocations', updated, { shouldDirty: true, shouldValidate: true })
   }
 
   const handleUpdateLineAmount = (invoiceId: string, val: number, max: number) => {
     const clamped = Math.min(Math.max(val, 0), max)
     const current = [...(form.getValues('allocations') ?? [])]
-    const idx = current.findIndex((item) => item?.salesInvoiceId === invoiceId)
+    const idx = current.findIndex((item) => item?.purchaseInvoiceId === invoiceId)
     if (idx >= 0) {
       if (clamped > 0) {
-        current[idx] = { salesInvoiceId: invoiceId, amount: clamped }
+        current[idx] = { purchaseInvoiceId: invoiceId, amount: clamped }
       } else {
         current.splice(idx, 1)
       }
     } else if (clamped > 0) {
-      current.push({ salesInvoiceId: invoiceId, amount: clamped })
+      current.push({ purchaseInvoiceId: invoiceId, amount: clamped })
     }
     form.setValue('allocations', current, { shouldDirty: true, shouldValidate: true })
   }
 
   const submit = form.handleSubmit((value) => {
     if (round4(allocated) !== round4(value.totalAmount)) {
-      form.setError('root', { message: 'Receipt total must equal the allocated total' })
+      form.setError('root', { message: 'Payment total must equal the allocated total' })
       return
     }
-    const body: CustomerReceiptInput = {
+    const body: SupplierPaymentInput = {
       ...value,
       exchangeRate: isForeign ? value.exchangeRate : null,
       notes: value.notes.trim() || null,
@@ -163,22 +162,22 @@ export function CustomerReceiptPage() {
     if (id) actions.update.mutate({ id, body })
     else
       actions.create.mutate(body, {
-        onSuccess: (created) => navigate(`/finance/customer-receipts/${created.id}`),
+        onSuccess: (created) => navigate(`/finance/supplier-payments/${created.id}`),
       })
   })
 
-  if (id && receiptQuery.isPending)
+  if (id && paymentQuery.isPending)
     return (
       <div className="grid h-64 place-items-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     )
-  if (receiptQuery.isError) return <p className="text-destructive">{receiptQuery.error.message}</p>
+  if (paymentQuery.isError) return <p className="text-destructive">{paymentQuery.error.message}</p>
 
-  const selectableCustomer =
-    receipt && !customers.some((customer) => customer.id === receipt.customerId)
+  const selectableSupplier =
+    payment && !suppliers.some((supplier) => supplier.id === payment.supplierId)
   const selectableAccount =
-    receipt && !accounts.some((account) => account.id === receipt.moneyAccountId)
+    payment && !accounts.some((account) => account.id === payment.moneyAccountId)
   const actionError =
     actions.create.error ?? actions.update.error ?? actions.post.error ?? actions.remove.error
 
@@ -187,30 +186,40 @@ export function CustomerReceiptPage() {
       {/* TOP HEADER */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
-          <Link to="/finance/customer-receipts">
+          <Link to="/finance/supplier-payments">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="size-4" />
             </Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Customer Receipt{' '}
-              <span className="font-mono text-[#d85430]">{receipt?.documentNumber ?? 'New draft'}</span>
+              Supplier Payment{' '}
+              <span className="font-mono text-[#d85430]">{payment?.documentNumber ?? 'New draft'}</span>
             </h1>
             <p className="text-xs text-slate-500">
               {posted
-                ? 'Posted · immutable Money Account and Accounts Receivable settlement history'
-                : 'Draft · allocate funds against outstanding customer sales invoices'}
+                ? 'Posted · immutable Money Account and Accounts Payable settlement history'
+                : 'Draft · allocate funds against open purchase invoices/bills'}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {receipt && <ReceiptStatus status={receipt.status} />}
-          {posted && receipt && (
+          {payment && (
+            <span
+              className={`inline-flex rounded px-2.5 py-1 text-xs font-semibold ${
+                posted
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+              }`}
+            >
+              {posted ? 'Posted' : 'Draft'}
+            </span>
+          )}
+          {posted && payment && (
             <>
               <Link
                 to={`/finance/money-ledger?documentNumber=${encodeURIComponent(
-                  receipt.documentNumber
+                  payment.documentNumber
                 )}`}
               >
                 <Button variant="outline" size="sm">
@@ -218,9 +227,9 @@ export function CustomerReceiptPage() {
                   Money Ledger
                 </Button>
               </Link>
-              {receipt.journalEntryId && (
+              {payment.journalEntryId && (
                 <Link
-                  to={`/accounting/journal?search=${encodeURIComponent(receipt.documentNumber)}`}
+                  to={`/accounting/journal?search=${encodeURIComponent(payment.documentNumber)}`}
                 >
                   <Button variant="outline" size="sm">
                     <BookOpen className="size-4" />
@@ -235,37 +244,37 @@ export function CustomerReceiptPage() {
 
       <form className="space-y-5" onSubmit={submit}>
         <fieldset disabled={posted} className="space-y-5 disabled:opacity-80">
-          {/* CUSTOMER & RECEIPT DETAILS CARD */}
+          {/* PAYMENT DETAILS CARD */}
           <Card className="border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Receipt Details</CardTitle>
+              <CardTitle className="text-base font-semibold">Payment Details</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
-              <Field label="Customer" error={form.formState.errors.customerId?.message}>
+              <Field label="Supplier" error={form.formState.errors.supplierId?.message}>
                 <Select
-                  {...form.register('customerId', {
+                  {...form.register('supplierId', {
                     onChange: () => form.setValue('allocations', [], { shouldDirty: true }),
                   })}
                 >
-                  <option value="">Select customer</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
+                  <option value="">Select supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
                     </option>
                   ))}
-                  {selectableCustomer && (
-                    <option value={receipt.customerId}>
-                      {receipt.customerName} (historical)
+                  {selectableSupplier && (
+                    <option value={payment.supplierId}>
+                      {payment.supplierName} (historical)
                     </option>
                   )}
                 </Select>
               </Field>
 
-              <Field label="Receipt Date" error={form.formState.errors.receiptDate?.message}>
-                <Input type="date" className="h-9 text-xs" {...form.register('receiptDate')} />
+              <Field label="Payment Date" error={form.formState.errors.paymentDate?.message}>
+                <Input type="date" className="h-9 text-xs" {...form.register('paymentDate')} />
               </Field>
 
-              <Field label="Receiving Money Account" error={form.formState.errors.moneyAccountId?.message}>
+              <Field label="Funding Money Account" error={form.formState.errors.moneyAccountId?.message}>
                 <Select
                   {...form.register('moneyAccountId', {
                     onChange: (event) => {
@@ -279,7 +288,7 @@ export function CustomerReceiptPage() {
                     },
                   })}
                 >
-                  <option value="">Select deposit account</option>
+                  <option value="">Select funding account</option>
                   {accounts.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.code} — {account.name} · {formatAmount(account.balance)}{' '}
@@ -287,14 +296,14 @@ export function CustomerReceiptPage() {
                     </option>
                   ))}
                   {selectableAccount && (
-                    <option value={receipt.moneyAccountId}>
-                      {receipt.moneyAccountCode} — {receipt.moneyAccountName} (historical)
+                    <option value={payment.moneyAccountId}>
+                      {payment.moneyAccountCode} — {payment.moneyAccountName} (historical)
                     </option>
                   )}
                 </Select>
               </Field>
 
-              <Field label="Receipt Currency">
+              <Field label="Payment Currency">
                 <div className="flex h-9 items-center justify-between rounded-md border border-slate-100 bg-slate-50 px-3 font-mono text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-800/40">
                   <span>{currencyCode}</span>
                   {!isForeign && <span className="text-[10px] text-slate-400">1.0 (Base)</span>}
@@ -319,7 +328,7 @@ export function CustomerReceiptPage() {
                 </Field>
               )}
 
-              <Field label="Receipt Total" error={form.formState.errors.totalAmount?.message}>
+              <Field label="Payment Total" error={form.formState.errors.totalAmount?.message}>
                 <Input
                   type="number"
                   min="0.0001"
@@ -338,7 +347,7 @@ export function CustomerReceiptPage() {
             </CardContent>
           </Card>
 
-          {/* OUTSTANDING / ALLOCATED SALES INVOICES */}
+          {/* OUTSTANDING / ALLOCATED PURCHASE INVOICES */}
           {!posted && (
             <Card className="border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
               <CardHeader className="pb-3">
@@ -348,7 +357,7 @@ export function CustomerReceiptPage() {
                       Invoices to Settle
                     </CardTitle>
                     <CardDescription>
-                      Allocate received payment directly to open customer sales invoices.
+                      Allocate payment directly to open supplier purchase bills.
                     </CardDescription>
                   </div>
 
@@ -356,11 +365,11 @@ export function CustomerReceiptPage() {
                     type="button"
                     size="sm"
                     className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
-                    disabled={!values.customerId || !currencyId}
+                    disabled={!values.supplierId || !currencyId}
                     onClick={() => setIsInvoiceDialogOpen(true)}
                   >
                     <FileText className="size-4" />
-                    Choose Invoices to Settle{' '}
+                    Choose Invoices to Pay{' '}
                     {draftRows.length > 0 ? `(${draftRows.length} available)` : ''}
                   </Button>
                 </div>
@@ -373,19 +382,19 @@ export function CustomerReceiptPage() {
                         <TableHead className="px-3 font-semibold">Invoice #</TableHead>
                         <TableHead className="px-3 font-semibold">Date</TableHead>
                         <TableHead className="px-3 text-right font-semibold">Original Total</TableHead>
-                        <TableHead className="px-3 text-right font-semibold">Received So Far</TableHead>
+                        <TableHead className="px-3 text-right font-semibold">Paid So Far</TableHead>
                         <TableHead className="px-3 text-right font-semibold">Remaining Outstanding</TableHead>
                         <TableHead className="w-44 px-3 text-right font-semibold text-primary">
-                          Settled Amount ({currencyCode})
+                          Paid Amount ({currencyCode})
                         </TableHead>
                         <TableHead className="w-12 px-2 text-center" />
                       </TableRow>
                     </TableHeader>
                     <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {!values.customerId || !currencyId ? (
+                      {!values.supplierId || !currencyId ? (
                         <TableRow>
                           <TableCell colSpan={7} className="h-24 text-center text-xs text-slate-400">
-                            Select a customer and Money Account to view open invoices.
+                            Select a supplier and Money Account to view open purchase bills.
                           </TableCell>
                         </TableRow>
                       ) : outstandingQuery.isPending ? (
@@ -407,7 +416,7 @@ export function CustomerReceiptPage() {
                                 className="gap-1 text-primary"
                                 onClick={() => setIsInvoiceDialogOpen(true)}
                               >
-                                <Plus className="size-3.5" /> Select Invoices to Settle
+                                <Plus className="size-3.5" /> Select Invoices to Pay
                               </Button>
                             </div>
                           </TableCell>
@@ -415,18 +424,18 @@ export function CustomerReceiptPage() {
                       ) : (
                         activeAllocations.map((alloc) => {
                           const invoice = draftRows.find(
-                            (item) => item.id === alloc.salesInvoiceId
+                            (item) => item.id === alloc.purchaseInvoiceId
                           )
                           const maxOutstanding = invoice?.outstandingAmount ?? alloc.amount
 
                           return (
-                            <TableRow key={alloc.salesInvoiceId}>
+                            <TableRow key={alloc.purchaseInvoiceId}>
                               <TableCell className="px-3 py-2">
                                 <Link
                                   className="font-mono text-xs font-bold text-[#d85430] hover:underline"
-                                  to={`/sales/invoices/${alloc.salesInvoiceId}`}
+                                  to={`/purchases/invoices/${alloc.purchaseInvoiceId}`}
                                 >
-                                  {invoice?.documentNumber ?? 'Sales Invoice'}
+                                  {invoice?.documentNumber ?? 'Purchase Invoice'}
                                 </Link>
                               </TableCell>
                               <TableCell className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
@@ -436,7 +445,7 @@ export function CustomerReceiptPage() {
                                 {invoice ? formatAmount(invoice.originalTotal) : '—'}
                               </TableCell>
                               <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-500">
-                                {invoice ? formatAmount(invoice.receivedAmount) : '—'}
+                                {invoice ? formatAmount(invoice.paidAmount) : '—'}
                               </TableCell>
                               <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-slate-900 dark:text-slate-100">
                                 {invoice ? formatAmount(invoice.outstandingAmount) : '—'}
@@ -450,7 +459,7 @@ export function CustomerReceiptPage() {
                                   value={alloc.amount > 0 ? alloc.amount : ''}
                                   onChange={(e) =>
                                     handleUpdateLineAmount(
-                                      alloc.salesInvoiceId,
+                                      alloc.purchaseInvoiceId,
                                       Number(e.target.value),
                                       maxOutstanding
                                     )
@@ -465,7 +474,7 @@ export function CustomerReceiptPage() {
                                   size="icon-xs"
                                   title="Remove allocation"
                                   className="text-slate-400 hover:text-red-600"
-                                  onClick={() => handleRemoveAllocation(alloc.salesInvoiceId)}
+                                  onClick={() => handleRemoveAllocation(alloc.purchaseInvoiceId)}
                                 >
                                   <Trash2 className="size-3.5" />
                                 </Button>
@@ -484,7 +493,7 @@ export function CustomerReceiptPage() {
                     {isBalanced ? (
                       <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                         <CheckCircle2 className="size-3.5 text-emerald-600" />
-                        Receipt Fully Allocated
+                        Payment Fully Allocated
                       </div>
                     ) : (
                       <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
@@ -496,7 +505,7 @@ export function CustomerReceiptPage() {
 
                   <div className="flex flex-wrap items-center gap-6 text-xs">
                     <div>
-                      <span className="text-slate-500">Receipt Total: </span>
+                      <span className="text-slate-500">Payment Total: </span>
                       <strong className="font-mono text-slate-900 dark:text-slate-100">
                         {formatAmount(totalAmountNum)} {currencyCode}
                       </strong>
@@ -524,42 +533,36 @@ export function CustomerReceiptPage() {
           )}
         </fieldset>
 
-        {posted && receipt && (
+        {posted && payment && (
           <Card>
             <CardHeader>
-              <CardTitle>Applied Sales Invoices</CardTitle>
+              <CardTitle>Applied Purchase Invoices</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Invoice</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Invoice Total</TableHead>
-                    <TableHead className="text-right">Applied</TableHead>
+                    <TableHead className="text-right">Applied Amount</TableHead>
                     <TableHead className="text-right">Base Applied</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {receipt.allocations.map((allocation) => (
+                  {payment.allocations.map((allocation) => (
                     <TableRow key={allocation.id}>
                       <TableCell>
                         <Link
                           className="font-mono text-[#d85430]"
-                          to={`/sales/invoices/${allocation.salesInvoiceId}`}
+                          to={`/purchases/invoices/${allocation.purchaseInvoiceId}`}
                         >
-                          {allocation.salesInvoiceDocumentNumber}
+                          {allocation.purchaseInvoiceDocumentNumber}
                         </Link>
                       </TableCell>
-                      <TableCell>{allocation.salesInvoiceDate}</TableCell>
                       <TableCell className="text-right font-mono">
-                        {formatAmount(allocation.salesInvoiceTotal)} {receipt.currencyCode}
+                        {formatAmount(allocation.amount)} {payment.currencyCode}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {formatAmount(allocation.amount)} {receipt.currencyCode}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatAmount(allocation.baseAmount)} {receipt.baseCurrencyCode}
+                        {formatAmount(allocation.baseAmount)} {payment.baseCurrencyCode}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -569,17 +572,17 @@ export function CustomerReceiptPage() {
           </Card>
         )}
 
-        {receipt && (
+        {payment && (
           <Card>
             <CardContent className="grid gap-3 pt-6 text-sm sm:grid-cols-3">
               <Audit
                 label="Created"
-                value={`${receipt.createdByUsername} · ${formatTimestamp(receipt.createdAtUtc)}`}
+                value={`${payment.createdByUsername} · ${formatTimestamp(payment.createdAtUtc)}`}
               />
-              <Audit label="Updated" value={formatTimestamp(receipt.updatedAtUtc)} />
+              <Audit label="Updated" value={formatTimestamp(payment.updatedAtUtc)} />
               <Audit
                 label="Posted"
-                value={receipt.postedAtUtc ? formatTimestamp(receipt.postedAtUtc) : 'Not posted'}
+                value={payment.postedAtUtc ? formatTimestamp(payment.postedAtUtc) : 'Not posted'}
               />
             </CardContent>
           </Card>
@@ -593,7 +596,7 @@ export function CustomerReceiptPage() {
               )}
               {actionError && <p className="text-sm text-destructive">{actionError.message}</p>}
               <p className="text-xs text-muted-foreground">
-                Posting revalidates customer, account access, invoice outstanding amounts, currency,
+                Posting revalidates supplier, account access, invoice outstanding amounts, currency,
                 and historical exchange rates.
               </p>
             </div>
@@ -604,9 +607,9 @@ export function CustomerReceiptPage() {
                   variant="destructive"
                   disabled={actions.remove.isPending}
                   onClick={() => {
-                    if (window.confirm('Delete this Draft Customer Receipt?'))
+                    if (window.confirm('Delete this Draft Supplier Payment?'))
                       actions.remove.mutate(id, {
-                        onSuccess: () => navigate('/finance/customer-receipts'),
+                        onSuccess: () => navigate('/finance/supplier-payments'),
                       })
                   }}
                 >
@@ -630,14 +633,14 @@ export function CustomerReceiptPage() {
                   onClick={() => {
                     if (
                       window.confirm(
-                        'Post this Customer Receipt? Money Account and Accounts Receivable effects will be permanent.'
+                        'Post this Supplier Payment? Money Account and Accounts Payable effects will be permanent.'
                       )
                     )
                       actions.post.mutate(id)
                   }}
                 >
                   <Send className="size-4" />
-                  Post Receipt
+                  Post Payment
                 </Button>
               )}
             </div>
@@ -645,12 +648,12 @@ export function CustomerReceiptPage() {
         )}
       </form>
 
-      {/* CUSTOMER INVOICE SELECTION DIALOG */}
-      {selectedCustomer && currencyId && (
-        <CustomerReceiptInvoiceDialog
+      {/* SUPPLIER INVOICE SELECTION DIALOG */}
+      {selectedSupplier && currencyId && (
+        <SupplierPaymentInvoiceDialog
           open={isInvoiceDialogOpen}
           onOpenChange={setIsInvoiceDialogOpen}
-          customerName={selectedCustomer.name}
+          supplierName={selectedSupplier.name}
           currencyCode={currencyCode}
           invoices={draftRows}
           currentAllocations={activeAllocations}
@@ -661,22 +664,22 @@ export function CustomerReceiptPage() {
   )
 }
 
-function mergeOutstanding(rows: OutstandingSalesInvoice[], receipt: CustomerReceipt | undefined) {
-  if (!receipt || receipt.status === FinanceDocumentStatus.Posted) return rows
+function mergeOutstanding(rows: OutstandingPurchaseInvoice[], payment: SupplierPayment | undefined) {
+  if (!payment || payment.status === FinanceDocumentStatus.Posted) return rows
   const merged = [...rows]
-  receipt.allocations.forEach((allocation) => {
-    if (merged.some((invoice) => invoice.id === allocation.salesInvoiceId)) return
+  payment.allocations.forEach((allocation) => {
+    if (merged.some((invoice) => invoice.id === allocation.purchaseInvoiceId)) return
     merged.push({
-      id: allocation.salesInvoiceId,
-      documentNumber: allocation.salesInvoiceDocumentNumber,
-      invoiceDate: allocation.salesInvoiceDate,
-      customerId: receipt.customerId,
-      customerName: receipt.customerName,
-      currencyId: receipt.currencyId,
-      currencyCode: receipt.currencyCode,
-      exchangeRate: receipt.exchangeRate,
-      originalTotal: allocation.salesInvoiceTotal,
-      receivedAmount: allocation.salesInvoiceTotal,
+      id: allocation.purchaseInvoiceId,
+      documentNumber: allocation.purchaseInvoiceDocumentNumber,
+      invoiceDate: payment.paymentDate,
+      supplierId: payment.supplierId,
+      supplierName: payment.supplierName,
+      currencyId: payment.currencyId,
+      currencyCode: payment.currencyCode,
+      exchangeRate: payment.exchangeRate,
+      originalTotal: allocation.amount,
+      paidAmount: allocation.amount,
       outstandingAmount: 0,
     })
   })

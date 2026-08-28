@@ -11,6 +11,7 @@ import {
   ExchangeRatesPage,
   MoneyTransfersPage,
   SupplierPaymentsPage,
+  SupplierPaymentPage,
   CustomerReceiptsPage,
   CustomerReceiptPage,
 } from '@/features/finance'
@@ -87,6 +88,8 @@ export const router = createBrowserRouter([
           { path: '/finance/exchange-rates', element: <ExchangeRatesPage /> },
           { path: '/finance/transfers', element: <MoneyTransfersPage /> },
           { path: '/finance/supplier-payments', element: <SupplierPaymentsPage /> },
+          { path: '/finance/supplier-payments/new', element: <SupplierPaymentPage /> },
+          { path: '/finance/supplier-payments/:id', element: <SupplierPaymentPage /> },
           { path: '/finance/customer-receipts', element: <CustomerReceiptsPage /> },
           { path: '/finance/customer-receipts/new', element: <CustomerReceiptPage /> },
           { path: '/finance/customer-receipts/:id', element: <CustomerReceiptPage /> },

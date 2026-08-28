@@ -1,14 +1,26 @@
 import { useState } from 'react'
-import { FilePlus2 } from 'lucide-react'
+import { Landmark, Loader2, Plus, RotateCcw, Search, Send, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { useBranches, useCurrencies } from '@/features/business'
+import {
+  useCustomerReceiptActions,
+  useCustomerReceipts,
+  useFinanceCustomers,
+  useMoneyAccounts,
+} from '../hooks/useFinance'
 import { FinanceDocumentStatus } from '../types/finance.types'
-import { useCustomerReceipts, useFinanceCustomers, useMoneyAccounts } from '../hooks/useFinance'
 
 export function CustomerReceiptsPage() {
   const [page, setPage] = useState(1)
@@ -18,13 +30,15 @@ export function CustomerReceiptsPage() {
   const [branchId, setBranchId] = useState('')
   const [moneyAccountId, setMoneyAccountId] = useState('')
   const [currencyId, setCurrencyId] = useState('')
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState<string>('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+
   const customers = useFinanceCustomers().data ?? []
   const branches = useBranches().data?.data ?? []
   const currencies = useCurrencies().data?.data ?? []
   const moneyAccounts = useMoneyAccounts({ page: 1, pageSize: 100 }).data?.data ?? []
+
   const query = useCustomerReceipts({
     page,
     pageSize,
@@ -33,85 +47,349 @@ export function CustomerReceiptsPage() {
     branchId: branchId || undefined,
     moneyAccountId: moneyAccountId || undefined,
     currencyId: currencyId || undefined,
-    status: status || undefined,
+    status: status !== '' ? Number(status) : undefined,
     fromDate: fromDate || undefined,
     toDate: toDate || undefined,
   })
-  const resetPage = () => setPage(1)
+
+  const actions = useCustomerReceiptActions()
   const rows = query.data?.data ?? []
+  const resetPage = () => setPage(1)
+
+  const handleClearFilters = () => {
+    setSearch('')
+    setCustomerId('')
+    setBranchId('')
+    setMoneyAccountId('')
+    setCurrencyId('')
+    setStatus('')
+    setFromDate('')
+    setToDate('')
+    resetPage()
+  }
+
+  const hasActiveFilters =
+    search ||
+    customerId ||
+    branchId ||
+    moneyAccountId ||
+    currencyId ||
+    status !== '' ||
+    fromDate ||
+    toDate
 
   return (
-    <div className="flex h-full flex-col space-y-6">
+    <div className="flex h-full w-full flex-col space-y-6">
+      {/* HEADER & TOP ACTIONS */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Customer Receipts</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Drafts have no financial effect. Posting settles Sales Invoices and creates a Money Account inflow and balanced journal.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Customer Receipts
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Accounts Receivable settlements. Draft receipts hold allocations against customer sales
+            invoices until posted to create Money Account inflows and General Ledger entries.
           </p>
         </div>
         <Link to="/finance/customer-receipts/new">
-          <Button><FilePlus2 className="size-4" />New Customer Receipt</Button>
+          <Button className="gap-1.5 bg-[#e05d38] font-medium text-white shadow-xs hover:bg-[#c94f2d]">
+            <Plus className="size-4 stroke-[2.5]" />
+            New Customer Receipt
+          </Button>
         </Link>
       </div>
 
-      <div className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-4">
-        <Input aria-label="Search Customer Receipts" placeholder="Receipt number or customer" value={search} onChange={(event) => { setSearch(event.target.value); resetPage() }} />
-        <Select aria-label="Customer filter" value={customerId} onChange={(event) => { setCustomerId(event.target.value); resetPage() }}>
-          <option value="">All customers</option>
-          {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-        </Select>
-        <Select aria-label="Branch filter" value={branchId} onChange={(event) => { setBranchId(event.target.value); resetPage() }}>
-          <option value="">All branches</option>
-          {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-        </Select>
-        <Select aria-label="Money Account filter" value={moneyAccountId} onChange={(event) => { setMoneyAccountId(event.target.value); resetPage() }}>
+      {/* FILTER CONTROLS TOOLBAR */}
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-xs dark:border-slate-800 md:grid-cols-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="Receipt # or customer..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              resetPage()
+            }}
+            className="h-9 pl-9 text-xs"
+          />
+        </div>
+
+        <select
+          value={customerId}
+          onChange={(e) => {
+            setCustomerId(e.target.value)
+            resetPage()
+          }}
+          className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+        >
+          <option value="">All Customers</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={branchId}
+          onChange={(e) => {
+            setBranchId(e.target.value)
+            resetPage()
+          }}
+          className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+        >
+          <option value="">All Branches</option>
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={moneyAccountId}
+          onChange={(e) => {
+            setMoneyAccountId(e.target.value)
+            resetPage()
+          }}
+          className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+        >
           <option value="">All Money Accounts</option>
-          {moneyAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
-        </Select>
-        <Select aria-label="Currency filter" value={currencyId} onChange={(event) => { setCurrencyId(event.target.value); resetPage() }}>
-          <option value="">All currencies</option>
-          {currencies.map((currency) => <option key={currency.id} value={currency.id}>{currency.code}</option>)}
-        </Select>
-        <Select aria-label="Status filter" value={status} onChange={(event) => { setStatus(event.target.value); resetPage() }}>
-          <option value="">All statuses</option>
+          {moneyAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.code} — {account.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={currencyId}
+          onChange={(e) => {
+            setCurrencyId(e.target.value)
+            resetPage()
+          }}
+          className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+        >
+          <option value="">All Currencies</option>
+          {currencies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.code}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value)
+            resetPage()
+          }}
+          className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+        >
+          <option value="">All Statuses</option>
           <option value="0">Draft</option>
           <option value="1">Posted</option>
-        </Select>
-        <Input aria-label="From date" type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); resetPage() }} />
-        <Input aria-label="To date" type="date" value={toDate} onChange={(event) => { setToDate(event.target.value); resetPage() }} />
+        </select>
+
+        <Input
+          type="date"
+          aria-label="From Date"
+          value={fromDate}
+          onChange={(e) => {
+            setFromDate(e.target.value)
+            resetPage()
+          }}
+          className="h-9 text-xs"
+        />
+
+        <Input
+          type="date"
+          aria-label="To Date"
+          value={toDate}
+          onChange={(e) => {
+            setToDate(e.target.value)
+            resetPage()
+          }}
+          className="h-9 text-xs"
+        />
+
+        <div className="flex items-center justify-end md:col-span-4">
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs text-slate-600"
+              onClick={handleClearFilters}
+            >
+              <RotateCcw className="size-3.5" />
+              Reset Filters
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* DATA TABLE */}
       <DataTableShell>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className={head}><TableHead>Receipt</TableHead><TableHead>Date</TableHead><TableHead>Customer</TableHead><TableHead>Money Account</TableHead><TableHead>Currency</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead>Created by</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {query.isPending ? <MessageRow label="Loading Customer Receipts…" /> : query.isError ? <MessageRow label={query.error.message} error /> : rows.length === 0 ? <MessageRow label="No Customer Receipts found." /> : rows.map((receipt) => (
-                <TableRow key={receipt.id}>
-                  <TableCell><Link className="font-mono font-semibold text-[#d85430]" to={`/finance/customer-receipts/${receipt.id}`}>{receipt.documentNumber}</Link></TableCell>
-                  <TableCell>{receipt.receiptDate}</TableCell>
-                  <TableCell>{receipt.customerName}</TableCell>
-                  <TableCell><p className="font-mono">{receipt.moneyAccountCode}</p><p className="text-xs text-muted-foreground">{receipt.moneyAccountName}</p></TableCell>
-                  <TableCell>{receipt.currencyCode}</TableCell>
-                  <TableCell className="text-right font-mono">{formatAmount(receipt.totalAmount)}</TableCell>
-                  <TableCell><ReceiptStatus status={receipt.status} /></TableCell>
-                  <TableCell>{receipt.createdByUsername}</TableCell>
+            <TableHeader>
+              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+                <TableHead className="px-4 py-3">Receipt #</TableHead>
+                <TableHead className="px-4 py-3">Date</TableHead>
+                <TableHead className="px-4 py-3">Customer</TableHead>
+                <TableHead className="px-4 py-3">Money Account</TableHead>
+                <TableHead className="px-4 py-3">Currency</TableHead>
+                <TableHead className="px-4 py-3 text-right">Receipt Amount</TableHead>
+                <TableHead className="px-4 py-3">Status</TableHead>
+                <TableHead className="px-4 py-3">Created By</TableHead>
+                <TableHead className="px-4 py-3 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              {query.isPending ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="h-48 text-center text-sm text-slate-500">
+                    <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
+                    Loading customer receipts...
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : query.isError ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="h-48 text-center text-sm text-rose-500">
+                    {query.error.message}
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="h-48 text-center text-sm text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Landmark className="size-8 text-slate-300 dark:text-slate-600" />
+                      <p className="font-medium text-slate-700 dark:text-slate-300">
+                        No customer receipts found
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Record a new receipt to settle customer sales invoices.
+                      </p>
+                      <Link to="/finance/customer-receipts/new">
+                        <Button size="xs" className="mt-1 gap-1">
+                          <Plus className="size-3.5" /> Record Receipt
+                        </Button>
+                      </Link>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((receipt) => (
+                  <TableRow
+                    key={receipt.id}
+                    className="hover:bg-slate-50/80 transition-colors dark:hover:bg-slate-800/40"
+                  >
+                    <TableCell className="px-4 py-3.5">
+                      <Link
+                        className="font-mono text-xs font-bold text-[#d85430] hover:underline"
+                        to={`/finance/customer-receipts/${receipt.id}`}
+                      >
+                        {receipt.documentNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
+                      {receipt.receiptDate}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-xs font-medium text-slate-900 dark:text-slate-100">
+                      {receipt.customerName}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-xs">
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                        {receipt.moneyAccountCode}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-400">
+                      {receipt.currencyCode}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-right font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      {receipt.totalAmount.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 4,
+                      })}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5">
+                      <ReceiptStatus status={receipt.status} />
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-xs text-slate-500">
+                      {receipt.createdByUsername}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-right">
+                      {receipt.status === FinanceDocumentStatus.Draft && (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="xs"
+                            className="gap-1 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                            disabled={actions.post.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Post customer receipt ${receipt.documentNumber}? This will settle AR and deposit funds into ${receipt.moneyAccountCode}.`
+                                )
+                              ) {
+                                actions.post.mutate(receipt.id)
+                              }
+                            }}
+                          >
+                            <Send className="size-3" /> Post
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className="text-red-600 hover:bg-red-50 hover:border-red-200"
+                            disabled={actions.remove.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Delete draft customer receipt ${receipt.documentNumber}?`
+                                )
+                              ) {
+                                actions.remove.mutate(receipt.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
       </DataTableShell>
-      <DataTablePagination page={page} pageSize={pageSize} totalItems={query.data?.meta.totalCount ?? 0} onPageChange={setPage} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
+
+      {/* PAGINATION */}
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={query.data?.meta.totalCount ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size)
+          setPage(1)
+        }}
+      />
     </div>
   )
 }
 
 export function ReceiptStatus({ status }: { status: FinanceDocumentStatus }) {
-  return <span className={status === FinanceDocumentStatus.Posted ? 'rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700' : 'rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700'}>{status === FinanceDocumentStatus.Posted ? 'Posted' : 'Draft'}</span>
+  return (
+    <span
+      className={`inline-flex rounded px-2 py-0.5 text-[11px] font-semibold ${
+        status === FinanceDocumentStatus.Posted
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+      }`}
+    >
+      {status === FinanceDocumentStatus.Posted ? 'Posted' : 'Draft'}
+    </span>
+  )
 }
-
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className="h-9 rounded-md border bg-background px-3 text-sm" {...props} /> }
-function MessageRow({ label, error = false }: { label: string; error?: boolean }) { return <TableRow><TableCell colSpan={8} className={`h-40 text-center ${error ? 'text-destructive' : 'text-muted-foreground'}`}>{label}</TableCell></TableRow> }
-const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-const head = 'border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60'
