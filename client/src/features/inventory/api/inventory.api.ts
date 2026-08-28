@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient'
-import type { AdjustmentDocument, AdjustmentDraftInput, AdjustmentSummary, Category, CategoryInput, Movement, OpeningStockDocument, OpeningStockDraftInput, OpeningStockSummary, Product, ProductInput, StockBalance, TransferDocument, TransferDraftInput, TransferSummary, Unit, UnitInput, Warehouse, WarehouseInput } from '../types/inventory.types'
+import type { AdjustmentDocument, AdjustmentDraftInput, AdjustmentSummary, Category, CategoryInput, Movement, OpeningStockDocument, OpeningStockDraftInput, OpeningStockSummary, Product, ProductInput, StockBalance, Subcategory, SubcategoryInput, TransferDocument, TransferDraftInput, TransferSummary, Unit, UnitInput, Warehouse, WarehouseInput } from '../types/inventory.types'
 
 const params = (value: Record<string, string | undefined>) => { const q = new URLSearchParams(); Object.entries(value).forEach(([k, v]) => v && q.set(k, v)); return q.toString() ? `?${q}` : '' }
 const listParams = (filter: Record<string, string | undefined>) => params({ page: '1', pageSize: '100', ...filter })
@@ -7,14 +7,21 @@ const listParams = (filter: Record<string, string | undefined>) => params({ page
 export const inventoryApi = {
   balances: (filter: Record<string, string | undefined> = {}) => apiClient.getPaginated<StockBalance>(`/inventory/balances${listParams(filter)}`),
   products: (filter: Record<string, string | undefined> = {}) => apiClient.getPaginated<Product>(`/inventory/products${listParams(filter)}`),
+  product: (id: string) => apiClient.get<Product>(`/inventory/products/${id}`),
   warehouses: () => apiClient.getPaginated<Warehouse>('/inventory/warehouses?page=1&pageSize=100'),
-  categories: () => apiClient.getPaginated<Category>('/inventory/categories?page=1&pageSize=100'),
-  units: () => apiClient.getPaginated<Unit>('/inventory/units?page=1&pageSize=100'),
+  categories: (filter: Record<string, string | undefined> = {}) => apiClient.getPaginated<Category>(`/inventory/categories${listParams(filter)}`),
+  subcategories: (filter: Record<string, string | undefined> = {}) => apiClient.getPaginated<Subcategory>(`/inventory/subcategories${listParams(filter)}`),
+  units: (filter: Record<string, string | undefined> = {}) => apiClient.getPaginated<Unit>(`/inventory/units${listParams(filter)}`),
   movements: (filter: Record<string, string | undefined> = {}) => apiClient.getPaginated<Movement>(`/inventory/movements${listParams(filter)}`),
   createCategory: (body: CategoryInput) => apiClient.post<Category>('/inventory/categories', body),
   updateCategory: (id: string, body: CategoryInput) => apiClient.put<Category>(`/inventory/categories/${id}`, body),
+  deleteCategory: (id: string) => apiClient.delete<void>(`/inventory/categories/${id}`),
+  createSubcategory: (body: SubcategoryInput) => apiClient.post<Subcategory>('/inventory/subcategories', body),
+  updateSubcategory: (id: string, body: SubcategoryInput) => apiClient.put<Subcategory>(`/inventory/subcategories/${id}`, body),
+  deleteSubcategory: (id: string) => apiClient.delete<void>(`/inventory/subcategories/${id}`),
   createUnit: (body: UnitInput) => apiClient.post<Unit>('/inventory/units', body),
   updateUnit: (id: string, body: UnitInput) => apiClient.put<Unit>(`/inventory/units/${id}`, body),
+  deleteUnit: (id: string) => apiClient.delete<void>(`/inventory/units/${id}`),
   createProduct: (body: ProductInput) => apiClient.post<Product>('/inventory/products', body),
   updateProduct: (id: string, body: ProductInput) => apiClient.put<Product>(`/inventory/products/${id}`, body),
   deleteProduct: (id: string) => apiClient.delete<void>(`/inventory/products/${id}`),

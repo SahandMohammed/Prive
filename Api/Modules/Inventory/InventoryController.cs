@@ -72,6 +72,58 @@ public sealed class InventoryController : ControllerBase
   }
 
   // ---------------------------------------------------------------------------
+  // Subcategories
+  // ---------------------------------------------------------------------------
+
+  [HttpGet("subcategories")]
+  [ProducesResponseType(typeof(ApiResponse<List<SubcategoryResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetSubcategories(
+    [FromQuery] SubcategoryListQuery query,
+    CancellationToken ct)
+  {
+    var result = await _service.GetSubcategoriesAsync(query, ct);
+
+    return Ok(
+      ApiResponse<List<SubcategoryResponse>>.Ok(
+        result.Items,
+        result.ToMetadata()));
+  }
+
+  [HttpPost("subcategories")]
+  [ProducesResponseType(typeof(ApiResponse<SubcategoryResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> CreateSubcategory(
+    [FromBody] CreateSubcategoryRequest request,
+    CancellationToken ct)
+  {
+    var result = await _service.CreateSubcategoryAsync(request, ct);
+
+    return Ok(ApiResponse<SubcategoryResponse>.Ok(result));
+  }
+
+  [HttpPut("subcategories/{id:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<SubcategoryResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> UpdateSubcategory(
+    Guid id,
+    [FromBody] UpdateSubcategoryRequest request,
+    CancellationToken ct)
+  {
+    var result = await _service.UpdateSubcategoryAsync(id, request, ct);
+
+    return Ok(ApiResponse<SubcategoryResponse>.Ok(result));
+  }
+
+  [HttpDelete("subcategories/{id:guid}")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeleteSubcategory(
+    Guid id,
+    CancellationToken ct)
+  {
+    await _service.DeleteSubcategoryAsync(id, ct);
+
+    return NoContent();
+  }
+
+  // ---------------------------------------------------------------------------
   // Units
   // ---------------------------------------------------------------------------
 
@@ -148,6 +200,18 @@ public sealed class InventoryController : ControllerBase
     CancellationToken ct)
   {
     var result = await _service.CreateProductAsync(request, ct);
+
+    return Ok(ApiResponse<ProductResponse>.Ok(result));
+  }
+
+  [HttpGet("products/{id:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<ProductResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetProduct(
+    Guid id,
+    CancellationToken ct)
+  {
+    var result = await _service.GetProductAsync(id, ct);
 
     return Ok(ApiResponse<ProductResponse>.Ok(result));
   }

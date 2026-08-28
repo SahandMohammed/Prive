@@ -4,7 +4,8 @@ using Api.Shared.Pagination;
 namespace Api.Modules.Inventory;
 
 public class MasterListQuery : PaginationRequest { public string? Search { get; init; } public bool? IsActive { get; init; } }
-public sealed class ProductListQuery : MasterListQuery { public Guid? CategoryId { get; init; } public ProductPurpose? Purpose { get; init; } }
+public sealed class ProductListQuery : MasterListQuery { public Guid? CategoryId { get; init; } public Guid? SubcategoryId { get; init; } public ProductPurpose? Purpose { get; init; } }
+public sealed class SubcategoryListQuery : MasterListQuery { public Guid? CategoryId { get; init; } }
 public sealed class WarehouseListQuery : MasterListQuery { public Guid? BranchId { get; init; } }
 public sealed class StockBalanceListQuery : PaginationRequest { public Guid? ProductId { get; init; } public Guid? WarehouseId { get; init; } public Guid? BranchId { get; init; } public Guid? CategoryId { get; init; } public string? Search { get; init; } }
 public sealed class StockMovementListQuery : PaginationRequest
@@ -33,9 +34,39 @@ public sealed class StockAdjustmentListQuery : InventoryDocumentListQuery { publ
 public sealed class WarehouseTransferListQuery : InventoryDocumentListQuery { public Guid? SourceWarehouseId { get; init; } public Guid? DestinationWarehouseId { get; init; } }
 
 public sealed record CategoryResponse(Guid Id, string Name, bool IsActive);
+public sealed record SubcategoryResponse(Guid Id, string Name, Guid CategoryId, string CategoryName, bool IsActive);
 public sealed record UnitResponse(Guid Id, string Name, string Code, bool IsActive);
 public sealed record WarehouseResponse(Guid Id, string Code, string Name, Guid BranchId, string BranchCode, string BranchName, bool IsActive);
-public sealed record ProductResponse(Guid Id, string Name, string SKU, string? Barcode, Guid CategoryId, string CategoryName, Guid UnitOfMeasureId, string UnitCode, ProductPurpose Purpose, decimal SellingPriceBase, bool TrackInventory, bool IsActive, string? Description, string? ImageReference, decimal TotalQuantity, decimal AverageCostBase, decimal TotalValueBase);
+public sealed record ProductUnitConversionResponse(
+  Guid Id,
+  Guid UnitOfMeasureId,
+  string UnitName,
+  string UnitCode,
+  UnitConversionOperation Operation,
+  decimal Factor);
+public sealed record ProductResponse(
+  Guid Id,
+  string Name,
+  string SKU,
+  string? Barcode,
+  Guid CategoryId,
+  string CategoryName,
+  Guid? SubcategoryId,
+  string? SubcategoryName,
+  Guid UnitOfMeasureId,
+  string UnitName,
+  string UnitCode,
+  ProductPurpose Purpose,
+  decimal PurchasePriceBase,
+  decimal SellingPriceBase,
+  bool TrackInventory,
+  bool IsActive,
+  string? Description,
+  string? ImageReference,
+  decimal TotalQuantity,
+  decimal AverageCostBase,
+  decimal TotalValueBase,
+  IReadOnlyList<ProductUnitConversionResponse> UnitConversions);
 public sealed record StockBalanceResponse(Guid ProductId, string ProductName, string SKU, string CategoryName, string UnitCode, Guid WarehouseId, string WarehouseCode, string WarehouseName, Guid BranchId, string BranchName, decimal Quantity, decimal AverageCostBase, decimal TotalValueBase);
 public sealed record StockMovementResponse(Guid Id, DateOnly MovementDate, StockMovementType Type, Guid ProductId, string ProductName, string SKU, string UnitCode, Guid WarehouseId, string WarehouseCode, string WarehouseName, Guid BranchId, string BranchName, decimal QuantityIn, decimal QuantityOut, decimal UnitCostBase, string? Reference, string? Note, InventoryDocumentType? SourceDocumentType, Guid? SourceDocumentId, Guid? SourceDocumentLineId, string? DocumentNumber, Guid PerformedByUserId, string PerformedByUsername, DateTime CreatedAtUtc);
 
@@ -53,10 +84,44 @@ public sealed record WarehouseTransferResponse(Guid Id, string DocumentNumber, D
 
 public sealed record CreateCategoryRequest([Required, MaxLength(100)] string Name, bool IsActive = true);
 public sealed record UpdateCategoryRequest([Required, MaxLength(100)] string Name, bool IsActive);
+public sealed record CreateSubcategoryRequest([Required, MaxLength(100)] string Name, [Required] Guid CategoryId, bool IsActive = true);
+public sealed record UpdateSubcategoryRequest([Required, MaxLength(100)] string Name, [Required] Guid CategoryId, bool IsActive);
 public sealed record CreateUnitRequest([Required, MaxLength(100)] string Name, [Required, MaxLength(20)] string Code, bool IsActive = true);
 public sealed record UpdateUnitRequest([Required, MaxLength(100)] string Name, [Required, MaxLength(20)] string Code, bool IsActive);
-public sealed record CreateProductRequest([Required, MaxLength(250)] string Name, [Required, MaxLength(64)] string SKU, [MaxLength(64)] string? Barcode, [Required] Guid CategoryId, [Required] Guid UnitOfMeasureId, ProductPurpose Purpose, [Range(typeof(decimal), "0", "9999999999999")] decimal SellingPriceBase, bool TrackInventory, bool IsActive, [MaxLength(1000)] string? Description, [MaxLength(2048)] string? ImageReference);
-public sealed record UpdateProductRequest([Required, MaxLength(250)] string Name, [Required, MaxLength(64)] string SKU, [MaxLength(64)] string? Barcode, [Required] Guid CategoryId, [Required] Guid UnitOfMeasureId, ProductPurpose Purpose, [Range(typeof(decimal), "0", "9999999999999")] decimal SellingPriceBase, bool TrackInventory, bool IsActive, [MaxLength(1000)] string? Description, [MaxLength(2048)] string? ImageReference);
+public sealed record ProductUnitConversionRequest(
+  [Required] Guid UnitOfMeasureId,
+  [Required, EnumDataType(typeof(UnitConversionOperation))] UnitConversionOperation Operation,
+  [Range(typeof(decimal), "0.000001", "9999999999999")] decimal Factor);
+public sealed record CreateProductRequest(
+  [Required, MaxLength(250)] string Name,
+  [Required, MaxLength(64)] string SKU,
+  [MaxLength(64)] string? Barcode,
+  [Required] Guid CategoryId,
+  Guid? SubcategoryId,
+  [Required] Guid UnitOfMeasureId,
+  ProductPurpose Purpose,
+  [Range(typeof(decimal), "0", "9999999999999")] decimal PurchasePriceBase,
+  [Range(typeof(decimal), "0", "9999999999999")] decimal SellingPriceBase,
+  bool TrackInventory,
+  bool IsActive,
+  [MaxLength(1000)] string? Description,
+  [MaxLength(2048)] string? ImageReference,
+  IReadOnlyList<ProductUnitConversionRequest>? UnitConversions = null);
+public sealed record UpdateProductRequest(
+  [Required, MaxLength(250)] string Name,
+  [Required, MaxLength(64)] string SKU,
+  [MaxLength(64)] string? Barcode,
+  [Required] Guid CategoryId,
+  Guid? SubcategoryId,
+  [Required] Guid UnitOfMeasureId,
+  ProductPurpose Purpose,
+  [Range(typeof(decimal), "0", "9999999999999")] decimal PurchasePriceBase,
+  [Range(typeof(decimal), "0", "9999999999999")] decimal SellingPriceBase,
+  bool TrackInventory,
+  bool IsActive,
+  [MaxLength(1000)] string? Description,
+  [MaxLength(2048)] string? ImageReference,
+  IReadOnlyList<ProductUnitConversionRequest>? UnitConversions = null);
 public sealed record CreateWarehouseRequest([Required, MaxLength(32)] string Code, [Required, MaxLength(200)] string Name, [Required] Guid BranchId, bool IsActive = true);
 public sealed record UpdateWarehouseRequest([Required, MaxLength(32)] string Code, [Required, MaxLength(200)] string Name, [Required] Guid BranchId, bool IsActive);
 

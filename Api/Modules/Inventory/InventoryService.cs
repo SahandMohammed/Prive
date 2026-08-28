@@ -97,17 +97,117 @@ public sealed class InventoryService
   {
     var category = await GetCategoryEntity(id, ct);
 
-    if (await _db.Products.AnyAsync(
-      x => x.CategoryId == id,
-      ct))
+    if (await _db.Products.AnyAsync(x => x.CategoryId == id, ct) ||
+        await _db.ProductSubcategories.AnyAsync(x => x.CategoryId == id, ct))
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.CategoryInUse,
-        "A category assigned to products cannot be deleted.");
+        "A category assigned to products or containing subcategories cannot be deleted.");
     }
 
     _db.ProductCategories.Remove(category);
 
+    await _db.SaveChangesAsync(ct);
+  }
+
+  // ===========================================================================
+  // Subcategories
+  // ===========================================================================
+
+  public async Task<PagedResult<SubcategoryResponse>> GetSubcategoriesAsync(
+    SubcategoryListQuery query,
+    CancellationToken ct)
+  {
+    var subcategories = Filter(_db.ProductSubcategories.AsNoTracking(), query);
+
+    if (query.CategoryId is not null)
+    {
+      subcategories = subcategories.Where(x => x.CategoryId == query.CategoryId);
+    }
+
+    return await subcategories
+      .OrderBy(x => x.Category.Name)
+      .ThenBy(x => x.Name)
+      .Select(x => new SubcategoryResponse(
+        x.Id,
+        x.Name,
+        x.CategoryId,
+        x.Category.Name,
+        x.IsActive))
+      .ToPagedResultAsync(query, ct);
+  }
+
+  public async Task<SubcategoryResponse> CreateSubcategoryAsync(
+    CreateSubcategoryRequest request,
+    CancellationToken ct)
+  {
+    var category = await GetActiveCategoryEntity(request.CategoryId, ct);
+    var name = request.Name.Trim();
+
+    await EnsureSubcategoryName(null, category.Id, name, ct);
+
+    var subcategory = new ProductSubcategoryEntity
+    {
+      Name = name,
+      CategoryId = category.Id,
+      Category = category,
+      IsActive = request.IsActive
+    };
+
+    _db.ProductSubcategories.Add(subcategory);
+    await _db.SaveChangesAsync(ct);
+
+    return ToSubcategory(subcategory);
+  }
+
+  public async Task<SubcategoryResponse> UpdateSubcategoryAsync(
+    Guid id,
+    UpdateSubcategoryRequest request,
+    CancellationToken ct)
+  {
+    var subcategory = await _db.ProductSubcategories
+      .Include(x => x.Category)
+      .SingleOrDefaultAsync(x => x.Id == id, ct)
+      ?? throw new NotFoundException(
+        ErrorCodes.Inventory.SubcategoryNotFound,
+        "Subcategory not found.");
+    var category = await GetActiveCategoryEntity(request.CategoryId, ct);
+    var name = request.Name.Trim();
+
+    await EnsureSubcategoryName(id, category.Id, name, ct);
+
+    if (subcategory.CategoryId != category.Id &&
+        await _db.Products.AnyAsync(x => x.SubcategoryId == id, ct))
+    {
+      throw new BadRequestException(
+        ErrorCodes.Inventory.SubcategoryInUse,
+        "A subcategory assigned to products cannot move to another category.");
+    }
+
+    subcategory.Name = name;
+    subcategory.CategoryId = category.Id;
+    subcategory.Category = category;
+    subcategory.IsActive = request.IsActive;
+
+    await _db.SaveChangesAsync(ct);
+
+    return ToSubcategory(subcategory);
+  }
+
+  public async Task DeleteSubcategoryAsync(
+    Guid id,
+    CancellationToken ct)
+  {
+    var subcategory = await GetSubcategoryEntity(id, ct);
+
+    if (await _db.Products.AnyAsync(x => x.SubcategoryId == id, ct))
+    {
+      throw new BadRequestException(
+        ErrorCodes.Inventory.SubcategoryInUse,
+        "A subcategory assigned to products cannot be deleted.");
+    }
+
+    _db.ProductSubcategories.Remove(subcategory);
     await _db.SaveChangesAsync(ct);
   }
 
@@ -199,9 +299,8 @@ public sealed class InventoryService
   {
     var unit = await GetUnitEntity(id, ct);
 
-    if (await _db.Products.AnyAsync(
-      x => x.UnitOfMeasureId == id,
-      ct))
+    if (await _db.Products.AnyAsync(x => x.UnitOfMeasureId == id, ct) ||
+        await _db.ProductUnitConversions.AnyAsync(x => x.UnitOfMeasureId == id, ct))
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.UnitInUse,
@@ -224,7 +323,11 @@ public sealed class InventoryService
     var productsQuery = _db.Products
       .AsNoTracking()
       .Include(x => x.Category)
+      .Include(x => x.Subcategory)
       .Include(x => x.UnitOfMeasure)
+      .Include(x => x.UnitConversions)
+      .ThenInclude(x => x.UnitOfMeasure)
+      .AsSplitQuery()
       .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(query.Search))
@@ -250,6 +353,12 @@ public sealed class InventoryService
         x => x.CategoryId == query.CategoryId);
     }
 
+    if (query.SubcategoryId is not null)
+    {
+      productsQuery = productsQuery.Where(
+        x => x.SubcategoryId == query.SubcategoryId);
+    }
+
     if (query.Purpose is not null)
     {
       productsQuery = productsQuery.Where(
@@ -257,12 +366,14 @@ public sealed class InventoryService
     }
 
     var normalized = query.Normalize();
+    var skip = Math.Min((long)(normalized.Page - 1) * normalized.PageSize, int.MaxValue);
 
     var count = await productsQuery.CountAsync(ct);
 
     var products = await productsQuery
       .OrderBy(x => x.Name)
-      .Skip((normalized.Page - 1) * normalized.PageSize)
+      .ThenBy(x => x.Id)
+      .Skip((int)skip)
       .Take(normalized.PageSize)
       .ToListAsync(ct);
 
@@ -284,13 +395,29 @@ public sealed class InventoryService
       normalized.PageSize);
   }
 
+  public async Task<ProductResponse> GetProductAsync(
+    Guid id,
+    CancellationToken ct)
+  {
+    var product = await ProductQuery()
+      .SingleOrDefaultAsync(x => x.Id == id, ct)
+      ?? throw new NotFoundException(
+        ErrorCodes.Inventory.ProductNotFound,
+        "Product not found.");
+    var balances = await GetProductBalancesAsync([id], null, ct);
+
+    return ToProduct(product, balances.GetValueOrDefault(id));
+  }
+
   public async Task<ProductResponse> CreateProductAsync(
     CreateProductRequest request,
     CancellationToken ct)
   {
     await ValidateProductReferences(
       request.CategoryId,
+      request.SubcategoryId,
       request.UnitOfMeasureId,
+      request.UnitConversions,
       ct);
 
     await EnsureProductCodes(
@@ -300,22 +427,14 @@ public sealed class InventoryService
       ct);
 
     var product = new ProductEntity();
-
     Apply(product, request);
+    ApplyConversions(product, request.UnitConversions);
 
     _db.Products.Add(product);
 
     await _db.SaveChangesAsync(ct);
 
-    await _db.Entry(product)
-      .Reference(x => x.Category)
-      .LoadAsync(ct);
-
-    await _db.Entry(product)
-      .Reference(x => x.UnitOfMeasure)
-      .LoadAsync(ct);
-
-    return ToProduct(product, default);
+    return await GetProductAsync(product.Id, ct);
   }
 
   public async Task<ProductResponse> UpdateProductAsync(
@@ -325,15 +444,25 @@ public sealed class InventoryService
   {
     var product = await _db.Products
       .Include(x => x.Category)
+      .Include(x => x.Subcategory)
       .Include(x => x.UnitOfMeasure)
+      .Include(x => x.UnitConversions)
       .SingleOrDefaultAsync(x => x.Id == id, ct)
       ?? throw new NotFoundException(
         ErrorCodes.Inventory.ProductNotFound,
         "Product not found.");
+    var conversions = request.UnitConversions ?? product.UnitConversions
+      .Select(x => new ProductUnitConversionRequest(
+        x.UnitOfMeasureId,
+        x.Operation,
+        x.Factor))
+      .ToList();
 
     await ValidateProductReferences(
       request.CategoryId,
+      request.SubcategoryId,
       request.UnitOfMeasureId,
+      conversions,
       ct);
 
     await EnsureProductCodes(
@@ -342,26 +471,52 @@ public sealed class InventoryService
       request.Barcode,
       ct);
 
+    if (product.UnitOfMeasureId != request.UnitOfMeasureId &&
+        await ProductHasHistoryAsync(id, ct))
+    {
+      throw new BadRequestException(
+        ErrorCodes.Inventory.BaseUnitChangeNotAllowed,
+        "The base unit cannot change after the product has transactional history.");
+    }
+
     Apply(product, request);
+    if (request.UnitConversions is not null)
+    {
+      var requestedUnitIds = request.UnitConversions
+        .Select(x => x.UnitOfMeasureId)
+        .ToHashSet();
+      var existingByUnitId = product.UnitConversions
+        .ToDictionary(x => x.UnitOfMeasureId);
+
+      _db.ProductUnitConversions.RemoveRange(
+        product.UnitConversions.Where(
+          x => !requestedUnitIds.Contains(x.UnitOfMeasureId)));
+
+      foreach (var conversion in request.UnitConversions)
+      {
+        if (existingByUnitId.TryGetValue(
+          conversion.UnitOfMeasureId,
+          out var existing))
+        {
+          existing.Operation = conversion.Operation;
+          existing.Factor = conversion.Factor;
+        }
+        else
+        {
+          _db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+          {
+            ProductId = product.Id,
+            UnitOfMeasureId = conversion.UnitOfMeasureId,
+            Operation = conversion.Operation,
+            Factor = conversion.Factor
+          });
+        }
+      }
+    }
 
     await _db.SaveChangesAsync(ct);
 
-    await _db.Entry(product)
-      .Reference(x => x.Category)
-      .LoadAsync(ct);
-
-    await _db.Entry(product)
-      .Reference(x => x.UnitOfMeasure)
-      .LoadAsync(ct);
-
-    var balances = await GetProductBalancesAsync(
-      [id],
-      null,
-      ct);
-
-    return ToProduct(
-      product,
-      balances.GetValueOrDefault(id));
+    return await GetProductAsync(id, ct);
   }
 
   public async Task DeleteProductAsync(
@@ -374,9 +529,7 @@ public sealed class InventoryService
         ErrorCodes.Inventory.ProductNotFound,
         "Product not found.");
 
-    if (await _db.StockMovements.AnyAsync(x => x.ProductId == id, ct) ||
-        await _db.PurchaseInvoiceLines.AnyAsync(x => x.ProductId == id, ct) ||
-        await _db.SalesInvoiceLines.AnyAsync(x => x.ProductId == id, ct))
+    if (await ProductHasHistoryAsync(id, ct))
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.ProductHasHistory,
@@ -2094,6 +2247,18 @@ public sealed class InventoryService
   // Document Queries
   // ===========================================================================
 
+  private IQueryable<ProductEntity> ProductQuery()
+  {
+    return _db.Products
+      .AsNoTracking()
+      .Include(x => x.Category)
+      .Include(x => x.Subcategory)
+      .Include(x => x.UnitOfMeasure)
+      .Include(x => x.UnitConversions)
+      .ThenInclude(x => x.UnitOfMeasure)
+      .AsSplitQuery();
+  }
+
   private IQueryable<OpeningStockDocumentEntity> OpeningStockQuery()
   {
     return _db.OpeningStockDocuments
@@ -2460,7 +2625,9 @@ public sealed class InventoryService
 
   private async Task ValidateProductReferences(
     Guid categoryId,
+    Guid? subcategoryId,
     Guid unitId,
+    IReadOnlyList<ProductUnitConversionRequest>? conversions,
     CancellationToken ct)
   {
     var categoryExists = await _db.ProductCategories.AnyAsync(
@@ -2474,16 +2641,73 @@ public sealed class InventoryService
         "Select an active category.");
     }
 
-    var unitExists = await _db.UnitsOfMeasure.AnyAsync(
-      x => x.Id == unitId && x.IsActive,
+    if (subcategoryId is not null)
+    {
+      var subcategoryExists = await _db.ProductSubcategories.AnyAsync(
+        x => x.Id == subcategoryId && x.CategoryId == categoryId && x.IsActive,
+        ct);
+
+      if (!subcategoryExists)
+      {
+        throw new BadRequestException(
+          ErrorCodes.Inventory.SubcategoryInvalid,
+          "Select an active subcategory that belongs to the selected category.");
+      }
+    }
+
+    ValidateConversions(unitId, conversions);
+
+    var unitIds = (conversions ?? [])
+      .Select(x => x.UnitOfMeasureId)
+      .Append(unitId)
+      .Distinct()
+      .ToList();
+    var activeUnitCount = await _db.UnitsOfMeasure.CountAsync(
+      x => unitIds.Contains(x.Id) && x.IsActive,
       ct);
 
-    if (!unitExists)
+    if (activeUnitCount != unitIds.Count)
     {
       throw new BadRequestException(
         ErrorCodes.Inventory.UnitInvalid,
-        "Select an active unit.");
+        "Select active units for the base unit and every conversion.");
     }
+  }
+
+  private static void ValidateConversions(
+    Guid baseUnitId,
+    IReadOnlyList<ProductUnitConversionRequest>? conversions)
+  {
+    if (conversions is null || conversions.Count == 0)
+    {
+      return;
+    }
+
+    if (conversions.Any(x => x.UnitOfMeasureId == Guid.Empty ||
+                             x.UnitOfMeasureId == baseUnitId ||
+                             x.Factor <= 0 ||
+                             !Enum.IsDefined(x.Operation)))
+    {
+      throw new BadRequestException(
+        ErrorCodes.Inventory.UnitConversionInvalid,
+        "Each conversion requires a different active unit, a valid operation, and a factor greater than zero.");
+    }
+
+    if (conversions.Select(x => x.UnitOfMeasureId).Distinct().Count() != conversions.Count)
+    {
+      throw new ConflictException(
+        ErrorCodes.Inventory.UnitConversionDuplicate,
+        "A unit can appear only once in a product's conversions.");
+    }
+  }
+
+  private async Task<bool> ProductHasHistoryAsync(
+    Guid id,
+    CancellationToken ct)
+  {
+    return await _db.StockMovements.AnyAsync(x => x.ProductId == id, ct) ||
+      await _db.PurchaseInvoiceLines.AnyAsync(x => x.ProductId == id, ct) ||
+      await _db.SalesInvoiceLines.AnyAsync(x => x.ProductId == id, ct);
   }
 
   private async Task EnsureProductCodes(
@@ -2543,6 +2767,44 @@ public sealed class InventoryService
       ?? throw new NotFoundException(
         ErrorCodes.Inventory.CategoryNotFound,
         "Category not found.");
+  }
+
+  private async Task<ProductCategoryEntity> GetActiveCategoryEntity(
+    Guid id,
+    CancellationToken ct)
+  {
+    return await _db.ProductCategories
+      .SingleOrDefaultAsync(x => x.Id == id && x.IsActive, ct)
+      ?? throw new BadRequestException(
+        ErrorCodes.Inventory.CategoryInvalid,
+        "Select an active category.");
+  }
+
+  private async Task<ProductSubcategoryEntity> GetSubcategoryEntity(
+    Guid id,
+    CancellationToken ct)
+  {
+    return await _db.ProductSubcategories
+      .SingleOrDefaultAsync(x => x.Id == id, ct)
+      ?? throw new NotFoundException(
+        ErrorCodes.Inventory.SubcategoryNotFound,
+        "Subcategory not found.");
+  }
+
+  private async Task EnsureSubcategoryName(
+    Guid? id,
+    Guid categoryId,
+    string name,
+    CancellationToken ct)
+  {
+    if (await _db.ProductSubcategories.AnyAsync(
+      x => x.CategoryId == categoryId && x.Name == name && x.Id != id,
+      ct))
+    {
+      throw new ConflictException(
+        ErrorCodes.Inventory.SubcategoryNameTaken,
+        "That subcategory name is already in use for the selected category.");
+    }
   }
 
   private async Task<UnitOfMeasureEntity> GetUnitEntity(
@@ -2607,6 +2869,27 @@ public sealed class InventoryService
     return query;
   }
 
+  private static IQueryable<ProductSubcategoryEntity> Filter(
+    IQueryable<ProductSubcategoryEntity> query,
+    MasterListQuery filter)
+  {
+    if (!string.IsNullOrWhiteSpace(filter.Search))
+    {
+      var search = filter.Search.Trim().ToLower();
+
+      query = query.Where(x =>
+        x.Name.ToLower().Contains(search) ||
+        x.Category.Name.ToLower().Contains(search));
+    }
+
+    if (filter.IsActive is not null)
+    {
+      query = query.Where(x => x.IsActive == filter.IsActive);
+    }
+
+    return query;
+  }
+
   // ===========================================================================
   // Mapping / Normalization
   // ===========================================================================
@@ -2619,8 +2902,10 @@ public sealed class InventoryService
     product.SKU = Code(request.SKU);
     product.Barcode = Trim(request.Barcode);
     product.CategoryId = request.CategoryId;
+    product.SubcategoryId = request.SubcategoryId;
     product.UnitOfMeasureId = request.UnitOfMeasureId;
     product.Purpose = request.Purpose;
+    product.PurchasePriceBase = request.PurchasePriceBase;
     product.SellingPriceBase = request.SellingPriceBase;
     product.TrackInventory = request.TrackInventory;
     product.IsActive = request.IsActive;
@@ -2639,13 +2924,31 @@ public sealed class InventoryService
         request.SKU,
         request.Barcode,
         request.CategoryId,
+        request.SubcategoryId,
         request.UnitOfMeasureId,
         request.Purpose,
+        request.PurchasePriceBase,
         request.SellingPriceBase,
         request.TrackInventory,
         request.IsActive,
         request.Description,
-        request.ImageReference));
+        request.ImageReference,
+        request.UnitConversions));
+  }
+
+  private static void ApplyConversions(
+    ProductEntity product,
+    IReadOnlyList<ProductUnitConversionRequest>? conversions)
+  {
+    foreach (var conversion in conversions ?? [])
+    {
+      product.UnitConversions.Add(new ProductUnitConversionEntity
+      {
+        UnitOfMeasureId = conversion.UnitOfMeasureId,
+        Operation = conversion.Operation,
+        Factor = conversion.Factor
+      });
+    }
   }
 
   private static ProductResponse ToProduct(
@@ -2659,9 +2962,13 @@ public sealed class InventoryService
       product.Barcode,
       product.CategoryId,
       product.Category.Name,
+      product.SubcategoryId,
+      product.Subcategory?.Name,
       product.UnitOfMeasureId,
+      product.UnitOfMeasure.Name,
       product.UnitOfMeasure.Code,
       product.Purpose,
+      product.PurchasePriceBase,
       product.SellingPriceBase,
       product.TrackInventory,
       product.IsActive,
@@ -2671,7 +2978,28 @@ public sealed class InventoryService
       balance.Quantity == 0
         ? 0
         : balance.Value / balance.Quantity,
-      balance.Value);
+      balance.Value,
+      product.UnitConversions
+        .OrderBy(x => x.UnitOfMeasure.Code)
+        .Select(x => new ProductUnitConversionResponse(
+          x.Id,
+          x.UnitOfMeasureId,
+          x.UnitOfMeasure.Name,
+          x.UnitOfMeasure.Code,
+          x.Operation,
+          x.Factor))
+        .ToList());
+  }
+
+  private static SubcategoryResponse ToSubcategory(
+    ProductSubcategoryEntity subcategory)
+  {
+    return new SubcategoryResponse(
+      subcategory.Id,
+      subcategory.Name,
+      subcategory.CategoryId,
+      subcategory.Category.Name,
+      subcategory.IsActive);
   }
 
   private static WarehouseResponse ToWarehouse(

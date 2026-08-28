@@ -1,27 +1,121 @@
-import { useEffect, useMemo, useState } from 'react'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, Pencil } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { useMemo, useState } from 'react'
+import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCurrentBusiness } from '@/features/business'
-import { useCategories, useProducts, useSaveProduct, useUnits } from '../hooks/useInventory'
-import { productSchema } from '../schemas/inventory.schemas'
-import type { Product, ProductInput } from '../types/inventory.types'
-import { Empty, Field, Header, Loading, SearchBar, Status } from './CategoriesPage'
+import { formatMoney } from '@/lib/money'
+import { useCategories, useDeleteProduct, useProducts, useSubcategories } from '../hooks/useInventory'
+import { Empty, Loading, Status } from './CategoriesPage'
 
-type ProductForm = Omit<ProductInput, 'barcode' | 'description' | 'imageReference'> & { barcode: string; description: string }
-const defaults: ProductForm = { name: '', sku: '', barcode: '', categoryId: '', unitOfMeasureId: '', purpose: 0, sellingPriceBase: 0, trackInventory: true, isActive: true, description: '' }
 export function ProductsPage() {
-  const productsQuery = useProducts(); const categories = useCategories().data?.data.filter((item) => item.isActive) ?? []; const units = useUnits().data?.data.filter((item) => item.isActive) ?? []; const business = useCurrentBusiness().data; const [editing, setEditing] = useState<Product | null>(null); const [open, setOpen] = useState(false); const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(10)
-  const form = useForm<ProductForm>({ resolver: zodResolver(productSchema), defaultValues: defaults }); const save = useSaveProduct(editing?.id ?? null)
-  useEffect(() => form.reset(editing ? { name: editing.name, sku: editing.sku, barcode: editing.barcode ?? '', categoryId: editing.categoryId, unitOfMeasureId: editing.unitOfMeasureId, purpose: editing.purpose, sellingPriceBase: editing.sellingPriceBase, trackInventory: editing.trackInventory, isActive: editing.isActive, description: editing.description ?? '' } : defaults), [editing, form])
-  const close = () => { setOpen(false); setEditing(null) }; const create = () => { setEditing(null); setOpen(true) }; const edit = (item: Product) => { setEditing(item); setOpen(true) }
-  const rows = useMemo(() => { const term = search.trim().toLowerCase(); return (productsQuery.data?.data ?? []).filter((item) => !term || `${item.name} ${item.sku} ${item.barcode ?? ''}`.toLowerCase().includes(term)) }, [productsQuery.data?.data, search]); const paged = rows.slice((page - 1) * pageSize, page * pageSize)
-  return <div className="flex h-full w-full flex-col space-y-6"><Header title="Products" description="Manage inventory-tracked products without changing their historical movements." action="Add product" onClick={create} /><SearchBar value={search} onChange={(value) => { setSearch(value); setPage(1) }} placeholder="Search product, SKU, or barcode" count={`${rows.length} product${rows.length === 1 ? '' : 's'}`} /><DataTableShell><div className="overflow-x-auto"><Table><TableHeader><TableRow className={head}><TableHead className="px-4">Product</TableHead><TableHead className="px-4">Category / unit</TableHead><TableHead className="px-4">Purpose</TableHead><TableHead className="px-4 text-right">Selling price</TableHead><TableHead className="px-4 text-right">Current stock</TableHead><TableHead className="px-4">Status</TableHead><TableHead className="w-20 px-4 text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{productsQuery.isLoading ? <Loading colSpan={7} /> : paged.length === 0 ? <Empty colSpan={7} label="No products found" onClick={create} /> : paged.map((item) => <TableRow key={item.id}><TableCell className="px-4 py-3.5"><p className="font-medium">{item.name}</p><p className="font-mono text-xs text-slate-500">{item.sku}{item.barcode && ` · ${item.barcode}`}</p></TableCell><TableCell className="px-4 py-3.5">{item.categoryName} · {item.unitCode}</TableCell><TableCell className="px-4 py-3.5">{['Resale', 'Consumable', 'Both'][item.purpose]}</TableCell><TableCell className="px-4 py-3.5 text-right font-mono">{item.sellingPriceBase.toLocaleString()} {business?.baseCurrencyCode ?? ''}</TableCell><TableCell className="px-4 py-3.5 text-right font-mono">{item.totalQuantity} {item.unitCode}</TableCell><TableCell className="px-4 py-3.5"><Status active={item.isActive} /></TableCell><TableCell className="px-4 py-3.5 text-right"><Button variant="ghost" size="icon-sm" onClick={() => edit(item)} aria-label={`Edit ${item.name}`}><Pencil className="size-4" /></Button></TableCell></TableRow>)}</TableBody></Table></div></DataTableShell><DataTablePagination page={page} pageSize={pageSize} totalItems={rows.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} /><Dialog open={open} onOpenChange={(value) => value ? setOpen(true) : close()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>{editing ? `Edit ${editing.sku}` : 'Add product'}</DialogTitle><DialogDescription>Products with stock history are preserved; deactivate them when they are no longer used.</DialogDescription></DialogHeader><form onSubmit={form.handleSubmit((values) => save.mutate({ ...values, barcode: values.barcode || null, description: values.description || null, imageReference: null }, { onSuccess: close }))} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><Field label="Name" error={form.formState.errors.name?.message}><Input {...form.register('name')} /></Field><Field label="SKU" error={form.formState.errors.sku?.message}><Input className="uppercase" {...form.register('sku')} /></Field><Field label="Barcode"><Input {...form.register('barcode')} /></Field><Field label="Purpose"><select className="h-9 rounded-md border bg-background px-3" {...form.register('purpose', { valueAsNumber: true })}><option value={0}>Resale</option><option value={1}>Consumable</option><option value={2}>Both</option></select></Field></div><div className="grid gap-4 sm:grid-cols-2"><Field label="Category" error={form.formState.errors.categoryId?.message}><select className="h-9 rounded-md border bg-background px-3" {...form.register('categoryId')}><option value="">Select category</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Unit" error={form.formState.errors.unitOfMeasureId?.message}><select className="h-9 rounded-md border bg-background px-3" {...form.register('unitOfMeasureId')}><option value="">Select unit</option>{units.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></Field><Field label={`Default selling price (${business?.baseCurrencyCode ?? 'Base Currency'})`} error={form.formState.errors.sellingPriceBase?.message}><Input type="number" min="0" step="0.0001" {...form.register('sellingPriceBase', { valueAsNumber: true })} /></Field></div><Field label="Description"><Input {...form.register('description')} /></Field><div className="flex gap-4"><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('trackInventory')} /> Track inventory</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} /> Active</label></div>{save.isError && <p className="text-sm text-destructive">{save.error.message}</p>}<DialogFooter><Button type="button" variant="outline" onClick={close}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add product'}</Button></DialogFooter></form></DialogContent></Dialog></div>
+  const [search, setSearch] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [subcategoryId, setSubcategoryId] = useState('')
+  const [status, setStatus] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const filters = useMemo(() => ({
+    page: String(page),
+    pageSize: String(pageSize),
+    search: search.trim() || undefined,
+    categoryId: categoryId || undefined,
+    subcategoryId: subcategoryId || undefined,
+    isActive: status || undefined,
+  }), [categoryId, page, pageSize, search, status, subcategoryId])
+  const products = useProducts(filters)
+  const categories = useCategories().data?.data ?? []
+  const subcategories = useSubcategories({ categoryId: categoryId || undefined }).data?.data ?? []
+  const business = useCurrentBusiness().data
+  const remove = useDeleteProduct()
+  const rows = products.data?.data ?? []
+  const total = products.data?.meta.totalCount ?? 0
+
+  const resetPage = () => setPage(1)
+  const selectCategory = (value: string) => {
+    setCategoryId(value)
+    setSubcategoryId('')
+    resetPage()
+  }
+  const deleteProduct = (id: string, name: string) => {
+    if (window.confirm(`Delete ${name}? Products with history cannot be deleted.`)) remove.mutate(id)
+  }
+  const money = (value: number) => formatMoney(
+    value,
+    business?.baseCurrencySymbol ?? business?.baseCurrencyCode ?? '',
+    business?.baseCurrencyDecimalPlaces ?? 2,
+  )
+
+  return (
+    <div className="flex h-full w-full flex-col space-y-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <h2 className="text-xl font-semibold">Items</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Define inventory items, their base units, and selling or purchasing conversions.</p>
+        </div>
+        <Link to="/settings/items/new"><Button className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"><Plus className="size-4" />Add item</Button></Link>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(event) => { setSearch(event.target.value); resetPage() }} placeholder="Search name, SKU, or barcode" className="pl-9" />
+        </div>
+        <Select value={categoryId} onChange={selectCategory} label="All categories">
+          {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </Select>
+        <Select value={subcategoryId} onChange={(value) => { setSubcategoryId(value); resetPage() }} label="All subcategories">
+          {subcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>)}
+        </Select>
+        <Select value={status} onChange={(value) => { setStatus(value); resetPage() }} label="All statuses">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </Select>
+      </div>
+
+      <DataTableShell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader><TableRow className={head}>
+              <TableHead className="px-4">Item</TableHead>
+              <TableHead className="px-4">Category</TableHead>
+              <TableHead className="px-4">Base unit</TableHead>
+              <TableHead className="px-4 text-right">Purchase price</TableHead>
+              <TableHead className="px-4 text-right">Selling price</TableHead>
+              <TableHead className="px-4">Status</TableHead>
+              <TableHead className="w-24 px-4 text-right">Actions</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {products.isLoading ? <Loading colSpan={7} /> : rows.length === 0 ? <Empty colSpan={7} label="No items found" /> : rows.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="px-4 py-3.5"><p className="font-medium">{item.name}</p><p className="font-mono text-xs text-muted-foreground">{item.sku}</p></TableCell>
+                  <TableCell className="px-4 py-3.5"><p>{item.categoryName}</p><p className="text-xs text-muted-foreground">{item.subcategoryName ?? 'No subcategory'}</p></TableCell>
+                  <TableCell className="px-4 py-3.5"><p>{item.unitName}</p><p className="text-xs text-muted-foreground">{item.unitCode}{item.unitConversions.length > 0 ? ` · ${item.unitConversions.length} conversion${item.unitConversions.length === 1 ? '' : 's'}` : ''}</p></TableCell>
+                  <TableCell className="px-4 py-3.5 text-right font-mono">{money(item.purchasePriceBase)}</TableCell>
+                  <TableCell className="px-4 py-3.5 text-right font-mono">{money(item.sellingPriceBase)}</TableCell>
+                  <TableCell className="px-4 py-3.5"><Status active={item.isActive} /></TableCell>
+                  <TableCell className="px-4 py-3.5 text-right">
+                    <Link to={`/settings/items/${item.id}`} aria-label={`Edit ${item.name}`}><Button variant="ghost" size="icon-sm"><Pencil className="size-4" /></Button></Link>
+                    <Button variant="ghost" size="icon-sm" onClick={() => deleteProduct(item.id, item.name)} disabled={remove.isPending} aria-label={`Delete ${item.name}`}><Trash2 className="size-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </DataTableShell>
+      {products.isError && <p className="text-sm text-destructive">{products.error.message}</p>}
+      {remove.isError && <p className="text-sm text-destructive">{remove.error.message}</p>}
+      <DataTablePagination page={page} pageSize={pageSize} totalItems={total} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} />
+    </div>
+  )
 }
+
+function Select({ value, onChange, label, children }: { value: string; onChange: (value: string) => void; label: string; children: React.ReactNode }) {
+  return <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm"><option value="">{label}</option>{children}</select>
+}
+
 const head = 'border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60'

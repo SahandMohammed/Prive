@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { inventoryApi } from '../api/inventory.api'
-import type { AdjustmentDraftInput, CategoryInput, OpeningStockDraftInput, ProductInput, TransferDraftInput, UnitInput, WarehouseInput } from '../types/inventory.types'
+import type { AdjustmentDraftInput, CategoryInput, OpeningStockDraftInput, ProductInput, SubcategoryInput, TransferDraftInput, UnitInput, WarehouseInput } from '../types/inventory.types'
 
 export const useStockBalances = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'balances', filters], queryFn: () => inventoryApi.balances(filters) })
 export const useProducts = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'products', filters], queryFn: () => inventoryApi.products(filters) })
+export const useProduct = (id?: string) => useQuery({ queryKey: ['inventory', 'products', id], queryFn: () => inventoryApi.product(id!), enabled: Boolean(id) })
 export const useWarehouses = () => useQuery({ queryKey: ['inventory', 'warehouses'], queryFn: inventoryApi.warehouses })
-export const useCategories = () => useQuery({ queryKey: ['inventory', 'categories'], queryFn: inventoryApi.categories })
-export const useUnits = () => useQuery({ queryKey: ['inventory', 'units'], queryFn: inventoryApi.units })
+export const useCategories = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'categories', filters], queryFn: () => inventoryApi.categories(filters) })
+export const useSubcategories = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'subcategories', filters], queryFn: () => inventoryApi.subcategories(filters) })
+export const useUnits = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'units', filters], queryFn: () => inventoryApi.units(filters) })
 export const useMovements = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'movements', filters], queryFn: () => inventoryApi.movements(filters) })
 
 export const useOpeningStocks = (filters: Record<string, string | undefined> = {}) => useQuery({ queryKey: ['inventory', 'opening-stock', filters], queryFn: () => inventoryApi.openingStocks(filters) })
@@ -22,6 +24,11 @@ export function useSaveTransfer(id?: string) { const client = useQueryClient(); 
 export function useDocumentAction(type: 'opening-stock' | 'adjustments' | 'transfers', action: 'post' | 'delete') { const client = useQueryClient(); return useMutation<unknown, Error, string>({ mutationFn: async (id) => { if (type === 'opening-stock') return action === 'post' ? inventoryApi.postOpeningStock(id) : inventoryApi.deleteOpeningStock(id); if (type === 'adjustments') return action === 'post' ? inventoryApi.postAdjustment(id) : inventoryApi.deleteAdjustment(id); return action === 'post' ? inventoryApi.postTransfer(id) : inventoryApi.deleteTransfer(id) }, onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }
 
 export function useSaveCategory(editingId: string | null) { const client = useQueryClient(); return useMutation({ mutationFn: (body: CategoryInput) => editingId ? inventoryApi.updateCategory(editingId, body) : inventoryApi.createCategory(body), onSuccess: () => client.invalidateQueries({ queryKey: ['inventory', 'categories'] }) }) }
+export function useDeleteCategory() { const client = useQueryClient(); return useMutation({ mutationFn: inventoryApi.deleteCategory, onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }
+export function useSaveSubcategory(editingId: string | null) { const client = useQueryClient(); return useMutation({ mutationFn: (body: SubcategoryInput) => editingId ? inventoryApi.updateSubcategory(editingId, body) : inventoryApi.createSubcategory(body), onSuccess: () => client.invalidateQueries({ queryKey: ['inventory', 'subcategories'] }) }) }
+export function useDeleteSubcategory() { const client = useQueryClient(); return useMutation({ mutationFn: inventoryApi.deleteSubcategory, onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }
 export function useSaveUnit(editingId: string | null) { const client = useQueryClient(); return useMutation({ mutationFn: (body: UnitInput) => editingId ? inventoryApi.updateUnit(editingId, body) : inventoryApi.createUnit(body), onSuccess: () => client.invalidateQueries({ queryKey: ['inventory', 'units'] }) }) }
+export function useDeleteUnit() { const client = useQueryClient(); return useMutation({ mutationFn: inventoryApi.deleteUnit, onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }
 export function useSaveProduct(editingId: string | null) { const client = useQueryClient(); return useMutation({ mutationFn: (body: ProductInput) => editingId ? inventoryApi.updateProduct(editingId, body) : inventoryApi.createProduct(body), onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }
+export function useDeleteProduct() { const client = useQueryClient(); return useMutation({ mutationFn: inventoryApi.deleteProduct, onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }
 export function useSaveWarehouse(editingId: string | null) { const client = useQueryClient(); return useMutation({ mutationFn: (body: WarehouseInput) => editingId ? inventoryApi.updateWarehouse(editingId, body) : inventoryApi.createWarehouse(body), onSuccess: () => client.invalidateQueries({ queryKey: ['inventory'] }) }) }

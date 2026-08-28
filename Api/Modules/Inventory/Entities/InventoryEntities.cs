@@ -10,6 +10,17 @@ public sealed class ProductCategoryEntity
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public bool IsActive { get; set; } = true;
+  public ICollection<ProductSubcategoryEntity> Subcategories { get; set; } = new List<ProductSubcategoryEntity>();
+  public ICollection<ProductEntity> Products { get; set; } = new List<ProductEntity>();
+}
+
+public sealed class ProductSubcategoryEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public string Name { get; set; } = string.Empty;
+  public Guid CategoryId { get; set; }
+  public ProductCategoryEntity Category { get; set; } = null!;
+  public bool IsActive { get; set; } = true;
   public ICollection<ProductEntity> Products { get; set; } = new List<ProductEntity>();
 }
 
@@ -20,6 +31,7 @@ public sealed class UnitOfMeasureEntity
   public string Code { get; set; } = string.Empty;
   public bool IsActive { get; set; } = true;
   public ICollection<ProductEntity> Products { get; set; } = new List<ProductEntity>();
+  public ICollection<ProductUnitConversionEntity> ProductConversions { get; set; } = new List<ProductUnitConversionEntity>();
 }
 
 public sealed class ProductEntity
@@ -30,15 +42,30 @@ public sealed class ProductEntity
   public string? Barcode { get; set; }
   public Guid CategoryId { get; set; }
   public ProductCategoryEntity Category { get; set; } = null!;
+  public Guid? SubcategoryId { get; set; }
+  public ProductSubcategoryEntity? Subcategory { get; set; }
   public Guid UnitOfMeasureId { get; set; }
   public UnitOfMeasureEntity UnitOfMeasure { get; set; } = null!;
   public ProductPurpose Purpose { get; set; }
+  public decimal PurchasePriceBase { get; set; }
   public decimal SellingPriceBase { get; set; }
   public bool TrackInventory { get; set; } = true;
   public bool IsActive { get; set; } = true;
   public string? Description { get; set; }
   public string? ImageReference { get; set; }
+  public ICollection<ProductUnitConversionEntity> UnitConversions { get; set; } = new List<ProductUnitConversionEntity>();
   public ICollection<StockMovementEntity> StockMovements { get; set; } = new List<StockMovementEntity>();
+}
+
+public sealed class ProductUnitConversionEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public Guid ProductId { get; set; }
+  public ProductEntity Product { get; set; } = null!;
+  public Guid UnitOfMeasureId { get; set; }
+  public UnitOfMeasureEntity UnitOfMeasure { get; set; } = null!;
+  public UnitConversionOperation Operation { get; set; }
+  public decimal Factor { get; set; }
 }
 
 public sealed class WarehouseEntity
@@ -192,6 +219,7 @@ public sealed class StockMovementEntity
 }
 
 public enum ProductPurpose { Resale, Consumable, Both }
+public enum UnitConversionOperation { Multiply, Divide }
 public enum StockMovementType { OpeningStock, PositiveAdjustment, NegativeAdjustment, TransferOut, TransferIn, Purchase, Sale }
 public enum InventoryDocumentType { OpeningStock, Adjustment, Transfer, Purchase, SalesInvoice, PosSale }
 public enum InventoryDocumentStatus { Draft, Posted }

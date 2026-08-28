@@ -11,6 +11,18 @@ public sealed class ProductCategoryEntityConfiguration : IEntityTypeConfiguratio
   }
 }
 
+public sealed class ProductSubcategoryEntityConfiguration : IEntityTypeConfiguration<ProductSubcategoryEntity>
+{
+  public void Configure(EntityTypeBuilder<ProductSubcategoryEntity> b)
+  {
+    b.ToTable("product_subcategories");
+    b.HasKey(x => x.Id);
+    b.Property(x => x.Name).HasMaxLength(100).IsRequired();
+    b.HasIndex(x => new { x.CategoryId, x.Name }).IsUnique();
+    b.HasOne(x => x.Category).WithMany(x => x.Subcategories).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
+  }
+}
+
 public sealed class UnitOfMeasureEntityConfiguration : IEntityTypeConfiguration<UnitOfMeasureEntity>
 {
   public void Configure(EntityTypeBuilder<UnitOfMeasureEntity> b)
@@ -23,7 +35,21 @@ public sealed class ProductEntityConfiguration : IEntityTypeConfiguration<Produc
 {
   public void Configure(EntityTypeBuilder<ProductEntity> b)
   {
-    b.ToTable("products"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(250).IsRequired(); b.Property(x => x.SKU).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.SKU).IsUnique(); b.Property(x => x.Barcode).HasMaxLength(64); b.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL"); b.Property(x => x.Purpose).HasConversion<string>().HasMaxLength(20).IsRequired(); b.Property(x => x.SellingPriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.ImageReference).HasMaxLength(2048); b.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.Products).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
+    b.ToTable("products"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(250).IsRequired(); b.Property(x => x.SKU).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.SKU).IsUnique(); b.Property(x => x.Barcode).HasMaxLength(64); b.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL"); b.Property(x => x.Purpose).HasConversion<string>().HasMaxLength(20).IsRequired(); b.Property(x => x.PurchasePriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.SellingPriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.ImageReference).HasMaxLength(2048); b.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.Subcategory).WithMany(x => x.Products).HasForeignKey(x => x.SubcategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.Products).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
+  }
+}
+
+public sealed class ProductUnitConversionEntityConfiguration : IEntityTypeConfiguration<ProductUnitConversionEntity>
+{
+  public void Configure(EntityTypeBuilder<ProductUnitConversionEntity> b)
+  {
+    b.ToTable("product_unit_conversions");
+    b.HasKey(x => x.Id);
+    b.Property(x => x.Operation).HasConversion<string>().HasMaxLength(16).IsRequired();
+    b.Property(x => x.Factor).HasPrecision(19, 6).IsRequired();
+    b.HasIndex(x => new { x.ProductId, x.UnitOfMeasureId }).IsUnique();
+    b.HasOne(x => x.Product).WithMany(x => x.UnitConversions).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+    b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.ProductConversions).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
   }
 }
 

@@ -25,8 +25,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<JournalEntryEntity> JournalEntries => Set<JournalEntryEntity>();
   public DbSet<JournalLineEntity> JournalLines => Set<JournalLineEntity>();
   public DbSet<ProductCategoryEntity> ProductCategories => Set<ProductCategoryEntity>();
+  public DbSet<ProductSubcategoryEntity> ProductSubcategories => Set<ProductSubcategoryEntity>();
   public DbSet<UnitOfMeasureEntity> UnitsOfMeasure => Set<UnitOfMeasureEntity>();
   public DbSet<ProductEntity> Products => Set<ProductEntity>();
+  public DbSet<ProductUnitConversionEntity> ProductUnitConversions => Set<ProductUnitConversionEntity>();
   public DbSet<WarehouseEntity> Warehouses => Set<WarehouseEntity>();
   public DbSet<OpeningStockDocumentEntity> OpeningStockDocuments => Set<OpeningStockDocumentEntity>();
   public DbSet<OpeningStockLineEntity> OpeningStockLines => Set<OpeningStockLineEntity>();

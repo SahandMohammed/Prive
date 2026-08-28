@@ -107,7 +107,7 @@ export function CreateSalesInvoicePage() {
 
   const selectableProducts = [...products.filter((item) => item.isActive && item.trackInventory && (item.purpose === 0 || item.purpose === 2))]
   invoice?.lines.filter((line) => line.lineType === SalesLineType.Product).forEach((line) => {
-    if (line.productId && !selectableProducts.some((item) => item.id === line.productId)) selectableProducts.push({ id: line.productId, name: line.productName ?? 'Historical Product', sku: line.sku ?? '', barcode: null, categoryId: '', categoryName: '', unitOfMeasureId: line.unitOfMeasureId ?? '', unitCode: line.unitCode ?? '', purpose: 0, sellingPriceBase: round4(line.unitPrice * invoice.exchangeRate), trackInventory: true, isActive: false, description: null, totalQuantity: 0, averageCostBase: 0, totalValueBase: 0 })
+    if (line.productId && !selectableProducts.some((item) => item.id === line.productId)) selectableProducts.push({ id: line.productId, name: line.productName ?? 'Historical Product', sku: line.sku ?? '', barcode: null, categoryId: '', categoryName: '', subcategoryId: null, subcategoryName: null, unitOfMeasureId: line.unitOfMeasureId ?? '', unitName: line.unitCode ?? '', unitCode: line.unitCode ?? '', purpose: 0, purchasePriceBase: 0, sellingPriceBase: round4(line.unitPrice * invoice.exchangeRate), trackInventory: true, isActive: false, description: null, imageReference: null, totalQuantity: 0, averageCostBase: 0, totalValueBase: 0, unitConversions: [] })
   })
 
   const availableWarehouses = warehouses.filter((item) => (posted || item.isActive) && item.branchId === values.branchId)

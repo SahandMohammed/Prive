@@ -17,6 +17,8 @@ public sealed record BusinessResponse(
   string? LogoReference,
   Guid BaseCurrencyId,
   string BaseCurrencyCode,
+  string BaseCurrencySymbol,
+  int BaseCurrencyDecimalPlaces,
   bool IsSetupCompleted);
 
 public sealed record CreateBusinessRequest(

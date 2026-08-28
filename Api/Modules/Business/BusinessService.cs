@@ -107,5 +107,7 @@ public sealed class BusinessService
     business.LogoReference,
     business.BaseCurrencyId,
     business.BaseCurrency.Code,
+    business.BaseCurrency.Symbol,
+    business.BaseCurrency.DecimalPlaces,
     business.IsSetupCompleted);
 }

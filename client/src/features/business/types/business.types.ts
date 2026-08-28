@@ -30,6 +30,8 @@ export interface Business {
   logoReference: string | null
   baseCurrencyId: string
   baseCurrencyCode: string
+  baseCurrencySymbol: string
+  baseCurrencyDecimalPlaces: number
   isSetupCompleted: boolean
 }
 
