@@ -1,4 +1,5 @@
 import type { MoneyAccountType } from '@/features/finance'
+import type { ProductUnitConversion } from '@/features/inventory'
 import type { SalesLineType } from '@/features/sales'
 
 export const PosCatalogItemType = { Service: 0, Product: 1 } as const
@@ -58,9 +59,11 @@ export interface PosCatalogItem {
   sku: string | null
   barcode: string | null
   unitOfMeasureId: string | null
+  unitName: string | null
   unitCode: string | null
   availableQuantity: number | null
   imageReference: string | null
+  unitConversions: ProductUnitConversion[]
 }
 export interface PosCustomer {
   id: string
@@ -90,6 +93,7 @@ export interface CompletePosSaleInput {
     lineType: SalesLineType
     serviceId: string | null
     productId: string | null
+    unitOfMeasureId: string | null
     quantity: number
     professionalUserId: string | null
   }[]
@@ -105,11 +109,16 @@ export interface PosSaleLine {
   productId: string | null
   productName: string | null
   sku: string | null
+  unitOfMeasureId: string | null
   unitCode: string | null
   professionalUserId: string | null
   professionalUsername: string | null
   quantity: number
+  conversionOperation: 0 | 1 | null
+  conversionFactor: number
+  baseQuantity: number
   unitPrice: number
+  baseUnitPrice: number
   lineTotal: number
 }
 export interface PosTender {

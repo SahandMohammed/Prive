@@ -37,6 +37,45 @@ public sealed class FinanceWorkflowTests
   }
 
   [Fact]
+  public async Task Create_and_get_money_account_succeeds()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var service = CreateService(db);
+
+    var created = await service.CreateMoneyAccountAsync(new MoneyAccountRequest(
+      "BANK-NEW-IQD",
+      "New Bank Account",
+      MoneyAccountType.Bank,
+      data.BranchId,
+      data.BaseCurrencyId,
+      data.SourceGlAccountId,
+      true,
+      "Operational notes",
+      "Trade Bank",
+      "IQ0011223344"), data.OperatorUserId, default);
+
+    Assert.Equal("BANK-NEW-IQD", created.Code);
+    Assert.Equal("New Bank Account", created.Name);
+    Assert.Equal(MoneyAccountType.Bank, created.Type);
+    Assert.Equal("Trade Bank", created.BankName);
+    Assert.Equal("IQ0011223344", created.AccountNumberOrIban);
+    Assert.Equal(0, created.Balance);
+
+    var fetched = await service.GetMoneyAccountsAsync(
+      new MoneyAccountListQuery { Search = "BANK-NEW" }, data.OperatorUserId, true, default);
+    Assert.Single(fetched.Items);
+    Assert.Equal(created.Id, fetched.Items[0].Id);
+
+    await service.ReplaceMoneyAccountAccessAsync(created.Id, new ReplaceMoneyAccountAccessRequest(
+      [new(data.OperatorUserId, MoneyAccountAccessLevel.Operate)]), default);
+
+    var byId = await service.GetMoneyAccountAsync(created.Id, data.OperatorUserId, default);
+    Assert.Equal(created.Id, byId.Id);
+    Assert.Equal("BANK-NEW-IQD", byId.Code);
+  }
+
+  [Fact]
   public async Task Transfer_draft_has_no_effect_and_posting_is_balanced_traceable_and_immutable()
   {
     await using var db = CreateDb();

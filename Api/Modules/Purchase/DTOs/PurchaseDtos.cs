@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Api.Modules.Inventory;
 using Api.Shared.Pagination;
 
 namespace Api.Modules.Purchase;
@@ -19,7 +20,8 @@ public sealed record PurchaseInvoiceLineRequest(
   [Required] Guid ProductId,
   [Required] Guid UnitOfMeasureId,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
-  [Range(typeof(decimal), "0", "9999999999999")] decimal UnitCost);
+  [Range(typeof(decimal), "0", "9999999999999")] decimal UnitCost,
+  bool UseMasterPrice = false);
 
 public sealed record PurchaseInvoiceDraftRequest(
   [Required] Guid SupplierId,
@@ -62,7 +64,12 @@ public sealed record PurchaseInvoiceLineResponse(
   Guid UnitOfMeasureId,
   string UnitCode,
   decimal Quantity,
+  UnitConversionOperation? ConversionOperation,
+  decimal ConversionFactor,
+  decimal BaseQuantity,
   decimal UnitCost,
+  decimal BaseUnitCost,
+  bool IsPriceOverridden,
   decimal LineSubtotal,
   decimal LineAmount,
   decimal BaseLineAmount);

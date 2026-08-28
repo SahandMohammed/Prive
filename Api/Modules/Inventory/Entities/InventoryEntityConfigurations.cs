@@ -78,7 +78,7 @@ public sealed class OpeningStockLineEntityConfiguration : IEntityTypeConfigurati
 {
   public void Configure(EntityTypeBuilder<OpeningStockLineEntity> b)
   {
-    b.ToTable("opening_stock_lines"); b.HasKey(x => x.Id); b.Property(x => x.Quantity).HasPrecision(19, 4).IsRequired(); b.Property(x => x.UnitCostBase).HasPrecision(19, 4).IsRequired(); b.HasIndex(x => new { x.OpeningStockDocumentId, x.ProductId }).IsUnique(); b.HasOne(x => x.Document).WithMany(x => x.Lines).HasForeignKey(x => x.OpeningStockDocumentId).OnDelete(DeleteBehavior.Cascade); b.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+    b.ToTable("opening_stock_lines"); b.HasKey(x => x.Id); b.Property(x => x.Quantity).HasPrecision(19, 4).IsRequired(); b.Property(x => x.ConversionOperation).HasConversion<string>().HasMaxLength(16); b.Property(x => x.ConversionFactor).HasPrecision(19, 6).IsRequired(); b.Property(x => x.BaseQuantity).HasPrecision(19, 4).IsRequired(); b.Property(x => x.UnitCost).HasPrecision(19, 4).IsRequired(); b.Property(x => x.UnitCostBase).HasPrecision(19, 4).IsRequired(); b.HasIndex(x => new { x.OpeningStockDocumentId, x.ProductId }).IsUnique(); b.HasOne(x => x.Document).WithMany(x => x.Lines).HasForeignKey(x => x.OpeningStockDocumentId).OnDelete(DeleteBehavior.Cascade); b.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany().HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
   }
 }
 

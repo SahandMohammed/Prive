@@ -84,7 +84,12 @@ export interface SalesInvoiceLine {
   professionalUsername: string | null
   description: string | null
   quantity: number
+  conversionOperation: 0 | 1 | null
+  conversionFactor: number
+  baseQuantity: number
   unitPrice: number
+  baseUnitPrice: number
+  isPriceOverridden: boolean
   lineSubtotal: number
   lineAmount: number
   baseLineAmount: number
@@ -132,5 +137,6 @@ export interface SalesInvoiceDraftInput {
     description: string | null
     quantity: number
     unitPrice: number
+    useMasterPrice: boolean
   }[]
 }

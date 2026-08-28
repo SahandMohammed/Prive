@@ -85,6 +85,38 @@ public sealed class PosWorkflowTests
   }
 
   [Fact]
+  public async Task Pos_converted_product_unit_derives_price_and_posts_base_quantity()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db, stockQuantity: 100);
+    var carton = new UnitOfMeasureEntity { Name = "Box", Code = "BOX" };
+    db.Add(carton);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductId,
+      UnitOfMeasure = carton,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    await db.SaveChangesAsync();
+    var service = CreateService(db);
+
+    var sale = await service.CompleteSaleAsync(
+      Request(data, [ProductLine(data, 2, carton.Id)], [new(data.IqdMoneyAccountId, 720_000)]),
+      data.CashierId,
+      default);
+
+    var line = Assert.Single(sale.Lines);
+    Assert.Equal(carton.Id, line.UnitOfMeasureId);
+    Assert.Equal(360_000, line.UnitPrice);
+    Assert.Equal(48, line.BaseQuantity);
+    Assert.Equal(15_000, line.BaseUnitPrice);
+    Assert.Equal(720_000, line.LineTotal);
+    Assert.Equal(52, await StockQuantityAsync(db, data));
+    Assert.Equal(48, (await db.StockMovements.SingleAsync(item => item.SalesInvoiceId == sale.SalesInvoiceId)).QuantityOut);
+  }
+
+  [Fact]
   public async Task Mixed_iqd_usd_tender_preserves_physical_amounts_and_rate_snapshot()
   {
     await using var db = CreateDb();
@@ -313,10 +345,10 @@ public sealed class PosWorkflowTests
       change);
 
   private static PosSaleLineRequest ServiceLine(TestData data) =>
-    new(SalesLineType.Service, data.ServiceId, null, 1, data.ProfessionalId);
+    new(SalesLineType.Service, data.ServiceId, null, null, 1, data.ProfessionalId);
 
-  private static PosSaleLineRequest ProductLine(TestData data, decimal quantity = 1) =>
-    new(SalesLineType.Product, null, data.ProductId, quantity, null);
+  private static PosSaleLineRequest ProductLine(TestData data, decimal quantity = 1, Guid? unitId = null) =>
+    new(SalesLineType.Product, null, data.ProductId, unitId ?? data.UnitId, quantity, null);
 
   private static Task<decimal> PosBalanceAsync(AppDbContext db, Guid accountId) =>
     db.MoneyLedgerEntries.Where(entry => entry.MoneyAccountId == accountId)
@@ -436,6 +468,7 @@ public sealed class PosWorkflowTests
       warehouse.Id,
       iqd.Id,
       usd.Id,
+      unit.Id,
       product.Id,
       salonService.Id,
       iqdAccount.Id,
@@ -460,6 +493,7 @@ public sealed class PosWorkflowTests
     Guid WarehouseId,
     Guid IqdCurrencyId,
     Guid UsdCurrencyId,
+    Guid UnitId,
     Guid ProductId,
     Guid ServiceId,
     Guid IqdMoneyAccountId,

@@ -718,7 +718,7 @@ public sealed class InventoryService
         x.WarehouseId,
         x.Warehouse.Name,
         x.Lines.Count,
-        x.Lines.Sum(line => line.Quantity * line.UnitCostBase),
+        x.Lines.Sum(line => line.BaseQuantity * line.UnitCostBase),
         x.Status,
         x.CreatedByUserId,
         x.CreatedByUser.Username,
@@ -756,7 +756,11 @@ public sealed class InventoryService
     ValidateOpeningLines(
       request.Lines.Select(x => (
         x.Quantity,
-        x.UnitCostBase)));
+        x.UnitCost)));
+
+    var productUnits = await ResolveProductUnitsAsync(
+      request.Lines.Select(x => (x.ProductId, x.UnitOfMeasureId)),
+      ct);
 
     var document = new OpeningStockDocumentEntity
     {
@@ -773,12 +777,12 @@ public sealed class InventoryService
 
     foreach (var line in request.Lines)
     {
-      document.Lines.Add(new OpeningStockLineEntity
+      var entity = new OpeningStockLineEntity
       {
-        ProductId = line.ProductId,
-        Quantity = line.Quantity,
-        UnitCostBase = line.UnitCostBase
-      });
+        ProductId = line.ProductId
+      };
+      ApplyOpeningLine(entity, line, productUnits[line.ProductId]);
+      document.Lines.Add(entity);
     }
 
     _db.OpeningStockDocuments.Add(document);
@@ -812,7 +816,11 @@ public sealed class InventoryService
     ValidateOpeningLines(
       request.Lines.Select(x => (
         x.Quantity,
-        x.UnitCostBase)));
+        x.UnitCost)));
+
+    var productUnits = await ResolveProductUnitsAsync(
+      request.Lines.Select(x => (x.ProductId, x.UnitOfMeasureId)),
+      ct);
 
     document.DocumentDate = request.DocumentDate;
     document.BranchId = request.BranchId;
@@ -831,20 +839,19 @@ public sealed class InventoryService
         continue;
       }
 
-      line.Quantity = update.Quantity;
-      line.UnitCostBase = update.UnitCostBase;
+      ApplyOpeningLine(line, update, productUnits[update.ProductId]);
     }
 
     foreach (var line in request.Lines.Where(
       x => document.Lines.All(
         y => y.ProductId != x.ProductId)))
     {
-      document.Lines.Add(new OpeningStockLineEntity
+      var entity = new OpeningStockLineEntity
       {
-        ProductId = line.ProductId,
-        Quantity = line.Quantity,
-        UnitCostBase = line.UnitCostBase
-      });
+        ProductId = line.ProductId
+      };
+      ApplyOpeningLine(entity, line, productUnits[line.ProductId]);
+      document.Lines.Add(entity);
     }
 
     await _db.SaveChangesAsync(ct);
@@ -885,7 +892,7 @@ public sealed class InventoryService
     ValidateOpeningLines(
       document.Lines.Select(x => (
         x.Quantity,
-        x.UnitCostBase)));
+        x.UnitCost)));
 
     await ValidateSingleWarehouseDocumentAsync(
       document.BranchId,
@@ -1775,7 +1782,7 @@ public sealed class InventoryService
       WarehouseId = document.WarehouseId,
       MovementDate = document.DocumentDate,
       Type = StockMovementType.OpeningStock,
-      QuantityIn = line.Quantity,
+      QuantityIn = line.BaseQuantity,
       UnitCostBase = line.UnitCostBase,
       Reference = document.DocumentNumber,
       Note = document.Notes,
@@ -1958,6 +1965,73 @@ public sealed class InventoryService
     }
   }
 
+  private async Task<Dictionary<Guid, ProductUnitSelection>> ResolveProductUnitsAsync(
+    IEnumerable<(Guid ProductId, Guid UnitOfMeasureId)> lines,
+    CancellationToken ct)
+  {
+    var requested = lines.ToList();
+    if (requested.Any(x => x.UnitOfMeasureId == Guid.Empty))
+      throw new BadRequestException(
+        ErrorCodes.Inventory.UnitInvalid,
+        "Select a unit for every product line.");
+
+    var productIds = requested.Select(x => x.ProductId).Distinct().ToList();
+    var products = await _db.Products
+      .AsNoTracking()
+      .Include(x => x.UnitOfMeasure)
+      .Include(x => x.UnitConversions)
+      .ThenInclude(x => x.UnitOfMeasure)
+      .Where(x => productIds.Contains(x.Id) && x.IsActive && x.TrackInventory)
+      .ToDictionaryAsync(x => x.Id, ct);
+
+    var selections = new Dictionary<Guid, ProductUnitSelection>();
+    foreach (var requestedLine in requested)
+    {
+      if (!products.TryGetValue(requestedLine.ProductId, out var product))
+        throw new BadRequestException(
+          ErrorCodes.Inventory.ProductNotStockable,
+          "Every line must use an active inventory-tracked product.");
+
+      var selection = UnitConversionCalculator.Resolve(
+        product,
+        requestedLine.UnitOfMeasureId);
+      if (selection is null || !selection.Value.IsActive || !selection.Value.IsValid)
+        throw new BadRequestException(
+          ErrorCodes.Inventory.UnitInvalid,
+          "Each line must use an active base unit or configured conversion unit.");
+
+      selections[requestedLine.ProductId] = selection.Value;
+    }
+
+    return selections;
+  }
+
+  private static void ApplyOpeningLine(
+    OpeningStockLineEntity line,
+    OpeningStockLineRequest request,
+    ProductUnitSelection selection)
+  {
+    var baseQuantity = RoundQuantity(UnitConversionCalculator.ConvertToBaseQuantity(
+      request.Quantity,
+      selection.Operation,
+      selection.Factor));
+    if (baseQuantity <= 0)
+      throw new BadRequestException(
+        ErrorCodes.Inventory.DocumentLinesRequired,
+        "The selected quantity is too small for the product's base-unit precision.");
+
+    line.UnitOfMeasureId = request.UnitOfMeasureId;
+    line.Quantity = request.Quantity;
+    line.ConversionOperation = selection.Operation;
+    line.ConversionFactor = selection.Factor;
+    line.BaseQuantity = baseQuantity;
+    line.UnitCost = request.UnitCost;
+    line.UnitCostBase = RoundMoney(UnitConversionCalculator.ConvertUnitPriceToBasePrice(
+      request.UnitCost,
+      selection.Operation,
+      selection.Factor));
+  }
+
   private static void ValidateLines(
     IEnumerable<Guid> productIds)
   {
@@ -2045,6 +2119,12 @@ public sealed class InventoryService
         "Posted inventory documents are immutable.");
     }
   }
+
+  private static decimal RoundQuantity(decimal value) =>
+    decimal.Round(value, 4, MidpointRounding.AwayFromZero);
+
+  private static decimal RoundMoney(decimal value) =>
+    decimal.Round(value, 4, MidpointRounding.AwayFromZero);
 
   private static NotFoundException DocumentNotFound()
   {
@@ -2268,6 +2348,8 @@ public sealed class InventoryService
       .Include(x => x.CreatedByUser)
       .Include(x => x.Lines)
       .ThenInclude(x => x.Product)
+      .ThenInclude(x => x.UnitOfMeasure)
+      .Include(x => x.Lines)
       .ThenInclude(x => x.UnitOfMeasure);
   }
 
@@ -2310,10 +2392,15 @@ public sealed class InventoryService
         x.ProductId,
         x.Product.Name,
         x.Product.SKU,
-        x.Product.UnitOfMeasure.Code,
+        x.UnitOfMeasureId,
+        x.UnitOfMeasure.Code,
         x.Quantity,
+        x.ConversionOperation,
+        x.ConversionFactor,
+        x.BaseQuantity,
+        x.UnitCost,
         x.UnitCostBase,
-        x.Quantity * x.UnitCostBase))
+        x.BaseQuantity * x.UnitCostBase))
       .ToList();
 
     return new OpeningStockResponse(

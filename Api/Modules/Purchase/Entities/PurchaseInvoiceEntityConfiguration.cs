@@ -41,7 +41,11 @@ public sealed class PurchaseInvoiceLineEntityConfiguration : IEntityTypeConfigur
     builder.ToTable("purchase_invoice_lines");
     builder.HasKey(line => line.Id);
     builder.Property(line => line.Quantity).HasPrecision(19, 4).IsRequired();
-    builder.Property(line => line.UnitCost).HasPrecision(19, 4).IsRequired();
+    builder.Property(line => line.ConversionOperation).HasConversion<string>().HasMaxLength(16);
+    builder.Property(line => line.ConversionFactor).HasPrecision(19, 6).IsRequired();
+    builder.Property(line => line.BaseQuantity).HasPrecision(19, 4).IsRequired();
+    builder.Property(line => line.UnitCost).HasPrecision(19, 6).IsRequired();
+    builder.Property(line => line.BaseUnitCost).HasPrecision(19, 6).IsRequired();
     builder.Property(line => line.LineSubtotal).HasPrecision(19, 4).IsRequired();
     builder.Property(line => line.LineAmount).HasPrecision(19, 4).IsRequired();
     builder.Property(line => line.BaseLineAmount).HasPrecision(19, 4).IsRequired();

@@ -26,11 +26,15 @@ const salesLineSchema = z.object({
   description: z.string().max(500, 'Maximum 500 characters'),
   quantity: z.number().positive('Quantity must be greater than zero'),
   unitPrice: z.number().min(0, 'Unit price cannot be negative'),
+  unitPriceBase: z.number().min(0),
+  useMasterPrice: z.boolean(),
 }).superRefine((line, context) => {
   if (line.lineType === SalesLineType.Service && !z.string().uuid().safeParse(line.serviceId).success)
     context.addIssue({ code: 'custom', path: ['serviceId'], message: 'Select a Service' })
   if (line.lineType === SalesLineType.Product && !z.string().uuid().safeParse(line.productId).success)
     context.addIssue({ code: 'custom', path: ['productId'], message: 'Select a Product' })
+  if (line.lineType === SalesLineType.Product && !z.string().uuid().safeParse(line.unitOfMeasureId).success)
+    context.addIssue({ code: 'custom', path: ['unitOfMeasureId'], message: 'Select a Unit' })
 })
 
 export const salesInvoiceSchema = z.object({

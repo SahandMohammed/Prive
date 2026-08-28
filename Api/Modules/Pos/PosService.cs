@@ -147,7 +147,9 @@ public sealed class PosService
         null,
         null,
         null,
-        null));
+        null,
+        null,
+        new List<ProductUnitConversionResponse>()));
     var products = productQuery
       .OrderBy(product => product.Name)
       .ThenBy(product => product.Id)
@@ -161,12 +163,23 @@ public sealed class PosService
         product.SKU,
         product.Barcode,
         product.UnitOfMeasureId,
+        product.UnitOfMeasure.Name,
         product.UnitOfMeasure.Code,
         request.WarehouseId == null
           ? null
           : (decimal?)product.StockMovements.Where(movement => movement.WarehouseId == request.WarehouseId)
             .Sum(movement => movement.QuantityIn - movement.QuantityOut),
-        product.ImageReference));
+        product.ImageReference,
+        product.UnitConversions
+          .OrderBy(item => item.UnitOfMeasure.Code)
+          .Select(item => new ProductUnitConversionResponse(
+            item.Id,
+            item.UnitOfMeasureId,
+            item.UnitOfMeasure.Name,
+            item.UnitOfMeasure.Code,
+            item.Operation,
+            item.Factor))
+          .ToList()));
 
     if (request.ItemType == PosCatalogItemType.Service)
       return await services.ToPagedResultAsync(request, ct);
@@ -274,7 +287,10 @@ public sealed class PosService
       .Select(line => line.ProductId!.Value).ToList();
     var services = await _db.Services.AsNoTracking().Where(service => serviceIds.Contains(service.Id))
       .ToDictionaryAsync(service => service.Id, ct);
-    var products = await _db.Products.AsNoTracking().Where(product => productIds.Contains(product.Id))
+    var products = await _db.Products.AsNoTracking()
+      .Include(product => product.UnitOfMeasure)
+      .Include(product => product.UnitConversions).ThenInclude(item => item.UnitOfMeasure)
+      .Where(product => productIds.Contains(product.Id))
       .ToDictionaryAsync(product => product.Id, ct);
     if (services.Count != serviceIds.Count || products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "Every POS line must reference an existing Service or Product.");
@@ -293,10 +309,10 @@ public sealed class PosService
         SalesLineType.Product,
         null,
         line.ProductId,
-        products[line.ProductId!.Value].UnitOfMeasureId,
-        products[line.ProductId.Value].Name,
+        line.UnitOfMeasureId,
+        products[line.ProductId!.Value].Name,
         line.Quantity,
-        products[line.ProductId.Value].SellingPriceBase))
+        SelectedProductPrice(products[line.ProductId!.Value], line.UnitOfMeasureId)))
       .ToList();
     var saleTotal = salesLines.Sum(line => Money(line.Quantity * line.UnitPrice));
 
@@ -550,11 +566,16 @@ public sealed class PosService
         line.ProductId,
         line.Product?.Name,
         line.Product?.SKU,
+        line.UnitOfMeasureId,
         line.UnitOfMeasure?.Code,
         line.ProfessionalUserId,
         line.ProfessionalUser?.Username,
         line.Quantity,
+        line.ConversionOperation,
+        line.ConversionFactor,
+        line.BaseQuantity,
         line.UnitPrice,
+        line.BaseUnitPrice,
         line.LineAmount)).ToList(),
       tenders,
       change);
@@ -579,9 +600,10 @@ public sealed class PosService
     foreach (var line in request.Lines)
     {
       var service = line.LineType == SalesLineType.Service && line.ServiceId is not null && line.ServiceId != Guid.Empty
-        && line.ProductId is null;
+        && line.ProductId is null && line.UnitOfMeasureId is null;
       var product = line.LineType == SalesLineType.Product && line.ProductId is not null && line.ProductId != Guid.Empty
-        && line.ServiceId is null && line.ProfessionalUserId is null;
+        && line.ServiceId is null && line.ProfessionalUserId is null
+        && line.UnitOfMeasureId is not null && line.UnitOfMeasureId != Guid.Empty;
       if (!service && !product)
         throw new BadRequestException(ErrorCodes.Pos.LineInvalid,
           "Each POS line must reference exactly one Service or Product; only Services may have a Professional.");
@@ -616,6 +638,22 @@ public sealed class PosService
   }
 
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
+
+  private static decimal SelectedProductPrice(ProductEntity product, Guid? unitOfMeasureId)
+  {
+    var selection = unitOfMeasureId is null
+      ? null
+      : UnitConversionCalculator.Resolve(product, unitOfMeasureId.Value);
+    if (selection is null || !selection.Value.IsActive || !selection.Value.IsValid)
+      throw new BadRequestException(
+        ErrorCodes.Pos.LineInvalid,
+        "Each Product line must use an active base unit or configured conversion unit.");
+
+    return Money(UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+      product.SellingPriceBase,
+      selection.Value.Operation,
+      selection.Value.Factor));
+  }
   private static BadRequestException BusinessNotConfigured() => new(
     ErrorCodes.Pos.BusinessNotConfigured,
     "Complete Business Setup before using POS.");

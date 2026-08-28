@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient'
-import type { CustomerReceipt, CustomerReceiptInput, CustomerReceiptSummary, ExchangeRate, ExchangeRateInput, FinanceCustomer, FinanceSupplier, MoneyAccount, MoneyAccountAccess, MoneyAccountAccessInput, MoneyAccountInput, MoneyLedgerEntry, MoneyTransfer, MoneyTransferInput, OpeningBalanceInput, OutstandingPurchaseInvoice, OutstandingSalesInvoice, PageFilters, SupplierPayment, SupplierPaymentInput } from '../types/finance.types'
+import type { CustomerReceipt, CustomerReceiptInput, CustomerReceiptSummary, EffectiveExchangeRate, ExchangeRate, ExchangeRateInput, FinanceCustomer, FinanceSupplier, MoneyAccount, MoneyAccountAccess, MoneyAccountAccessInput, MoneyAccountInput, MoneyLedgerEntry, MoneyTransfer, MoneyTransferInput, OpeningBalanceInput, OutstandingPurchaseInvoice, OutstandingSalesInvoice, PageFilters, SupplierPayment, SupplierPaymentInput } from '../types/finance.types'
 
 function qs(filters: Record<string, string | number | boolean | undefined>) { const query = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) }); return query.toString() }
 
@@ -13,6 +13,7 @@ export const financeApi = {
   openingBalance: (id: string, body: OpeningBalanceInput) => apiClient.post<MoneyLedgerEntry>(`/finance/money-accounts/${id}/opening-balance`, body),
   ledger: (filters: PageFilters) => apiClient.getPaginated<MoneyLedgerEntry>(`/finance/money-ledger?${qs(filters)}`),
   exchangeRates: (filters: PageFilters) => apiClient.getPaginated<ExchangeRate>(`/finance/exchange-rates?${qs(filters)}`),
+  effectiveExchangeRate: (currencyId: string, date: string) => apiClient.get<EffectiveExchangeRate>(`/finance/exchange-rates/effective?${qs({ currencyId, date })}`),
   createExchangeRate: (body: ExchangeRateInput) => apiClient.post<ExchangeRate>('/finance/exchange-rates', body),
   deactivateExchangeRate: (id: string) => apiClient.put<ExchangeRate>(`/finance/exchange-rates/${id}/deactivate`),
   transfers: (filters: PageFilters) => apiClient.getPaginated<MoneyTransfer>(`/finance/transfers?${qs(filters)}`),

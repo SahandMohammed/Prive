@@ -22,7 +22,7 @@ export interface OpeningStockSummary extends DocumentAudit { warehouseId: string
 export interface AdjustmentSummary extends DocumentAudit { warehouseId: string; warehouseName: string; reason: string }
 export interface TransferSummary extends DocumentAudit { sourceWarehouseId: string; sourceWarehouseName: string; destinationWarehouseId: string; destinationWarehouseName: string }
 
-export interface OpeningStockLine { id: string; productId: string; productName: string; sku: string; unitCode: string; quantity: number; unitCostBase: number; lineValueBase: number }
+export interface OpeningStockLine { id: string; productId: string; productName: string; sku: string; unitOfMeasureId: string; unitCode: string; quantity: number; conversionOperation: UnitConversionOperation | null; conversionFactor: number; baseQuantity: number; unitCost: number; unitCostBase: number; lineValueBase: number }
 export interface OpeningStockDocument extends OpeningStockSummary { branchCode: string; warehouseCode: string; notes: string | null; lines: OpeningStockLine[] }
 export interface AdjustmentLine { id: string; productId: string; productName: string; sku: string; unitCode: string; systemQuantity: number; actualQuantity: number; difference: number }
 export interface AdjustmentDocument extends AdjustmentSummary { branchCode: string; warehouseCode: string; notes: string | null; lines: AdjustmentLine[] }
@@ -35,6 +35,6 @@ export interface WarehouseInput { code: string; name: string; branchId: string; 
 export interface CategoryInput { name: string; isActive: boolean }
 export interface SubcategoryInput { name: string; categoryId: string; isActive: boolean }
 export interface UnitInput { name: string; code: string; isActive: boolean }
-export interface OpeningStockDraftInput { branchId: string; warehouseId: string; documentDate: string; notes: string | null; lines: { productId: string; quantity: number; unitCostBase: number }[] }
+export interface OpeningStockDraftInput { branchId: string; warehouseId: string; documentDate: string; notes: string | null; lines: { productId: string; unitOfMeasureId: string; quantity: number; unitCost: number }[] }
 export interface AdjustmentDraftInput { branchId: string; warehouseId: string; documentDate: string; reason: string; notes: string | null; lines: { productId: string; actualQuantity: number }[] }
 export interface TransferDraftInput { branchId: string; sourceWarehouseId: string; destinationWarehouseId: string; documentDate: string; notes: string | null; lines: { productId: string; quantity: number }[] }

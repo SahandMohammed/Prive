@@ -50,7 +50,12 @@ public sealed class PurchaseInvoiceLineEntity
   public Guid UnitOfMeasureId { get; set; }
   public UnitOfMeasureEntity UnitOfMeasure { get; set; } = null!;
   public decimal Quantity { get; set; }
+  public UnitConversionOperation? ConversionOperation { get; set; }
+  public decimal ConversionFactor { get; set; } = 1m;
+  public decimal BaseQuantity { get; set; }
   public decimal UnitCost { get; set; }
+  public decimal BaseUnitCost { get; set; }
+  public bool IsPriceOverridden { get; set; }
   public decimal LineSubtotal { get; set; }
   public decimal LineAmount { get; set; }
   public decimal BaseLineAmount { get; set; }

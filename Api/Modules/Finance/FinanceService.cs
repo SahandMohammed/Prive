@@ -57,7 +57,7 @@ public sealed class FinanceService
   public async Task<MoneyAccountResponse> GetMoneyAccountAsync(Guid id, Guid userId, CancellationToken ct)
   {
     await EnsureAccessAsync(id, userId, MoneyAccountAccessLevel.View, ct);
-    return await MoneyAccountResponseQuery(userId).SingleOrDefaultAsync(account => account.Id == id, ct)
+    return await MoneyAccountResponseQuery(userId, id).SingleOrDefaultAsync(ct)
       ?? throw MoneyAccountNotFound();
   }
 
@@ -221,6 +221,21 @@ public sealed class FinanceService
       .ToPagedResultAsync(request, ct);
   }
 
+  public async Task<EffectiveExchangeRateResponse> GetEffectiveExchangeRateAsync(
+    Guid currencyId,
+    DateOnly date,
+    CancellationToken ct)
+  {
+    var business = await GetBusinessAsync(ct);
+    if (!await _db.Currencies.AsNoTracking().AnyAsync(currency => currency.Id == currencyId && currency.IsActive, ct))
+      throw new BadRequestException(ErrorCodes.Finance.CurrencyInvalid, "Select an active currency.");
+
+    var rate = await ExchangeRateResolver.FindAsync(_db, currencyId, business.BaseCurrencyId, date, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.ExchangeRateRequired,
+        "Add an active exchange rate from the invoice currency to the Business base currency for the selected date.");
+    return new EffectiveExchangeRateResponse(currencyId, business.BaseCurrencyId, date, rate);
+  }
+
   public async Task<ExchangeRateResponse> CreateExchangeRateAsync(CreateExchangeRateRequest request, Guid userId, CancellationToken ct)
   {
     if (request.FromCurrencyId == request.ToCurrencyId)
@@ -244,7 +259,7 @@ public sealed class FinanceService
     };
     _db.ExchangeRates.Add(rate);
     await _db.SaveChangesAsync(ct);
-    return await ExchangeRateResponseQuery().SingleAsync(item => item.Id == rate.Id, ct);
+    return await ExchangeRateResponseQuery(rate.Id).SingleAsync(ct);
   }
 
   public async Task<ExchangeRateResponse> DeactivateExchangeRateAsync(Guid id, CancellationToken ct)
@@ -253,7 +268,7 @@ public sealed class FinanceService
       ?? throw new NotFoundException(ErrorCodes.Finance.ExchangeRateNotFound, "Exchange Rate not found.");
     rate.IsActive = false;
     await _db.SaveChangesAsync(ct);
-    return await ExchangeRateResponseQuery().SingleAsync(item => item.Id == id, ct);
+    return await ExchangeRateResponseQuery(id).SingleAsync(ct);
   }
 
   public async Task<PagedResult<MoneyTransferResponse>> GetMoneyTransfersAsync(
@@ -938,14 +953,7 @@ public sealed class FinanceService
     DateTime effectiveAtUtc,
     CancellationToken ct)
   {
-    if (currencyId == baseCurrencyId) return 1m;
-    var effectiveAt = effectiveAtUtc.Kind == DateTimeKind.Unspecified
-      ? DateTime.SpecifyKind(effectiveAtUtc, DateTimeKind.Utc)
-      : effectiveAtUtc.ToUniversalTime();
-    return await _db.ExchangeRates.AsNoTracking()
-      .Where(rate => rate.FromCurrencyId == currencyId && rate.ToCurrencyId == baseCurrencyId
-        && rate.IsActive && rate.EffectiveAtUtc <= effectiveAt)
-      .OrderByDescending(rate => rate.EffectiveAtUtc).Select(rate => (decimal?)rate.Rate).FirstOrDefaultAsync(ct)
+    return await ExchangeRateResolver.FindAsync(_db, currencyId, baseCurrencyId, effectiveAtUtc, ct)
       ?? throw new BadRequestException(ErrorCodes.Finance.ExchangeRateRequired,
         "Add an active exchange rate from the Money Account currency to the Business base currency.");
   }
@@ -1021,8 +1029,13 @@ public sealed class FinanceService
     }
   }
 
-  private IQueryable<MoneyAccountResponse> MoneyAccountResponseQuery(Guid userId) =>
-    _db.MoneyAccounts.AsNoTracking().Select(account => new MoneyAccountResponse(
+  private IQueryable<MoneyAccountResponse> MoneyAccountResponseQuery(Guid userId, Guid? id = null)
+  {
+    var query = _db.MoneyAccounts.AsNoTracking().AsQueryable();
+    if (id.HasValue)
+      query = query.Where(account => account.Id == id.Value);
+
+    return query.Select(account => new MoneyAccountResponse(
       account.Id, account.Code, account.Name, account.Type,
       account.BranchId, account.Branch.Code, account.Branch.Name,
       account.CurrencyId, account.Currency.Code,
@@ -1032,9 +1045,10 @@ public sealed class FinanceService
       account.AccessAssignments.Where(access => access.UserId == userId)
         .Select(access => (MoneyAccountAccessLevel?)access.AccessLevel).FirstOrDefault(),
       account.CreatedAtUtc, account.UpdatedAtUtc));
+  }
 
   private async Task<MoneyAccountResponse> GetManagedMoneyAccountAsync(Guid id, Guid userId, CancellationToken ct) =>
-    await MoneyAccountResponseQuery(userId).SingleAsync(account => account.Id == id, ct);
+    await MoneyAccountResponseQuery(userId, id).SingleOrDefaultAsync(ct) ?? throw MoneyAccountNotFound();
 
   private IQueryable<MoneyLedgerEntryEntity> LedgerResponseSource(Guid userId) =>
     LedgerEntryQuery()
@@ -1054,11 +1068,17 @@ public sealed class FinanceService
     entry.Amount, entry.BaseAmount, entry.ExchangeRate, entry.JournalEntryId,
     entry.PerformedByUserId, entry.PerformedByUser.Username, entry.Notes, entry.PostedAtUtc);
 
-  private IQueryable<ExchangeRateResponse> ExchangeRateResponseQuery() =>
-    _db.ExchangeRates.AsNoTracking().Select(rate => new ExchangeRateResponse(
+  private IQueryable<ExchangeRateResponse> ExchangeRateResponseQuery(Guid? id = null)
+  {
+    var query = _db.ExchangeRates.AsNoTracking().AsQueryable();
+    if (id.HasValue)
+      query = query.Where(rate => rate.Id == id.Value);
+
+    return query.Select(rate => new ExchangeRateResponse(
       rate.Id, rate.FromCurrencyId, rate.FromCurrency.Code, rate.ToCurrencyId, rate.ToCurrency.Code,
       rate.Rate, rate.EffectiveAtUtc, rate.IsActive, rate.CreatedByUserId,
       rate.CreatedByUser.Username, rate.CreatedAtUtc));
+  }
 
   private IQueryable<MoneyTransferEntity> MoneyTransferQuery() => _db.MoneyTransfers.AsNoTracking()
     .Include(transfer => transfer.SourceMoneyAccount)

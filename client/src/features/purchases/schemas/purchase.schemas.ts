@@ -16,5 +16,7 @@ export const purchaseInvoiceSchema = z.object({
     unitOfMeasureId: requiredId,
     quantity: z.number().positive('Quantity must be greater than zero'),
     unitCost: z.number().min(0, 'Unit cost cannot be negative'),
+    unitCostBase: z.number().min(0),
+    useMasterPrice: z.boolean(),
   })).min(1, 'Add at least one product'),
 })

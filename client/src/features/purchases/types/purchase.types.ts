@@ -45,7 +45,12 @@ export interface PurchaseInvoiceLine {
   unitOfMeasureId: string
   unitCode: string
   quantity: number
+  conversionOperation: 0 | 1 | null
+  conversionFactor: number
+  baseQuantity: number
   unitCost: number
+  baseUnitCost: number
+  isPriceOverridden: boolean
   lineSubtotal: number
   lineAmount: number
   baseLineAmount: number
@@ -78,5 +83,6 @@ export interface PurchaseInvoiceDraftInput {
     unitOfMeasureId: string
     quantity: number
     unitCost: number
+    useMasterPrice: boolean
   }[]
 }

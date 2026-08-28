@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, BookOpen, BriefcaseBusiness, Loader2, Package, PackageSearch, Send, Trash2 } from 'lucide-react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useBranches, useCurrencies, useCurrentBusiness } from '@/features/business'
 import { useContacts } from '@/features/contacts'
-import { useProducts, useStockBalances, useWarehouses } from '@/features/inventory'
+import { useEffectiveExchangeRate } from '@/features/finance'
+import { convertBasePriceToUnitPrice, convertToBaseQuantity, convertUnitPriceToBasePrice, productUnitOptions, useProducts, useStockBalances, useWarehouses } from '@/features/inventory'
 import { salesInvoiceSchema } from '../schemas/sales.schemas'
 import { useDeleteSalesInvoice, usePostSalesInvoice, useSalesInvoice, useSaveSalesInvoice, useServices } from '../hooks/useSales'
 import { SalesInvoicePaymentStatus, SalesInvoiceStatus, SalesLineType } from '../types/sales.types'
@@ -24,6 +25,8 @@ interface LineForm {
   description: string
   quantity: number
   unitPrice: number
+  unitPriceBase: number
+  useMasterPrice: boolean
 }
 
 interface InvoiceForm {
@@ -38,8 +41,8 @@ interface InvoiceForm {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
-const newServiceLine = (): LineForm => ({ lineType: SalesLineType.Service, serviceId: '', productId: '', unitOfMeasureId: '', description: '', quantity: 1, unitPrice: 0 })
-const newProductLine = (): LineForm => ({ lineType: SalesLineType.Product, serviceId: '', productId: '', unitOfMeasureId: '', description: '', quantity: 1, unitPrice: 0 })
+const newServiceLine = (): LineForm => ({ lineType: SalesLineType.Service, serviceId: '', productId: '', unitOfMeasureId: '', description: '', quantity: 1, unitPrice: 0, unitPriceBase: 0, useMasterPrice: true })
+const newProductLine = (): LineForm => ({ lineType: SalesLineType.Product, serviceId: '', productId: '', unitOfMeasureId: '', description: '', quantity: 1, unitPrice: 0, unitPriceBase: 0, useMasterPrice: true })
 
 export function CreateSalesInvoicePage() {
   const { id } = useParams()
@@ -64,13 +67,19 @@ export function CreateSalesInvoicePage() {
   const invoice = invoiceQuery.data
   const posted = invoice?.status === SalesInvoiceStatus.Posted
   const selectedCurrencyId = values.currencyId ?? ''
+  const selectedCurrency = currencies.find((item) => item.id === selectedCurrencyId)
   const isForeign = Boolean(selectedCurrencyId && business && selectedCurrencyId !== business.baseCurrencyId)
   const rate = isForeign ? Number(values.exchangeRate) || 0 : 1
+  const effectiveRateQuery = useEffectiveExchangeRate(selectedCurrencyId, values.invoiceDate, isForeign && !posted)
+  const resolvedRateKey = useRef('')
+  const pricingContext = useRef({ currencyId: '', rate: 1 })
   const hasProductLines = (values.lines ?? []).some((line) => line?.lineType === SalesLineType.Product)
   const balances = useStockBalances({ warehouseId: values.warehouseId || undefined }).data?.data ?? []
 
   useEffect(() => {
     if (!invoice) return
+    resolvedRateKey.current = `${invoice.currencyId}:${invoice.invoiceDate}`
+    pricingContext.current = { currencyId: invoice.currencyId, rate: invoice.exchangeRate }
     form.reset({
       customerId: invoice.customerId ?? '',
       invoiceDate: invoice.invoiceDate,
@@ -87,6 +96,8 @@ export function CreateSalesInvoicePage() {
         description: line.description ?? '',
         quantity: line.quantity,
         unitPrice: line.unitPrice,
+        unitPriceBase: convertSnapshotBasePriceToUnitPrice(line.baseUnitPrice, line.conversionOperation, line.conversionFactor),
+        useMasterPrice: !line.isPriceOverridden,
       })),
     })
   }, [invoice, form])
@@ -95,6 +106,29 @@ export function CreateSalesInvoicePage() {
     if (id || !business || form.getValues('currencyId')) return
     form.setValue('currencyId', business.baseCurrencyId)
   }, [business, form, id])
+
+  useEffect(() => {
+    if (posted || !selectedCurrencyId || !values.invoiceDate) return
+    const key = `${selectedCurrencyId}:${values.invoiceDate}`
+    if (!isForeign) {
+      resolvedRateKey.current = key
+      form.setValue('exchangeRate', 1, { shouldDirty: true })
+      return
+    }
+    if (effectiveRateQuery.data && resolvedRateKey.current !== key) {
+      resolvedRateKey.current = key
+      form.setValue('exchangeRate', effectiveRateQuery.data.rate, { shouldDirty: true, shouldValidate: true })
+    }
+  }, [effectiveRateQuery.data, form, isForeign, posted, selectedCurrencyId, values.invoiceDate])
+
+  useEffect(() => {
+    if (!selectedCurrencyId || rate <= 0) return
+    if (pricingContext.current.currencyId === selectedCurrencyId && pricingContext.current.rate === rate) return
+    form.getValues('lines').forEach((line, index) => {
+      form.setValue(`lines.${index}.unitPrice`, round6(line.unitPriceBase / rate), { shouldDirty: true, shouldValidate: true })
+    })
+    pricingContext.current = { currencyId: selectedCurrencyId, rate }
+  }, [form, rate, selectedCurrencyId])
 
   const selectableCustomers = [...customers]
   if (invoice?.customerId && !selectableCustomers.some((item) => item.id === invoice.customerId))
@@ -112,7 +146,11 @@ export function CreateSalesInvoicePage() {
 
   const availableWarehouses = warehouses.filter((item) => (posted || item.isActive) && item.branchId === values.branchId)
   const subtotal = (values.lines ?? []).reduce((sum, line) => sum + (Number(line?.quantity) || 0) * (Number(line?.unitPrice) || 0), 0)
-  const baseTotal = (values.lines ?? []).reduce((sum, line) => sum + (Number(line?.quantity) || 0) * round4((Number(line?.unitPrice) || 0) * rate), 0)
+  const baseTotal = (values.lines ?? []).reduce((sum, line) => sum + (Number(line?.quantity) || 0) * (Number(line?.unitPriceBase) || 0), 0)
+
+  const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    form.setValue('exchangeRate', event.target.value === business?.baseCurrencyId ? 1 : null, { shouldDirty: true })
+  }
 
   const submit = form.handleSubmit((value) => {
     if (isForeign && (!value.exchangeRate || value.exchangeRate <= 0)) {
@@ -135,6 +173,7 @@ export function CreateSalesInvoicePage() {
         description: line.description.trim() || null,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
+        useMasterPrice: line.useMasterPrice,
       })),
     }
     save.mutate(body, { onSuccess: (saved) => navigate(`/sales/invoices/${saved.id}`) })
@@ -152,8 +191,8 @@ export function CreateSalesInvoicePage() {
         <Field label="Invoice date" error={form.formState.errors.invoiceDate?.message}><Input type="date" {...form.register('invoiceDate')} /></Field>
         <Field label="Branch" error={form.formState.errors.branchId?.message}><Select {...form.register('branchId', { onChange: () => form.setValue('warehouseId', '', { shouldDirty: true }) })}><option value="">Select branch</option>{branches.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
         <Field label={hasProductLines ? 'Product warehouse' : 'Warehouse (optional)'} error={form.formState.errors.warehouseId?.message}><Select {...form.register('warehouseId')}><option value="">{hasProductLines ? 'Select warehouse' : 'No Product fulfilment'}</option>{availableWarehouses.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
-        <Field label="Currency" error={form.formState.errors.currencyId?.message}><Select {...form.register('currencyId', { onChange: (event) => { if (event.target.value === business?.baseCurrencyId) form.setValue('exchangeRate', 1, { shouldDirty: true }) } })}><option value="">Select currency</option>{currencies.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
-        {isForeign && <Field label={`Rate: 1 ${currencies.find((item) => item.id === selectedCurrencyId)?.code ?? ''} in ${business?.baseCurrencyCode ?? 'base currency'}`} error={form.formState.errors.exchangeRate?.message}><Input type="number" min="0.000001" step="0.000001" {...form.register('exchangeRate', { setValueAs: (value) => value === '' ? null : Number(value) })} /></Field>}
+        <Field label="Currency" error={form.formState.errors.currencyId?.message}><Select {...form.register('currencyId', { onChange: handleCurrencyChange })}><option value="">Select currency</option>{currencies.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
+        {isForeign && <Field label={`Rate: 1 ${currencies.find((item) => item.id === selectedCurrencyId)?.code ?? ''} in ${business?.baseCurrencyCode ?? 'base currency'}`} error={form.formState.errors.exchangeRate?.message ?? effectiveRateQuery.error?.message}><Input type="number" min="0.000001" step="0.000001" {...form.register('exchangeRate', { setValueAs: (value) => value === '' ? null : Number(value) })} /></Field>}
         <Field label="Notes" error={form.formState.errors.notes?.message}><Textarea rows={2} {...form.register('notes')} /></Field>
       </CardContent></Card>
 
@@ -161,21 +200,34 @@ export function CreateSalesInvoicePage() {
         const line = values.lines?.[index]
         const isService = line?.lineType === SalesLineType.Service
         const selectedProduct = selectableProducts.find((item) => item.id === line?.productId)
+        const unitOptions = productUnitOptions(selectedProduct)
+        const invoiceLine = invoice?.lines[index]
+        if (line?.unitOfMeasureId && !unitOptions.some((unit) => unit.id === line.unitOfMeasureId)) unitOptions.push({ id: line.unitOfMeasureId, name: invoiceLine?.unitCode ?? 'Unavailable unit', code: invoiceLine?.unitCode ?? '—', operation: invoiceLine?.conversionOperation ?? null, factor: invoiceLine?.conversionFactor ?? 1 })
+        const baseQuantity = selectedProduct && line?.unitOfMeasureId ? convertToBaseQuantity(selectedProduct, line.unitOfMeasureId, Number(line.quantity) || 0) ?? invoiceLine?.baseQuantity ?? null : null
+        const selectedUnitPriceBase = Number(line?.unitPriceBase) || 0
         const stock = balances.find((item) => item.productId === selectedProduct?.id)?.quantity ?? 0
         const lineTotal = (Number(line?.quantity) || 0) * (Number(line?.unitPrice) || 0)
         const sourceRegistration = isService ? form.register(`lines.${index}.serviceId`) : form.register(`lines.${index}.productId`)
+        const unitRegistration = form.register(`lines.${index}.unitOfMeasureId`)
+        const priceRegistration = form.register(`lines.${index}.unitPrice`, { valueAsNumber: true })
         return <tr key={field.id} className="border-b align-top"><td className="p-2"><LineTypeBadge lineType={line?.lineType ?? SalesLineType.Service} /><input type="hidden" {...form.register(`lines.${index}.lineType`, { valueAsNumber: true })} /></td><td className="p-2"><Select {...sourceRegistration} onChange={(event) => {
           sourceRegistration.onChange(event)
           if (isService) {
             const selected = selectableServices.find((item) => item.id === event.target.value)
-            form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round4((selected?.sellingPriceBase ?? 0) / rate) : 0, { shouldDirty: true, shouldValidate: true })
+            const basePrice = selected?.sellingPriceBase ?? 0
+            form.setValue(`lines.${index}.unitPriceBase`, basePrice, { shouldDirty: true })
+            form.setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
+            form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(basePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
           } else {
             const selected = selectableProducts.find((item) => item.id === event.target.value)
+            const basePrice = selected?.sellingPriceBase ?? 0
             form.setValue(`lines.${index}.unitOfMeasureId`, selected?.unitOfMeasureId ?? '', { shouldDirty: true, shouldValidate: true })
-            form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round4((selected?.sellingPriceBase ?? 0) / rate) : 0, { shouldDirty: true, shouldValidate: true })
+            form.setValue(`lines.${index}.unitPriceBase`, basePrice, { shouldDirty: true })
+            form.setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
+            form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(basePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
           }
-        }}><option value="">Select {isService ? 'Service' : 'Product'}</option>{isService ? selectableServices.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>) : selectableProducts.map((item) => <option key={item.id} value={item.id}>{item.sku} — {item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select>{isService ? form.formState.errors.lines?.[index]?.serviceId?.message && <ErrorText value={form.formState.errors.lines[index]?.serviceId?.message} /> : form.formState.errors.lines?.[index]?.productId?.message && <ErrorText value={form.formState.errors.lines[index]?.productId?.message} />}<input type="hidden" {...form.register(`lines.${index}.unitOfMeasureId`)} /></td><td className="p-2"><Input placeholder="Optional line note" {...form.register(`lines.${index}.description`)} /></td><td className="p-2">{isService ? <span className="text-muted-foreground">No stock movement</span> : <><p>{selectedProduct?.unitCode ?? '—'}</p><p className="text-xs text-muted-foreground">Available: <span className="font-mono">{values.warehouseId ? stock : '—'}</span></p></>}</td><td className="p-2"><Input className="text-right" type="number" min="0.0001" step="0.0001" {...form.register(`lines.${index}.quantity`, { valueAsNumber: true })} />{form.formState.errors.lines?.[index]?.quantity?.message && <ErrorText value={form.formState.errors.lines[index]?.quantity?.message} />}</td><td className="p-2"><Input className="text-right" type="number" min="0" step="0.0001" {...form.register(`lines.${index}.unitPrice`, { valueAsNumber: true })} />{form.formState.errors.lines?.[index]?.unitPrice?.message && <ErrorText value={form.formState.errors.lines[index]?.unitPrice?.message} />}</td><td className="p-2 text-right font-mono">{formatAmount(lineTotal)}</td><td className="p-2"><Button type="button" variant="ghost" size="icon-sm" disabled={lineFields.fields.length === 1} onClick={() => lineFields.remove(index)}><Trash2 className="size-4" /></Button></td></tr>
-      })}</tbody></table></div><div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => lineFields.append(newServiceLine())}><BriefcaseBusiness className="size-4" />Add Service</Button><Button type="button" variant="outline" onClick={() => lineFields.append(newProductLine())}><Package className="size-4" />Add Product</Button></div><div className="min-w-72 space-y-1 text-right"><p className="text-sm text-muted-foreground">Subtotal <span className="ml-4 font-mono text-foreground">{formatAmount(subtotal)} {currencies.find((item) => item.id === selectedCurrencyId)?.code ?? ''}</span></p><p className="text-lg font-semibold">Total <span className="ml-4 font-mono">{formatAmount(subtotal)} {currencies.find((item) => item.id === selectedCurrencyId)?.code ?? ''}</span></p>{isForeign && <p className="text-sm font-semibold text-[#d85430]">Base equivalent <span className="ml-4 font-mono">{formatAmount(baseTotal)} {business?.baseCurrencyCode}</span></p>}</div></div>{form.formState.errors.lines?.root?.message && <p className="mt-2 text-sm text-destructive">{form.formState.errors.lines.root.message}</p>}</CardContent></Card>
+        }}><option value="">Select {isService ? 'Service' : 'Product'}</option>{isService ? selectableServices.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>) : selectableProducts.map((item) => <option key={item.id} value={item.id}>{item.sku} — {item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select>{isService ? form.formState.errors.lines?.[index]?.serviceId?.message && <ErrorText value={form.formState.errors.lines[index]?.serviceId?.message} /> : form.formState.errors.lines?.[index]?.productId?.message && <ErrorText value={form.formState.errors.lines[index]?.productId?.message} />}</td><td className="p-2"><Input placeholder="Optional line note" {...form.register(`lines.${index}.description`)} /></td><td className="p-2">{isService ? <span className="text-muted-foreground">No stock movement</span> : <><Select {...unitRegistration} disabled={!selectedProduct} onChange={(event) => { const currentBaseUnitPrice = selectedProduct && line?.unitOfMeasureId ? convertUnitPriceToBasePrice(selectedProduct, line.unitOfMeasureId, selectedUnitPriceBase) : null; unitRegistration.onChange(event); const nextBasePrice = selectedProduct && currentBaseUnitPrice !== null ? convertBasePriceToUnitPrice(selectedProduct, event.target.value, currentBaseUnitPrice) : null; if (nextBasePrice !== null) { form.setValue(`lines.${index}.unitPriceBase`, round6(nextBasePrice), { shouldDirty: true }); form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(nextBasePrice / rate) : 0, { shouldDirty: true, shouldValidate: true }) } }}><option value="">Select unit</option>{unitOptions.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} — {unit.name}</option>)}</Select><p className="mt-1 text-xs text-muted-foreground">Available: <span className="font-mono">{values.warehouseId ? `${formatAmount(stock)} ${selectedProduct?.unitCode ?? ''}` : '—'}</span></p></>}</td><td className="p-2"><Input className="text-right" type="number" min="0.0001" step="0.0001" {...form.register(`lines.${index}.quantity`, { valueAsNumber: true })} />{selectedProduct && baseQuantity !== null && <p className="mt-1 text-right text-xs text-muted-foreground">Base: {formatAmount(baseQuantity)} {selectedProduct.unitCode}</p>}{form.formState.errors.lines?.[index]?.quantity?.message && <ErrorText value={form.formState.errors.lines[index]?.quantity?.message} />}</td><td className="p-2"><Input className="text-right" type="number" min="0" step="0.000001" disabled={isForeign && rate <= 0} {...priceRegistration} onChange={(event) => { priceRegistration.onChange(event); const transactionPrice = Number(event.target.value) || 0; form.setValue(`lines.${index}.unitPriceBase`, round6(transactionPrice * rate), { shouldDirty: true }); form.setValue(`lines.${index}.useMasterPrice`, false, { shouldDirty: true }) }} />{(isService || selectedProduct) && <p className="mt-1 text-right text-xs text-muted-foreground">Base: {formatMoney(selectedUnitPriceBase, business?.baseCurrencyDecimalPlaces)} {business?.baseCurrencyCode}{selectedProduct && line?.unitOfMeasureId ? ` / ${unitOptions.find((unit) => unit.id === line.unitOfMeasureId)?.code ?? selectedProduct.unitCode}` : ''}</p>}{form.formState.errors.lines?.[index]?.unitPrice?.message && <ErrorText value={form.formState.errors.lines[index]?.unitPrice?.message} />}</td><td className="p-2 text-right font-mono">{formatMoney(lineTotal, selectedCurrency?.decimalPlaces)}</td><td className="p-2"><Button type="button" variant="ghost" size="icon-sm" disabled={lineFields.fields.length === 1} onClick={() => lineFields.remove(index)}><Trash2 className="size-4" /></Button></td></tr>
+      })}</tbody></table></div><div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => lineFields.append(newServiceLine())}><BriefcaseBusiness className="size-4" />Add Service</Button><Button type="button" variant="outline" onClick={() => lineFields.append(newProductLine())}><Package className="size-4" />Add Product</Button></div><div className="min-w-72 space-y-1 text-right"><p className="text-sm text-muted-foreground">Subtotal <span className="ml-4 font-mono text-foreground">{formatMoney(subtotal, selectedCurrency?.decimalPlaces)} {selectedCurrency?.code ?? ''}</span></p><p className="text-lg font-semibold">Total <span className="ml-4 font-mono">{formatMoney(subtotal, selectedCurrency?.decimalPlaces)} {selectedCurrency?.code ?? ''}</span></p>{isForeign && <p className="text-sm font-semibold text-[#d85430]">Base equivalent <span className="ml-4 font-mono">{formatMoney(baseTotal, business?.baseCurrencyDecimalPlaces)} {business?.baseCurrencyCode}</span></p>}</div></div>{form.formState.errors.lines?.root?.message && <p className="mt-2 text-sm text-destructive">{form.formState.errors.lines.root.message}</p>}</CardContent></Card>
     </fieldset>
 
     {posted && invoice && <Card><CardHeader><CardTitle>Customer receipts</CardTitle></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 rounded bg-muted p-4 text-sm sm:grid-cols-3"><Audit label="Payment state" value={paymentStatusLabel[invoice.paymentStatus]} /><Audit label="Received" value={`${formatAmount(invoice.receivedAmount)} ${invoice.currencyCode}`} /><Audit label="Outstanding" value={`${formatAmount(invoice.outstandingAmount)} ${invoice.currencyCode}`} /></div>{invoice.receipts.length === 0 ? <p className="text-sm text-muted-foreground">No posted Customer Receipts have been allocated to this invoice.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className={head}><th>Receipt</th><th>Date</th><th className="text-right">Applied</th><th className="text-right">Base applied</th></tr></thead><tbody>{invoice.receipts.map((receipt) => <tr key={receipt.customerReceiptId} className="border-b"><td className="p-2"><Link className="font-mono text-[#d85430]" to={`/finance/customer-receipts/${receipt.customerReceiptId}`}>{receipt.customerReceiptDocumentNumber}</Link></td><td className="p-2">{receipt.receiptDate}</td><td className="p-2 text-right font-mono">{formatAmount(receipt.amount)} {invoice.currencyCode}</td><td className="p-2 text-right font-mono">{formatAmount(receipt.baseAmount)} {invoice.baseCurrencyCode}</td></tr>)}</tbody></table></div>}</CardContent></Card>}
@@ -191,7 +243,14 @@ function Audit({ label, value }: { label: string; value: string }) { return <div
 function ErrorText({ value }: { value?: string }) { return value ? <p className="mt-1 text-xs text-destructive">{value}</p> : null }
 function LineTypeBadge({ lineType }: { lineType: SalesLineTypeValue }) { const service = lineType === SalesLineType.Service; return <span className={service ? 'inline-flex items-center gap-1 rounded bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700' : 'inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700'}>{service ? <BriefcaseBusiness className="size-3" /> : <Package className="size-3" />}{service ? 'Service' : 'Product'}</span> }
 const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10000) / 10000
+const round6 = (value: number) => Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000
 const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
+const formatMoney = (value: number, decimals = 4) => value.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 const formatTimestamp = (value: string) => new Date(value).toLocaleString()
 const paymentStatusLabel = { [SalesInvoicePaymentStatus.Unpaid]: 'Unpaid', [SalesInvoicePaymentStatus.PartiallyPaid]: 'Partially Paid', [SalesInvoicePaymentStatus.Paid]: 'Paid' }
 const head = 'border-b border-slate-200 bg-[#e9ecef]/60 text-left text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60 [&>th]:p-2'
+
+function convertSnapshotBasePriceToUnitPrice(basePrice: number, operation: 0 | 1 | null, factor: number) {
+  if (operation === null) return basePrice
+  return operation === 0 ? basePrice * factor : basePrice / factor
+}

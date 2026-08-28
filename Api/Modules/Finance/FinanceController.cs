@@ -9,10 +9,10 @@ namespace Api.Modules.Finance;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/finance")]
-[Authorize(Roles = "SuperAdmin,Manager,Cashier")]
+[Authorize(Roles = "SuperAdmin,Manager,Owner,Cashier")]
 public sealed class FinanceController : ControllerBase
 {
-  private const string Administrators = "SuperAdmin,Manager";
+  private const string Administrators = "SuperAdmin,Manager,Owner";
   private readonly FinanceService _service;
 
   public FinanceController(FinanceService service) => _service = service;
@@ -21,7 +21,8 @@ public sealed class FinanceController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse<List<MoneyAccountResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetMoneyAccounts([FromQuery] MoneyAccountListQuery query, CancellationToken ct)
   {
-    var result = await _service.GetMoneyAccountsAsync(query, GetUserId(), false, ct);
+    var isManagement = User.IsInRole("SuperAdmin") || User.IsInRole("Manager") || User.IsInRole("Owner");
+    var result = await _service.GetMoneyAccountsAsync(query, GetUserId(), isManagement, ct);
     return Ok(ApiResponse<List<MoneyAccountResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
@@ -98,6 +99,15 @@ public sealed class FinanceController : ControllerBase
     var result = await _service.GetExchangeRatesAsync(query, ct);
     return Ok(ApiResponse<List<ExchangeRateResponse>>.Ok(result.Items, result.ToMetadata()));
   }
+
+  [HttpGet("exchange-rates/effective")]
+  [ProducesResponseType(typeof(ApiResponse<EffectiveExchangeRateResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetEffectiveExchangeRate(
+    [FromQuery] Guid currencyId,
+    [FromQuery] DateOnly date,
+    CancellationToken ct) =>
+    Ok(ApiResponse<EffectiveExchangeRateResponse>.Ok(
+      await _service.GetEffectiveExchangeRateAsync(currencyId, date, ct)));
 
   [HttpPost("exchange-rates")]
   [Authorize(Roles = Administrators)]

@@ -4,6 +4,7 @@ using Api.Modules.Branch;
 using Api.Modules.Business;
 using Api.Modules.Contact;
 using Api.Modules.Currency;
+using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Sales;
 using Api.Modules.User;
@@ -196,6 +197,170 @@ public sealed class SalesWorkflowTests
     Assert.Equal(data.BaseCurrencyId, historical.BaseCurrencyId);
     Assert.Equal(1_310, historical.ExchangeRate);
     Assert.Equal(131_000, historical.BaseTotal);
+  }
+
+  [Fact]
+  public async Task Converted_product_sale_posts_base_quantity_revenue_and_weighted_average_cogs()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    await AddStockAsync(db, data, 100, 2_500);
+    var carton = new UnitOfMeasureEntity { Name = "Box", Code = "BOX" };
+    db.Add(carton);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductId,
+      UnitOfMeasure = carton,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    await db.SaveChangesAsync();
+
+    var selectedUnitPrice = UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+      4_000,
+      UnitConversionOperation.Multiply,
+      24);
+    var service = CreateService(db);
+    var draft = await service.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null,
+        [new SalesInvoiceLineRequest(
+          SalesLineType.Product,
+          null,
+          data.ProductId,
+          carton.Id,
+          null,
+          2,
+          selectedUnitPrice)]),
+      data.UserId,
+      default);
+
+    var line = Assert.Single(draft.Lines);
+    Assert.Equal(96_000, line.UnitPrice);
+    Assert.Equal(48, line.BaseQuantity);
+    Assert.Equal(4_000, line.BaseUnitPrice);
+    Assert.Equal(192_000, line.LineAmount);
+
+    var posted = await service.PostInvoiceAsync(draft.Id, data.UserId, default);
+    var movement = await db.StockMovements.SingleAsync(item => item.SalesInvoiceId == posted.Id);
+    Assert.Equal(48, movement.QuantityOut);
+    Assert.Equal(52, await QuantityAsync(db, data.WarehouseId, data.ProductId));
+    var journal = await db.JournalEntries.Include(item => item.Lines)
+      .SingleAsync(item => item.Id == posted.JournalEntryId);
+    Assert.Equal(192_000, journal.Lines.Single(item => item.AccountId == data.ProductRevenueAccountId).CreditBaseAmount);
+    Assert.Equal(120_000, journal.Lines.Single(item => item.AccountId == data.CostOfGoodsSoldAccountId).DebitBaseAmount);
+  }
+
+  [Fact]
+  public async Task Master_service_and_product_prices_resolve_effective_rate_and_post_original_and_base_values()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    (await db.Products.FindAsync(data.ProductId))!.SellingPriceBase = 4_000;
+    await AddStockAsync(db, data, 100, 2_500);
+    var box = new UnitOfMeasureEntity { Name = "Box", Code = "BOX" };
+    db.Add(box);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductId,
+      UnitOfMeasure = box,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    db.ExchangeRates.Add(new ExchangeRateEntity
+    {
+      FromCurrencyId = data.ForeignCurrencyId,
+      ToCurrencyId = data.BaseCurrencyId,
+      Rate = 1_300,
+      EffectiveAtUtc = DateTime.UtcNow.AddDays(-1),
+      CreatedByUserId = data.UserId
+    });
+    await db.SaveChangesAsync();
+
+    var service = CreateService(db);
+    var draft = await service.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.ForeignCurrencyId, null,
+      [
+        new SalesInvoiceLineRequest(
+          SalesLineType.Service, data.ServiceId, null, null, null, 1, 0,
+          UseMasterPrice: true),
+        new SalesInvoiceLineRequest(
+          SalesLineType.Product, null, data.ProductId, box.Id, null, 2, 0,
+          UseMasterPrice: true)
+      ]),
+      data.UserId,
+      default);
+
+    Assert.Equal(1_300, draft.ExchangeRate);
+    var serviceLine = draft.Lines.Single(line => line.LineType == SalesLineType.Service);
+    Assert.Equal(19.230769m, serviceLine.UnitPrice);
+    Assert.Equal(25_000, serviceLine.BaseUnitPrice);
+    Assert.Equal(25_000, serviceLine.BaseLineAmount);
+    Assert.False(serviceLine.IsPriceOverridden);
+    var productLine = draft.Lines.Single(line => line.LineType == SalesLineType.Product);
+    Assert.Equal(73.846154m, productLine.UnitPrice);
+    Assert.Equal(48, productLine.BaseQuantity);
+    Assert.Equal(4_000, productLine.BaseUnitPrice);
+    Assert.Equal(192_000, productLine.BaseLineAmount);
+    Assert.Equal(217_000, draft.BaseTotal);
+
+    var repriced = await service.UpdateInvoiceAsync(
+      draft.Id,
+      Request(data, data.CustomerId, data.ForeignCurrencyId, 1_310,
+      [
+        new SalesInvoiceLineRequest(
+          SalesLineType.Service, data.ServiceId, null, null, null, 1, 0,
+          UseMasterPrice: true),
+        new SalesInvoiceLineRequest(
+          SalesLineType.Product, null, data.ProductId, box.Id, null, 2, 0,
+          UseMasterPrice: true)
+      ]),
+      default);
+    Assert.Equal(19.083969m, repriced.Lines.Single(line => line.LineType == SalesLineType.Service).UnitPrice);
+    Assert.Equal(73.282443m, repriced.Lines.Single(line => line.LineType == SalesLineType.Product).UnitPrice);
+    Assert.Equal(217_000, repriced.BaseTotal);
+
+    var posted = await service.PostInvoiceAsync(draft.Id, data.UserId, default);
+    var movement = await db.StockMovements.SingleAsync(item => item.SalesInvoiceId == posted.Id);
+    Assert.Equal(48, movement.QuantityOut);
+    Assert.Equal(2_500, movement.UnitCostBase);
+    var journal = await db.JournalEntries.Include(item => item.Lines).SingleAsync(item => item.Id == posted.JournalEntryId);
+    Assert.Equal(posted.Total, journal.Lines.Single(item => item.AccountId == data.ReceivableAccountId).OriginalDebitAmount);
+    Assert.Equal(217_000, journal.Lines.Single(item => item.AccountId == data.ReceivableAccountId).DebitBaseAmount);
+    Assert.Equal(25_000, journal.Lines.Single(item => item.AccountId == data.ServiceRevenueAccountId).CreditBaseAmount);
+    Assert.Equal(192_000, journal.Lines.Single(item => item.AccountId == data.ProductRevenueAccountId).CreditBaseAmount);
+    Assert.Equal(120_000, journal.Lines.Single(item => item.AccountId == data.CostOfGoodsSoldAccountId).DebitBaseAmount);
+    Assert.Equal(journal.Lines.Sum(item => item.DebitBaseAmount), journal.Lines.Sum(item => item.CreditBaseAmount));
+  }
+
+  [Fact]
+  public async Task Manual_foreign_sales_price_preserves_transaction_specific_base_revenue()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var box = new UnitOfMeasureEntity { Name = "Box", Code = "BOX" };
+    db.Add(box);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductId,
+      UnitOfMeasure = box,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    await db.SaveChangesAsync();
+
+    var draft = await CreateService(db).CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.ForeignCurrencyId, 1_300,
+        [new SalesInvoiceLineRequest(
+          SalesLineType.Product, null, data.ProductId, box.Id, null, 2, 70)]),
+      data.UserId,
+      default);
+
+    var line = Assert.Single(draft.Lines);
+    Assert.True(line.IsPriceOverridden);
+    Assert.Equal(70, line.UnitPrice);
+    Assert.Equal(3_791.666667m, line.BaseUnitPrice);
+    Assert.Equal(182_000, line.BaseLineAmount);
+    Assert.Equal(182_000, draft.BaseTotal);
   }
 
   [Fact]

@@ -1,5 +1,6 @@
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
+using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
@@ -90,7 +91,7 @@ public sealed class PurchaseService
     };
 
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
-    ReplaceLines(invoice, request.Lines);
+    ReplaceLines(invoice, request.Lines, validation);
     Recalculate(invoice);
     _db.PurchaseInvoices.Add(invoice);
     await SaveDraftAsync(ct);
@@ -110,7 +111,7 @@ public sealed class PurchaseService
 
     var validation = await ValidateAsync(request, ct);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
-    ReplaceLines(invoice, request.Lines);
+    ReplaceLines(invoice, request.Lines, validation);
     Recalculate(invoice);
     invoice.UpdatedAtUtc = DateTime.UtcNow;
     await SaveDraftMutationAsync(ct);
@@ -150,7 +151,7 @@ public sealed class PurchaseService
         line.Quantity,
         line.UnitCost)).ToList());
 
-    var validation = await ValidateAsync(request, ct);
+    var validation = await ValidateAsync(request, ct, validateUnits: false);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
     Recalculate(invoice);
 
@@ -204,9 +205,9 @@ public sealed class PurchaseService
         WarehouseId = invoice.WarehouseId,
         Type = StockMovementType.Purchase,
         MovementDate = invoice.InvoiceDate,
-        QuantityIn = line.Quantity,
+        QuantityIn = line.BaseQuantity,
         QuantityOut = 0,
-        UnitCostBase = BaseUnitCost(line.UnitCost, invoice.ExchangeRate),
+        UnitCostBase = line.BaseUnitCost,
         Reference = invoice.DocumentNumber,
         Note = invoice.Notes,
         PurchaseInvoiceId = invoice.Id,
@@ -226,9 +227,10 @@ public sealed class PurchaseService
     return await GetByIdAsync(id, ct);
   }
 
-  private async Task<(Guid BaseCurrencyId, decimal ExchangeRate)> ValidateAsync(
+  private async Task<PurchaseValidation> ValidateAsync(
     PurchaseInvoiceDraftRequest request,
-    CancellationToken ct)
+    CancellationToken ct,
+    bool validateUnits = true)
   {
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Purchase.LinesRequired, "Add at least one purchase line.");
@@ -266,20 +268,57 @@ public sealed class PurchaseService
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw new BadRequestException(ErrorCodes.Purchase.BusinessNotConfigured, "Complete Business Setup before recording purchases.");
 
-    var exchangeRate = request.CurrencyId == business.BaseCurrencyId ? 1m : request.ExchangeRate;
+    var exchangeRate = request.CurrencyId == business.BaseCurrencyId
+      ? 1m
+      : request.ExchangeRate ?? await ExchangeRateResolver.FindAsync(
+        _db,
+        request.CurrencyId,
+        business.BaseCurrencyId,
+        request.InvoiceDate,
+        ct);
     if (exchangeRate is null || exchangeRate <= 0)
       throw new BadRequestException(ErrorCodes.Purchase.ExchangeRateRequired, "Enter a positive exchange rate for a foreign-currency purchase.");
 
     var productIds = request.Lines.Select(line => line.ProductId).ToList();
     var products = await _db.Products.AsNoTracking()
+      .Include(product => product.UnitOfMeasure)
+      .Include(product => product.UnitConversions).ThenInclude(item => item.UnitOfMeasure)
       .Where(product => productIds.Contains(product.Id) && product.IsActive && product.TrackInventory)
       .ToDictionaryAsync(product => product.Id, ct);
     if (products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Purchase.ProductInvalid, "Every line must use an active inventory-tracked product.");
-    if (request.Lines.Any(line => products[line.ProductId].UnitOfMeasureId != line.UnitOfMeasureId))
-      throw new BadRequestException(ErrorCodes.Purchase.UnitInvalid, "Each purchase line must use the product's configured unit.");
 
-    return (business.BaseCurrencyId, exchangeRate.Value);
+    var productUnits = new Dictionary<Guid, ProductUnitSelection>();
+    if (validateUnits)
+    {
+      foreach (var line in request.Lines)
+      {
+        var selection = UnitConversionCalculator.Resolve(
+          products[line.ProductId],
+          line.UnitOfMeasureId);
+        if (selection is null || !selection.Value.IsActive || !selection.Value.IsValid)
+          throw new BadRequestException(
+            ErrorCodes.Purchase.UnitInvalid,
+            "Each purchase line must use an active base unit or configured conversion unit.");
+
+        var baseQuantity = Quantity(UnitConversionCalculator.ConvertToBaseQuantity(
+          line.Quantity,
+          selection.Value.Operation,
+          selection.Value.Factor));
+        if (baseQuantity <= 0)
+          throw new BadRequestException(
+            ErrorCodes.Purchase.QuantityInvalid,
+            "The selected quantity is too small for the product's base-unit precision.");
+
+        productUnits.Add(line.ProductId, selection.Value);
+      }
+    }
+
+    return new PurchaseValidation(
+      business.BaseCurrencyId,
+      exchangeRate.Value,
+      products,
+      productUnits);
   }
 
   private static void Apply(
@@ -299,18 +338,43 @@ public sealed class PurchaseService
     invoice.Notes = Trim(request.Notes);
   }
 
-  private void ReplaceLines(PurchaseInvoiceEntity invoice, List<PurchaseInvoiceLineRequest> requests)
+  private void ReplaceLines(
+    PurchaseInvoiceEntity invoice,
+    List<PurchaseInvoiceLineRequest> requests,
+    PurchaseValidation validation)
   {
     foreach (var existing in invoice.Lines.ToList()) _db.PurchaseInvoiceLines.Remove(existing);
     invoice.Lines.Clear();
     foreach (var request in requests)
     {
+      var selection = validation.ProductUnits[request.ProductId];
+      var product = validation.Products[request.ProductId];
+      var baseUnitCost = request.UseMasterPrice
+        ? Price(product.PurchasePriceBase)
+        : Price(UnitConversionCalculator.ConvertUnitPriceToBasePrice(
+          request.UnitCost,
+          selection.Operation,
+          selection.Factor) * invoice.ExchangeRate);
+      var unitCost = request.UseMasterPrice
+        ? Price(UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+          baseUnitCost,
+          selection.Operation,
+          selection.Factor) / invoice.ExchangeRate)
+        : Price(request.UnitCost);
       var line = new PurchaseInvoiceLineEntity
       {
         ProductId = request.ProductId,
         UnitOfMeasureId = request.UnitOfMeasureId,
         Quantity = request.Quantity,
-        UnitCost = request.UnitCost
+        ConversionOperation = selection.Operation,
+        ConversionFactor = selection.Factor,
+        BaseQuantity = Quantity(UnitConversionCalculator.ConvertToBaseQuantity(
+          request.Quantity,
+          selection.Operation,
+          selection.Factor)),
+        UnitCost = unitCost,
+        BaseUnitCost = baseUnitCost,
+        IsPriceOverridden = !request.UseMasterPrice
       };
       invoice.Lines.Add(line);
       _db.PurchaseInvoiceLines.Add(line);
@@ -323,7 +387,7 @@ public sealed class PurchaseService
     {
       line.LineSubtotal = Money(line.Quantity * line.UnitCost);
       line.LineAmount = line.LineSubtotal;
-      line.BaseLineAmount = Money(line.Quantity * BaseUnitCost(line.UnitCost, invoice.ExchangeRate));
+      line.BaseLineAmount = Money(line.BaseQuantity * line.BaseUnitCost);
     }
 
     invoice.Subtotal = invoice.Lines.Sum(line => line.LineSubtotal);
@@ -426,14 +490,27 @@ public sealed class PurchaseService
       line.UnitOfMeasureId,
       line.UnitOfMeasure.Code,
       line.Quantity,
+      line.ConversionOperation,
+      line.ConversionFactor,
+      line.BaseQuantity,
       line.UnitCost,
+      line.BaseUnitCost,
+      line.IsPriceOverridden,
       line.LineSubtotal,
       line.LineAmount,
       line.BaseLineAmount)).ToList());
 
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
-  private static decimal BaseUnitCost(decimal unitCost, decimal exchangeRate) => Money(unitCost * exchangeRate);
+  private static decimal Price(decimal value) => decimal.Round(value, 6, MidpointRounding.AwayFromZero);
+  private static decimal Quantity(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
+
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+  private sealed record PurchaseValidation(
+    Guid BaseCurrencyId,
+    decimal ExchangeRate,
+    IReadOnlyDictionary<Guid, ProductEntity> Products,
+    IReadOnlyDictionary<Guid, ProductUnitSelection> ProductUnits);
 
   private static void EnsureDraft(PurchaseInvoiceStatus status)
   {

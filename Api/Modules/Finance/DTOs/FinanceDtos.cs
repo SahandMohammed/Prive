@@ -127,6 +127,12 @@ public sealed record ExchangeRateResponse(
   string CreatedByUsername,
   DateTime CreatedAtUtc);
 
+public sealed record EffectiveExchangeRateResponse(
+  Guid CurrencyId,
+  Guid BaseCurrencyId,
+  DateOnly Date,
+  decimal Rate);
+
 public sealed class MoneyTransferListQuery : PaginationRequest
 {
   public string? Search { get; init; }

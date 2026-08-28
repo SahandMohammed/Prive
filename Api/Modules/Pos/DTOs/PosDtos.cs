@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Api.Modules.Finance;
+using Api.Modules.Inventory;
 using Api.Modules.Sales;
 using Api.Shared.Pagination;
 
@@ -32,6 +33,7 @@ public sealed record PosSaleLineRequest(
   [Required] SalesLineType LineType,
   Guid? ServiceId,
   Guid? ProductId,
+  Guid? UnitOfMeasureId,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
   Guid? ProfessionalUserId);
 
@@ -89,9 +91,11 @@ public sealed record PosCatalogItemResponse(
   string? SKU,
   string? Barcode,
   Guid? UnitOfMeasureId,
+  string? UnitName,
   string? UnitCode,
   decimal? AvailableQuantity,
-  string? ImageReference);
+  string? ImageReference,
+  IReadOnlyList<ProductUnitConversionResponse> UnitConversions);
 
 public sealed record PosCustomerResponse(Guid Id, string Name, string? PrimaryPhoneNumber);
 
@@ -115,11 +119,16 @@ public sealed record PosSaleLineResponse(
   Guid? ProductId,
   string? ProductName,
   string? SKU,
+  Guid? UnitOfMeasureId,
   string? UnitCode,
   Guid? ProfessionalUserId,
   string? ProfessionalUsername,
   decimal Quantity,
+  UnitConversionOperation? ConversionOperation,
+  decimal ConversionFactor,
+  decimal BaseQuantity,
   decimal UnitPrice,
+  decimal BaseUnitPrice,
   decimal LineTotal);
 
 public sealed record PosTenderResponse(

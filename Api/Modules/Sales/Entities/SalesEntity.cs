@@ -80,7 +80,12 @@ public sealed class SalesInvoiceLineEntity
   public UnitOfMeasureEntity? UnitOfMeasure { get; set; }
   public string? Description { get; set; }
   public decimal Quantity { get; set; }
+  public UnitConversionOperation? ConversionOperation { get; set; }
+  public decimal ConversionFactor { get; set; } = 1m;
+  public decimal BaseQuantity { get; set; }
   public decimal UnitPrice { get; set; }
+  public decimal BaseUnitPrice { get; set; }
+  public bool IsPriceOverridden { get; set; }
   public decimal LineSubtotal { get; set; }
   public decimal LineAmount { get; set; }
   public decimal BaseLineAmount { get; set; }

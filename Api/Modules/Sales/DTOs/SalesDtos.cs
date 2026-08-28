@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Api.Modules.Inventory;
 using Api.Shared.Pagination;
 
 namespace Api.Modules.Sales;
@@ -48,7 +49,8 @@ public sealed record SalesInvoiceLineRequest(
   [MaxLength(500)] string? Description,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
   [Range(typeof(decimal), "0", "9999999999999")] decimal UnitPrice,
-  Guid? ProfessionalUserId = null);
+  Guid? ProfessionalUserId = null,
+  bool UseMasterPrice = false);
 
 public sealed record SalesInvoiceDraftRequest(
   Guid? CustomerId,
@@ -110,7 +112,12 @@ public sealed record SalesInvoiceLineResponse(
   string? ProfessionalUsername,
   string? Description,
   decimal Quantity,
+  UnitConversionOperation? ConversionOperation,
+  decimal ConversionFactor,
+  decimal BaseQuantity,
   decimal UnitPrice,
+  decimal BaseUnitPrice,
+  bool IsPriceOverridden,
   decimal LineSubtotal,
   decimal LineAmount,
   decimal BaseLineAmount);

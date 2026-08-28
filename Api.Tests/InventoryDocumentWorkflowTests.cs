@@ -16,7 +16,7 @@ public sealed class InventoryDocumentWorkflowTests
     var data = await SeedAsync(db);
     var service = new InventoryService(db);
     var request = new OpeningStockDraftRequest(data.BranchId, data.SourceWarehouseId, DateOnly.FromDateTime(DateTime.UtcNow),
-      [new(data.ProductAId, 10, 4), new(data.ProductBId, 5, 8)], "Initial count");
+      [new(data.ProductAId, data.UnitId, 10, 4), new(data.ProductBId, data.UnitId, 5, 8)], "Initial count");
 
     var draft = await service.CreateOpeningStockAsync(request, data.UserId, default);
     Assert.Equal("OS-000001", draft.DocumentNumber);
@@ -24,7 +24,7 @@ public sealed class InventoryDocumentWorkflowTests
     Assert.Equal(80, draft.TotalValueBase);
     Assert.Empty(db.StockMovements);
 
-    var edited = request with { Lines = [new(data.ProductAId, 12, 4), new(data.ProductBId, 5, 8)] };
+    var edited = request with { Lines = [new(data.ProductAId, data.UnitId, 12, 4), new(data.ProductBId, data.UnitId, 5, 8)] };
     await service.UpdateOpeningStockAsync(draft.Id, edited, default);
     Assert.Empty(db.StockMovements);
 
@@ -47,7 +47,7 @@ public sealed class InventoryDocumentWorkflowTests
     await Assert.ThrowsAsync<ConflictException>(() => service.UpdateOpeningStockAsync(draft.Id, edited, default));
     await Assert.ThrowsAsync<ConflictException>(() => service.DeleteOpeningStockAsync(draft.Id, default));
 
-    var second = await service.CreateOpeningStockAsync(request with { Lines = [new(data.ProductAId, 8, 10)] }, data.UserId, default);
+    var second = await service.CreateOpeningStockAsync(request with { Lines = [new(data.ProductAId, data.UnitId, 8, 10)] }, data.UserId, default);
     Assert.Equal("OS-000002", second.DocumentNumber);
     await service.PostOpeningStockAsync(second.Id, data.UserId, default);
     Assert.Equal(6.4m, await AverageCostAsync(db, data.SourceWarehouseId, data.ProductAId));
@@ -65,6 +65,46 @@ public sealed class InventoryDocumentWorkflowTests
     await service.DeleteTransferAsync(draft.Id, default);
     Assert.Empty(db.StockMovements);
     Assert.Empty(db.WarehouseTransferDocuments);
+  }
+
+  [Fact]
+  public async Task Opening_stock_conversion_snapshots_selected_and_base_quantity_and_cost()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var carton = new UnitOfMeasureEntity { Name = "Box", Code = "BOX" };
+    db.Add(carton);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductAId,
+      UnitOfMeasure = carton,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    await db.SaveChangesAsync();
+    var service = new InventoryService(db);
+
+    var draft = await service.CreateOpeningStockAsync(
+      new OpeningStockDraftRequest(
+        data.BranchId,
+        data.SourceWarehouseId,
+        DateOnly.FromDateTime(DateTime.UtcNow),
+        [new OpeningStockLineRequest(data.ProductAId, carton.Id, 10, 72_000)],
+        null),
+      data.UserId,
+      default);
+
+    var line = Assert.Single(draft.Lines);
+    Assert.Equal(10, line.Quantity);
+    Assert.Equal(240, line.BaseQuantity);
+    Assert.Equal(72_000, line.UnitCost);
+    Assert.Equal(3_000, line.UnitCostBase);
+    Assert.Equal(720_000, line.LineValueBase);
+
+    await service.PostOpeningStockAsync(draft.Id, data.UserId, default);
+    var movement = await db.StockMovements.SingleAsync(item => item.OpeningStockDocumentId == draft.Id);
+    Assert.Equal(240, movement.QuantityIn);
+    Assert.Equal(3_000, movement.UnitCostBase);
   }
 
   [Fact]
@@ -125,7 +165,7 @@ public sealed class InventoryDocumentWorkflowTests
     await using var db = CreateDb();
     var data = await SeedAsync(db);
     var service = new InventoryService(db);
-    var draft = await service.CreateOpeningStockAsync(new(data.BranchId, data.SourceWarehouseId, DateOnly.FromDateTime(DateTime.UtcNow), [new(data.ProductAId, 1, 1), new(data.ProductBId, 1, 1)], null), data.UserId, default);
+    var draft = await service.CreateOpeningStockAsync(new(data.BranchId, data.SourceWarehouseId, DateOnly.FromDateTime(DateTime.UtcNow), [new(data.ProductAId, data.UnitId, 1, 1), new(data.ProductBId, data.UnitId, 1, 1)], null), data.UserId, default);
     (await db.Products.FindAsync(data.ProductBId))!.IsActive = false;
     await db.SaveChangesAsync();
 
@@ -154,7 +194,7 @@ public sealed class InventoryDocumentWorkflowTests
     var c = new ProductEntity { Name = "C", SKU = "C", Category = category, UnitOfMeasure = unit, TrackInventory = true };
     db.AddRange(user, branch, category, unit, source, destination, a, b, c);
     await db.SaveChangesAsync();
-    return new(user.Id, branch.Id, source.Id, destination.Id, a.Id, b.Id, c.Id);
+    return new(user.Id, branch.Id, source.Id, destination.Id, unit.Id, a.Id, b.Id, c.Id);
   }
 
   private static async Task AddOpeningBalanceAsync(AppDbContext db, TestData data, Guid productId, decimal quantity, decimal cost)
@@ -165,5 +205,5 @@ public sealed class InventoryDocumentWorkflowTests
 
   private static Task<decimal> QuantityAsync(AppDbContext db, Guid warehouseId, Guid productId) => db.StockMovements.Where(x => x.WarehouseId == warehouseId && x.ProductId == productId).SumAsync(x => x.QuantityIn - x.QuantityOut);
   private static async Task<decimal> AverageCostAsync(AppDbContext db, Guid warehouseId, Guid productId) { var movements = db.StockMovements.Where(x => x.WarehouseId == warehouseId && x.ProductId == productId); var quantity = await movements.SumAsync(x => x.QuantityIn - x.QuantityOut); return await movements.SumAsync(x => x.QuantityIn * x.UnitCostBase - x.QuantityOut * x.UnitCostBase) / quantity; }
-  private sealed record TestData(Guid UserId, Guid BranchId, Guid SourceWarehouseId, Guid DestinationWarehouseId, Guid ProductAId, Guid ProductBId, Guid ProductCId);
+  private sealed record TestData(Guid UserId, Guid BranchId, Guid SourceWarehouseId, Guid DestinationWarehouseId, Guid UnitId, Guid ProductAId, Guid ProductBId, Guid ProductCId);
 }

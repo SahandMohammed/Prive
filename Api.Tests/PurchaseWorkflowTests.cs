@@ -4,6 +4,7 @@ using Api.Modules.Branch;
 using Api.Modules.Business;
 using Api.Modules.Contact;
 using Api.Modules.Currency;
+using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Purchase;
 using Api.Modules.User;
@@ -28,6 +29,8 @@ public sealed class PurchaseWorkflowTests
     Assert.Equal(PurchaseInvoiceStatus.Draft, draft.Status);
     Assert.Equal(20, draft.Total);
     Assert.Equal(20, draft.BaseTotal);
+    Assert.Equal(2, Assert.Single(draft.Lines).BaseQuantity);
+    Assert.Equal(10, Assert.Single(draft.Lines).BaseUnitCost);
     Assert.Empty(db.StockMovements);
     Assert.Empty(db.JournalEntries);
 
@@ -139,6 +142,258 @@ public sealed class PurchaseWorkflowTests
     Assert.Equal(data.BaseCurrencyId, historical.BaseCurrencyId);
     Assert.Equal(1310, historical.ExchangeRate);
     Assert.Equal(104800, historical.BaseTotal);
+  }
+
+  [Fact]
+  public async Task Converted_purchase_unit_snapshots_quantity_price_and_manual_cost_in_base_units()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var carton = new UnitOfMeasureEntity { Name = "Carton", Code = "CTN" };
+    db.Add(carton);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductAId,
+      UnitOfMeasure = carton,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    await db.SaveChangesAsync();
+
+    var service = CreateService(db);
+    Assert.Equal(72_000, UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+      3_000,
+      UnitConversionOperation.Multiply,
+      24));
+
+    var draft = await service.CreateAsync(
+      Request(data, data.BaseCurrencyId, null, [new(data.ProductAId, carton.Id, 2, 60_000)]),
+      data.UserId,
+      default);
+
+    var line = Assert.Single(draft.Lines);
+    Assert.Equal("CTN", line.UnitCode);
+    Assert.Equal(2, line.Quantity);
+    Assert.Equal(UnitConversionOperation.Multiply, line.ConversionOperation);
+    Assert.Equal(24, line.ConversionFactor);
+    Assert.Equal(48, line.BaseQuantity);
+    Assert.Equal(60_000, line.UnitCost);
+    Assert.Equal(2_500, line.BaseUnitCost);
+    Assert.Equal(120_000, line.BaseLineAmount);
+
+    await service.PostAsync(draft.Id, data.UserId, default);
+
+    var movement = await db.StockMovements.SingleAsync(item => item.PurchaseInvoiceId == draft.Id);
+    Assert.Equal(48, movement.QuantityIn);
+    Assert.Equal(2_500, movement.UnitCostBase);
+    Assert.Equal(120_000, movement.QuantityIn * movement.UnitCostBase);
+
+    var conversion = await db.ProductUnitConversions.SingleAsync(item => item.ProductId == data.ProductAId);
+    conversion.Factor = 12;
+    await db.SaveChangesAsync();
+    var historical = Assert.Single((await service.GetByIdAsync(draft.Id, default)).Lines);
+    Assert.Equal(24, historical.ConversionFactor);
+    Assert.Equal(48, historical.BaseQuantity);
+    Assert.Equal(2_500, historical.BaseUnitCost);
+  }
+
+  [Fact]
+  public async Task Divide_purchase_conversion_uses_equivalent_base_quantity_and_cost()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var gram = new UnitOfMeasureEntity { Name = "Gram", Code = "G" };
+    db.Add(gram);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductBId,
+      UnitOfMeasure = gram,
+      Operation = UnitConversionOperation.Divide,
+      Factor = 1_000
+    });
+    await db.SaveChangesAsync();
+
+    Assert.Equal(10, UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+      10_000,
+      UnitConversionOperation.Divide,
+      1_000));
+
+    var service = CreateService(db);
+    var draft = await service.CreateAsync(
+      Request(data, data.BaseCurrencyId, null, [new(data.ProductBId, gram.Id, 500, 10)]),
+      data.UserId,
+      default);
+    var line = Assert.Single(draft.Lines);
+    Assert.Equal(0.5m, line.BaseQuantity);
+    Assert.Equal(10_000, line.BaseUnitCost);
+    Assert.Equal(5_000, line.LineAmount);
+
+    await service.PostAsync(draft.Id, data.UserId, default);
+    var movement = await db.StockMovements.SingleAsync(item => item.PurchaseInvoiceId == draft.Id);
+    Assert.Equal(0.5m, movement.QuantityIn);
+    Assert.Equal(10_000, movement.UnitCostBase);
+  }
+
+  [Fact]
+  public async Task Converted_default_purchase_price_updates_weighted_average_in_base_units()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var product = (await db.Products.FindAsync(data.ProductAId))!;
+    product.PurchasePriceBase = 3_000;
+    var carton = new UnitOfMeasureEntity { Name = "Carton", Code = "CTN" };
+    db.Add(carton);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = product.Id,
+      UnitOfMeasure = carton,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    db.StockMovements.Add(new StockMovementEntity
+    {
+      ProductId = product.Id,
+      WarehouseId = data.WarehouseId,
+      Type = StockMovementType.OpeningStock,
+      MovementDate = DateOnly.FromDateTime(DateTime.UtcNow),
+      QuantityIn = 99,
+      UnitCostBase = 2_500,
+      PerformedByUserId = data.UserId
+    });
+    await db.SaveChangesAsync();
+
+    var selectedPrice = UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+      product.PurchasePriceBase,
+      UnitConversionOperation.Multiply,
+      24);
+    var service = CreateService(db);
+    var draft = await service.CreateAsync(
+      Request(data, data.BaseCurrencyId, null, [new(product.Id, carton.Id, 2, selectedPrice)]),
+      data.UserId,
+      default);
+    await service.PostAsync(draft.Id, data.UserId, default);
+
+    Assert.Equal(147, await QuantityAsync(db, data.WarehouseId, product.Id));
+    Assert.Equal(391_500m / 147m, await AverageCostAsync(db, data.WarehouseId, product.Id));
+  }
+
+  [Fact]
+  public async Task Master_purchase_price_resolves_effective_rate_and_converts_multiply_unit_without_changing_base_value()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var product = (await db.Products.FindAsync(data.ProductAId))!;
+    product.PurchasePriceBase = 3_000;
+    var box = new UnitOfMeasureEntity { Name = "Box", Code = "BOX" };
+    db.Add(box);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = product.Id,
+      UnitOfMeasure = box,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    db.ExchangeRates.Add(new ExchangeRateEntity
+    {
+      FromCurrencyId = data.ForeignCurrencyId,
+      ToCurrencyId = data.BaseCurrencyId,
+      Rate = 1_300,
+      EffectiveAtUtc = DateTime.UtcNow.AddDays(-1),
+      CreatedByUserId = data.UserId
+    });
+    await db.SaveChangesAsync();
+
+    var service = CreateService(db);
+    var draft = await service.CreateAsync(
+      Request(data, data.ForeignCurrencyId, null,
+        [new PurchaseInvoiceLineRequest(product.Id, box.Id, 4, 0, UseMasterPrice: true)]),
+      data.UserId,
+      default);
+
+    var line = Assert.Single(draft.Lines);
+    Assert.Equal(1_300, draft.ExchangeRate);
+    Assert.Equal(55.384615m, line.UnitCost);
+    Assert.Equal(3_000, line.BaseUnitCost);
+    Assert.Equal(96, line.BaseQuantity);
+    Assert.Equal(288_000, line.BaseLineAmount);
+    Assert.Equal(288_000, draft.BaseTotal);
+    Assert.False(line.IsPriceOverridden);
+
+    var baseDraft = await service.UpdateAsync(
+      draft.Id,
+      Request(data, data.BaseCurrencyId, null,
+        [new PurchaseInvoiceLineRequest(product.Id, box.Id, 4, line.UnitCost, UseMasterPrice: true)]),
+      default);
+    Assert.Equal(72_000, Assert.Single(baseDraft.Lines).UnitCost);
+    Assert.Equal(288_000, baseDraft.BaseTotal);
+
+    var foreignAgain = await service.UpdateAsync(
+      draft.Id,
+      Request(data, data.ForeignCurrencyId, 1_300,
+        [new PurchaseInvoiceLineRequest(product.Id, box.Id, 4, 0, UseMasterPrice: true)]),
+      default);
+    Assert.Equal(55.384615m, Assert.Single(foreignAgain.Lines).UnitCost);
+    Assert.Equal(288_000, foreignAgain.BaseTotal);
+
+    var posted = await service.PostAsync(draft.Id, data.UserId, default);
+    var movement = await db.StockMovements.SingleAsync(item => item.PurchaseInvoiceId == posted.Id);
+    Assert.Equal(96, movement.QuantityIn);
+    Assert.Equal(3_000, movement.UnitCostBase);
+    var journal = await db.JournalEntries.Include(item => item.Lines).SingleAsync(item => item.Id == posted.JournalEntryId);
+    Assert.Equal(288_000, journal.Lines.Sum(item => item.DebitBaseAmount));
+    Assert.Equal(journal.Lines.Sum(item => item.DebitBaseAmount), journal.Lines.Sum(item => item.CreditBaseAmount));
+  }
+
+  [Fact]
+  public async Task Manual_foreign_purchase_price_and_divide_unit_preserve_transaction_specific_base_cost()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var product = (await db.Products.FindAsync(data.ProductBId))!;
+    product.PurchasePriceBase = 10_000;
+    var gram = new UnitOfMeasureEntity { Name = "Gram", Code = "G" };
+    db.Add(gram);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = product.Id,
+      UnitOfMeasure = gram,
+      Operation = UnitConversionOperation.Divide,
+      Factor = 1_000
+    });
+    await db.SaveChangesAsync();
+
+    var service = CreateService(db);
+    var defaultDraft = await service.CreateAsync(
+      Request(data, data.ForeignCurrencyId, 1_300,
+        [new PurchaseInvoiceLineRequest(product.Id, gram.Id, 500, 0, UseMasterPrice: true)]),
+      data.UserId,
+      default);
+    var defaultLine = Assert.Single(defaultDraft.Lines);
+    Assert.Equal(0.007692m, defaultLine.UnitCost);
+    Assert.Equal(0.5m, defaultLine.BaseQuantity);
+    Assert.Equal(10_000, defaultLine.BaseUnitCost);
+    Assert.Equal(5_000, defaultLine.BaseLineAmount);
+
+    var box = new UnitOfMeasureEntity { Name = "Carton", Code = "CTN" };
+    db.Add(box);
+    db.ProductUnitConversions.Add(new ProductUnitConversionEntity
+    {
+      ProductId = data.ProductAId,
+      UnitOfMeasure = box,
+      Operation = UnitConversionOperation.Multiply,
+      Factor = 24
+    });
+    await db.SaveChangesAsync();
+    var manual = await service.CreateAsync(
+      Request(data, data.ForeignCurrencyId, 1_300,
+        [new PurchaseInvoiceLineRequest(data.ProductAId, box.Id, 4, 50)]),
+      data.UserId,
+      default);
+    var manualLine = Assert.Single(manual.Lines);
+    Assert.True(manualLine.IsPriceOverridden);
+    Assert.Equal(2_708.333333m, manualLine.BaseUnitCost);
+    Assert.Equal(260_000, manualLine.BaseLineAmount);
+    Assert.Equal(260_000, manual.BaseTotal);
   }
 
   [Fact]

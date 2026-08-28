@@ -25,6 +25,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { convertBasePriceToUnitPrice, convertToBaseQuantity, productUnitOptions } from '@/features/inventory'
+import type { UnitConvertibleProduct } from '@/features/inventory'
 import { SalesLineType } from '@/features/sales'
 import { cn } from '@/lib/utils'
 import { useCompletePosSale, usePosCatalog, usePosCustomers, usePosSetup } from '../hooks/usePos'
@@ -36,6 +38,8 @@ import type { PosCatalogItem, PosSetup } from '../types/pos.types'
 interface CartLine {
   item: PosCatalogItem
   quantity: number
+  unitOfMeasureId: string
+  unitPriceBase: number
   professionalUserId: string
 }
 
@@ -68,7 +72,7 @@ export function PosPage() {
     warehouseId: selectedWarehouseId || undefined,
   })
   const items = catalogQuery.data?.data ?? []
-  const total = cart.reduce((sum, line) => sum + line.item.unitPriceBase * line.quantity, 0)
+  const total = cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
   const branchWarehouses =
     setup?.warehouses.filter((warehouse) => warehouse.branchId === selectedBranchId) ?? []
   const categories =
@@ -99,7 +103,7 @@ export function PosPage() {
         return current.map((line) =>
           line === existing ? { ...line, quantity: line.quantity + 1 } : line
         )
-      return [...current, { item, quantity: 1, professionalUserId: '' }]
+      return [...current, { item, quantity: 1, unitOfMeasureId: item.unitOfMeasureId ?? '', unitPriceBase: item.unitPriceBase, professionalUserId: '' }]
     })
   }
   const updateQuantity = (index: number, quantity: number) => {
@@ -326,7 +330,7 @@ export function PosPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{line.item.name}</p>
                         <p className="font-mono text-xs text-muted-foreground">
-                          {amount(line.item.unitPriceBase)} × {line.quantity}
+                          {amount(line.unitPriceBase)} × {line.quantity}
                         </p>
                       </div>
                       <Button
@@ -360,6 +364,20 @@ export function PosPage() {
                         ))}
                       </Select>
                     )}
+                    {line.item.itemType === PosCatalogItemType.Product && (
+                      <Select
+                        className="mt-3 h-8"
+                        value={line.unitOfMeasureId}
+                        onChange={(event) => {
+                          const product = asUnitProduct(line.item)
+                          const unitPrice = convertBasePriceToUnitPrice(product, event.target.value, line.item.unitPriceBase)
+                          if (unitPrice === null) return
+                          setCart((current) => current.map((item, currentIndex) => currentIndex === index ? { ...item, unitOfMeasureId: event.target.value, unitPriceBase: round4(unitPrice) } : item))
+                        }}
+                      >
+                        {productUnitOptions(asUnitProduct(line.item)).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} — {unit.name}</option>)}
+                      </Select>
+                    )}
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center gap-1">
                         <Button
@@ -379,9 +397,10 @@ export function PosPage() {
                         </Button>
                       </div>
                       <span className="font-mono font-semibold">
-                        {amount(line.item.unitPriceBase * line.quantity)}
+                        {amount(line.unitPriceBase * line.quantity)}
                       </span>
                     </div>
+                    {line.item.itemType === PosCatalogItemType.Product && <p className="mt-1 text-right text-xs text-muted-foreground">Base: {amount(convertToBaseQuantity(asUnitProduct(line.item), line.unitOfMeasureId, line.quantity) ?? 0)} {line.item.unitCode}</p>}
                   </div>
                 ))}
               </div>
@@ -547,6 +566,7 @@ function CheckoutDialog({
               : SalesLineType.Product,
           serviceId: line.item.itemType === PosCatalogItemType.Service ? line.item.id : null,
           productId: line.item.itemType === PosCatalogItemType.Product ? line.item.id : null,
+          unitOfMeasureId: line.item.itemType === PosCatalogItemType.Product ? line.unitOfMeasureId : null,
           quantity: line.quantity,
           professionalUserId: line.professionalUserId || null,
         })),
@@ -830,3 +850,12 @@ function Summary({
 }
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
 const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10_000) / 10_000
+
+function asUnitProduct(item: PosCatalogItem): UnitConvertibleProduct {
+  return {
+    unitOfMeasureId: item.unitOfMeasureId ?? '',
+    unitName: item.unitName ?? '',
+    unitCode: item.unitCode ?? '',
+    unitConversions: item.unitConversions,
+  }
+}

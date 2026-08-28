@@ -106,7 +106,13 @@ public sealed class OpeningStockLineEntity
   public OpeningStockDocumentEntity Document { get; set; } = null!;
   public Guid ProductId { get; set; }
   public ProductEntity Product { get; set; } = null!;
+  public Guid UnitOfMeasureId { get; set; }
+  public UnitOfMeasureEntity UnitOfMeasure { get; set; } = null!;
   public decimal Quantity { get; set; }
+  public UnitConversionOperation? ConversionOperation { get; set; }
+  public decimal ConversionFactor { get; set; } = 1m;
+  public decimal BaseQuantity { get; set; }
+  public decimal UnitCost { get; set; }
   public decimal UnitCostBase { get; set; }
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
 }

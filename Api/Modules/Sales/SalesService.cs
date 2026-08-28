@@ -207,7 +207,7 @@ public sealed class SalesService
       CreatedByUserId = userId
     };
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
-    ReplaceLines(invoice, request.Lines);
+    ReplaceLines(invoice, request.Lines, validation);
     Recalculate(invoice);
     _db.SalesInvoices.Add(invoice);
     await SaveNewInvoiceAsync(ct);
@@ -225,7 +225,7 @@ public sealed class SalesService
     EnsureDraft(invoice.Status);
     var validation = await ValidateInvoiceAsync(request, false, ct);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
-    ReplaceLines(invoice, request.Lines);
+    ReplaceLines(invoice, request.Lines, validation);
     Recalculate(invoice);
     invoice.UpdatedAtUtc = DateTime.UtcNow;
     await SaveInvoiceMutationAsync(ct);
@@ -266,7 +266,7 @@ public sealed class SalesService
         line.UnitPrice,
         line.ProfessionalUserId)).ToList());
 
-    var validation = await ValidateInvoiceAsync(request, true, ct);
+    var validation = await ValidateInvoiceAsync(request, true, ct, validateUnits: false);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
     Recalculate(invoice);
 
@@ -289,7 +289,7 @@ public sealed class SalesService
       CreatedByUserId = userId
     };
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
-    ReplaceLines(invoice, request.Lines);
+    ReplaceLines(invoice, request.Lines, validation);
     Recalculate(invoice);
     _db.SalesInvoices.Add(invoice);
 
@@ -335,7 +335,7 @@ public sealed class SalesService
       foreach (var line in productLines)
       {
         var balance = balances.GetValueOrDefault(line.ProductId!.Value);
-        if (balance is null || line.Quantity > balance.Quantity)
+        if (balance is null || line.BaseQuantity > balance.Quantity)
           throw new BadRequestException(ErrorCodes.Sales.InsufficientStock, "A product line exceeds current warehouse stock.");
       }
     }
@@ -381,7 +381,7 @@ public sealed class SalesService
       });
 
       var totalCost = productLines.Sum(line => Money(
-        line.Quantity * Money(balances[line.ProductId!.Value].Value / balances[line.ProductId.Value].Quantity)));
+        line.BaseQuantity * Money(balances[line.ProductId!.Value].Value / balances[line.ProductId.Value].Quantity)));
       if (totalCost > 0)
       {
         journalLines.Add(new JournalLineEntity
@@ -430,7 +430,7 @@ public sealed class SalesService
         Type = StockMovementType.Sale,
         MovementDate = invoice.InvoiceDate,
         QuantityIn = 0,
-        QuantityOut = line.Quantity,
+        QuantityOut = line.BaseQuantity,
         UnitCostBase = unitCostBase,
         Reference = invoice.DocumentNumber,
         Note = invoice.Notes,
@@ -467,7 +467,8 @@ public sealed class SalesService
   private async Task<InvoiceValidation> ValidateInvoiceAsync(
     SalesInvoiceDraftRequest request,
     bool requireCustomer,
-    CancellationToken ct)
+    CancellationToken ct,
+    bool validateUnits = true)
   {
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Sales.LinesRequired, "Add at least one sales line.");
@@ -530,7 +531,14 @@ public sealed class SalesService
     var business = await _db.Businesses.AsNoTracking()
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw new BadRequestException(ErrorCodes.Sales.BusinessNotConfigured, "Complete Business Setup before recording sales.");
-    var exchangeRate = request.CurrencyId == business.BaseCurrencyId ? 1m : request.ExchangeRate;
+    var exchangeRate = request.CurrencyId == business.BaseCurrencyId
+      ? 1m
+      : request.ExchangeRate ?? await ExchangeRateResolver.FindAsync(
+        _db,
+        request.CurrencyId,
+        business.BaseCurrencyId,
+        request.InvoiceDate,
+        ct);
     if (exchangeRate is null || exchangeRate <= 0)
       throw new BadRequestException(ErrorCodes.Sales.ExchangeRateRequired, "Enter a positive exchange rate for a foreign-currency sale.");
 
@@ -556,6 +564,8 @@ public sealed class SalesService
     }
 
     var products = await _db.Products.AsNoTracking()
+      .Include(product => product.UnitOfMeasure)
+      .Include(product => product.UnitConversions).ThenInclude(item => item.UnitOfMeasure)
       .Where(product => productIds.Contains(product.Id)
         && product.IsActive
         && product.TrackInventory
@@ -563,11 +573,38 @@ public sealed class SalesService
       .ToDictionaryAsync(product => product.Id, ct);
     if (products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Sales.ProductInvalid, "Every Product line must use an active resale inventory Product.");
-    if (request.Lines.Where(line => line.LineType == SalesLineType.Product)
-      .Any(line => products[line.ProductId!.Value].UnitOfMeasureId != line.UnitOfMeasureId))
-      throw new BadRequestException(ErrorCodes.Sales.UnitInvalid, "Each Product line must use the Product's configured unit.");
+    var productUnits = new Dictionary<Guid, ProductUnitSelection>();
+    if (validateUnits)
+    {
+      foreach (var line in request.Lines.Where(line => line.LineType == SalesLineType.Product))
+      {
+        var selection = UnitConversionCalculator.Resolve(
+          products[line.ProductId!.Value],
+          line.UnitOfMeasureId!.Value);
+        if (selection is null || !selection.Value.IsActive || !selection.Value.IsValid)
+          throw new BadRequestException(
+            ErrorCodes.Sales.UnitInvalid,
+            "Each Product line must use an active base unit or configured conversion unit.");
 
-    return new InvoiceValidation(business.BaseCurrencyId, exchangeRate.Value, services, products);
+        var baseQuantity = Quantity(UnitConversionCalculator.ConvertToBaseQuantity(
+          line.Quantity,
+          selection.Value.Operation,
+          selection.Value.Factor));
+        if (baseQuantity <= 0)
+          throw new BadRequestException(
+            ErrorCodes.Sales.QuantityInvalid,
+            "The selected quantity is too small for the Product's base-unit precision.");
+
+        productUnits.Add(line.ProductId.Value, selection.Value);
+      }
+    }
+
+    return new InvoiceValidation(
+      business.BaseCurrencyId,
+      exchangeRate.Value,
+      services,
+      products,
+      productUnits);
   }
 
   private static void Apply(
@@ -586,12 +623,33 @@ public sealed class SalesService
     invoice.Notes = Trim(request.Notes);
   }
 
-  private void ReplaceLines(SalesInvoiceEntity invoice, List<SalesInvoiceLineRequest> requests)
+  private void ReplaceLines(
+    SalesInvoiceEntity invoice,
+    List<SalesInvoiceLineRequest> requests,
+    InvoiceValidation validation)
   {
     foreach (var existing in invoice.Lines.ToList()) _db.SalesInvoiceLines.Remove(existing);
     invoice.Lines.Clear();
     foreach (var request in requests)
     {
+      var selection = request.LineType == SalesLineType.Product
+        ? validation.ProductUnits[request.ProductId!.Value]
+        : new ProductUnitSelection(Guid.Empty, null, 1m, true);
+      var masterBaseUnitPrice = request.LineType == SalesLineType.Product
+        ? validation.Products[request.ProductId!.Value].SellingPriceBase
+        : validation.Services[request.ServiceId!.Value].SellingPriceBase;
+      var baseUnitPrice = request.UseMasterPrice
+        ? Price(masterBaseUnitPrice)
+        : Price(UnitConversionCalculator.ConvertUnitPriceToBasePrice(
+          request.UnitPrice,
+          selection.Operation,
+          selection.Factor) * invoice.ExchangeRate);
+      var unitPrice = request.UseMasterPrice
+        ? Price(UnitConversionCalculator.ConvertBasePriceToUnitPrice(
+          baseUnitPrice,
+          selection.Operation,
+          selection.Factor) / invoice.ExchangeRate)
+        : Price(request.UnitPrice);
       var line = new SalesInvoiceLineEntity
       {
         SalesInvoiceId = invoice.Id,
@@ -601,7 +659,15 @@ public sealed class SalesService
         UnitOfMeasureId = request.UnitOfMeasureId,
         Description = Trim(request.Description),
         Quantity = request.Quantity,
-        UnitPrice = request.UnitPrice,
+        ConversionOperation = selection.Operation,
+        ConversionFactor = selection.Factor,
+        BaseQuantity = Quantity(UnitConversionCalculator.ConvertToBaseQuantity(
+          request.Quantity,
+          selection.Operation,
+          selection.Factor)),
+        UnitPrice = unitPrice,
+        BaseUnitPrice = baseUnitPrice,
+        IsPriceOverridden = !request.UseMasterPrice,
         ProfessionalUserId = request.ProfessionalUserId
       };
       invoice.Lines.Add(line);
@@ -615,7 +681,7 @@ public sealed class SalesService
     {
       line.LineSubtotal = Money(line.Quantity * line.UnitPrice);
       line.LineAmount = line.LineSubtotal;
-      line.BaseLineAmount = Money(line.Quantity * Money(line.UnitPrice * invoice.ExchangeRate));
+      line.BaseLineAmount = Money(line.BaseQuantity * line.BaseUnitPrice);
     }
     invoice.Subtotal = invoice.Lines.Sum(line => line.LineSubtotal);
     invoice.Total = invoice.Lines.Sum(line => line.LineAmount);
@@ -810,7 +876,12 @@ public sealed class SalesService
       line.ProfessionalUser?.Username,
       line.Description,
       line.Quantity,
+      line.ConversionOperation,
+      line.ConversionFactor,
+      line.BaseQuantity,
       line.UnitPrice,
+      line.BaseUnitPrice,
+      line.IsPriceOverridden,
       line.LineSubtotal,
       line.LineAmount,
       line.BaseLineAmount)).ToList());
@@ -833,6 +904,8 @@ public sealed class SalesService
     new(category.Id, category.Name, category.IsActive);
 
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
+  private static decimal Price(decimal value) => decimal.Round(value, 6, MidpointRounding.AwayFromZero);
+  private static decimal Quantity(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
   private static void EnsureDraft(SalesInvoiceStatus status)
@@ -848,7 +921,8 @@ public sealed class SalesService
     Guid BaseCurrencyId,
     decimal ExchangeRate,
     Dictionary<Guid, ServiceEntity> Services,
-    Dictionary<Guid, ProductEntity> Products);
+    Dictionary<Guid, ProductEntity> Products,
+    IReadOnlyDictionary<Guid, ProductUnitSelection> ProductUnits);
 
   private sealed record ProductBalance(decimal Quantity, decimal Value);
 }

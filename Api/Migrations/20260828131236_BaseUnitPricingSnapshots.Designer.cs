@@ -3,6 +3,7 @@ using System;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828131236_BaseUnitPricingSnapshots")]
+    partial class BaseUnitPricingSnapshots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1825,8 +1828,8 @@ namespace api.Migrations
                         .HasColumnType("numeric(19,4)");
 
                     b.Property<decimal>("BaseUnitCost")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
 
                     b.Property<decimal>("ConversionFactor")
                         .HasPrecision(19, 6)
@@ -1835,9 +1838,6 @@ namespace api.Migrations
                     b.Property<string>("ConversionOperation")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
-
-                    b.Property<bool>("IsPriceOverridden")
-                        .HasColumnType("boolean");
 
                     b.Property<decimal>("LineAmount")
                         .HasPrecision(19, 4)
@@ -1858,8 +1858,8 @@ namespace api.Migrations
                         .HasColumnType("numeric(19,4)");
 
                     b.Property<decimal>("UnitCost")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
 
                     b.Property<Guid>("UnitOfMeasureId")
                         .HasColumnType("uuid");
@@ -1987,8 +1987,8 @@ namespace api.Migrations
                         .HasColumnType("numeric(19,4)");
 
                     b.Property<decimal>("BaseUnitPrice")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
 
                     b.Property<decimal>("ConversionFactor")
                         .HasPrecision(19, 6)
@@ -2001,9 +2001,6 @@ namespace api.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsPriceOverridden")
-                        .HasColumnType("boolean");
 
                     b.Property<decimal>("LineAmount")
                         .HasPrecision(19, 4)
@@ -2038,8 +2035,8 @@ namespace api.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
 
                     b.HasKey("Id");
 
