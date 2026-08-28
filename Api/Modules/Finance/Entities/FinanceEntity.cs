@@ -186,5 +186,5 @@ public sealed class CustomerReceiptAllocationEntity
 
 public enum MoneyAccountType { Cashbox, Bank }
 public enum MoneyAccountAccessLevel { View, Operate }
-public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment, CustomerReceipt, PosSale }
+public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment, CustomerReceipt, PosSale, Expense }
 public enum FinanceDocumentStatus { Draft, Posted }

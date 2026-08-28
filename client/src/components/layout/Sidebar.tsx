@@ -92,6 +92,8 @@ export function Sidebar() {
         <NavGroup label="Finance" icon={<BanknoteIcon className="w-4 h-4" />}>
           <SubNavItem to="/finance/money-accounts">Money Accounts</SubNavItem>
           <SubNavItem to="/finance/money-ledger">Money Ledger</SubNavItem>
+          <SubNavItem to="/expenses">Expenses</SubNavItem>
+          <SubNavItem to="/expenses/categories">Expense Categories</SubNavItem>
           <SubNavItem to="/finance/exchange-rates">Exchange Rates</SubNavItem>
           <SubNavItem to="/finance/transfers">Transfers</SubNavItem>
           <SubNavItem to="/finance/supplier-payments">Supplier Payments</SubNavItem>

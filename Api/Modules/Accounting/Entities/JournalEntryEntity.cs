@@ -2,6 +2,7 @@ using Api.Modules.Branch;
 using Api.Modules.Purchase;
 using Api.Modules.Finance;
 using Api.Modules.Sales;
+using Api.Modules.Expenses;
 
 namespace Api.Modules.Accounting;
 
@@ -25,6 +26,7 @@ public sealed class JournalEntryEntity
   public MoneyTransferEntity? SourceMoneyTransfer { get; set; }
   public SupplierPaymentEntity? SourceSupplierPayment { get; set; }
   public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
+  public ExpenseDocumentEntity? SourceExpenseDocument { get; set; }
 }
 
 public enum JournalEntryStatus

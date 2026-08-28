@@ -227,6 +227,33 @@ public static class ErrorCodes
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
   }
 
+  public static class Expenses
+  {
+    public const string NotFound = "EXPENSES_NOT_FOUND";
+    public const string DocumentNotDraft = "EXPENSES_DOCUMENT_NOT_DRAFT";
+    public const string DocumentNumberConflict = "EXPENSES_DOCUMENT_NUMBER_CONFLICT";
+    public const string CategoryNotFound = "EXPENSES_CATEGORY_NOT_FOUND";
+    public const string CategoryCodeTaken = "EXPENSES_CATEGORY_CODE_TAKEN";
+    public const string CategoryInUse = "EXPENSES_CATEGORY_IN_USE";
+    public const string CategoryInvalid = "EXPENSES_CATEGORY_INVALID";
+    public const string AccountNotFound = "EXPENSES_ACCOUNT_NOT_FOUND";
+    public const string AccountInvalid = "EXPENSES_ACCOUNT_INVALID";
+    public const string AccountNotExpense = "EXPENSES_ACCOUNT_NOT_EXPENSE";
+    public const string AccountNotPostable = "EXPENSES_ACCOUNT_NOT_POSTABLE";
+    public const string BranchInvalid = "EXPENSES_BRANCH_INVALID";
+    public const string MoneyAccountInvalid = "EXPENSES_MONEY_ACCOUNT_INVALID";
+    public const string MoneyAccountBranchMismatch = "EXPENSES_MONEY_ACCOUNT_BRANCH_MISMATCH";
+    public const string MoneyAccountCurrencyMismatch = "EXPENSES_MONEY_ACCOUNT_CURRENCY_MISMATCH";
+    public const string MoneyAccountAccessDenied = "EXPENSES_MONEY_ACCOUNT_ACCESS_DENIED";
+    public const string CurrencyInvalid = "EXPENSES_CURRENCY_INVALID";
+    public const string ExchangeRateRequired = "EXPENSES_EXCHANGE_RATE_REQUIRED";
+    public const string BusinessNotConfigured = "EXPENSES_BUSINESS_NOT_CONFIGURED";
+    public const string LinesRequired = "EXPENSES_LINES_REQUIRED";
+    public const string LineAmountInvalid = "EXPENSES_LINE_AMOUNT_INVALID";
+    public const string JournalDirectReversalNotAllowed = "EXPENSES_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+    public const string PostedDocumentImmutable = "EXPENSES_DOCUMENT_POSTED_IMMUTABLE";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";

@@ -37,6 +37,11 @@ import { AdjustmentDocumentPage, AdjustmentsListPage, InventoryOverviewPage, Mov
 import { BranchesPage, BusinessSettingsPage as BaseBusinessSettingsPage, CurrenciesPage as BaseCurrenciesPage } from '@/features/business'
 import { ContactsPage } from '@/features/contacts'
 import { PosPage, PosReceiptPage } from '@/features/pos'
+import {
+  ExpensesPage,
+  ExpenseDetailPage,
+  ExpenseCategoriesPage,
+} from '@/features/expenses'
 
 // ---------------------------------------------------------------------------
 // Route structure
@@ -85,6 +90,12 @@ export const router = createBrowserRouter([
           { path: '/finance/customer-receipts', element: <CustomerReceiptsPage /> },
           { path: '/finance/customer-receipts/new', element: <CustomerReceiptPage /> },
           { path: '/finance/customer-receipts/:id', element: <CustomerReceiptPage /> },
+
+          // Expenses
+          { path: '/expenses', element: <ExpensesPage /> },
+          { path: '/expenses/new', element: <ExpenseDetailPage /> },
+          { path: '/expenses/:id', element: <ExpenseDetailPage /> },
+          { path: '/expenses/categories', element: <ExpenseCategoriesPage /> },
 
           // Accounting
           { path: '/accounting', element: <AccountingDashboard /> },
