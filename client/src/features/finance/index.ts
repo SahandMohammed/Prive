@@ -8,3 +8,4 @@ export { MoneyTransfersPage } from './pages/MoneyTransfersPage'
 export { SupplierPaymentsPage } from './pages/SupplierPaymentsPage'
 export { CustomerReceiptsPage } from './pages/CustomerReceiptsPage'
 export { CustomerReceiptPage } from './pages/CustomerReceiptPage'
+

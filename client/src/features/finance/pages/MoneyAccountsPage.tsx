@@ -35,7 +35,6 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { useAccountTree } from '@/features/accounting'
 import { useCurrentUser } from '@/features/auth'
 import { useBranches, useCurrencies } from '@/features/business'
 import { useUsers } from '@/features/users'
@@ -60,7 +59,6 @@ type FormValue = {
   type: 0 | 1
   branchId: string
   currencyId: string
-  accountingAccountId: string
   isActive: boolean
   notes: string
   bankName: string
@@ -73,7 +71,6 @@ const emptyForm: FormValue = {
   type: 0,
   branchId: '',
   currencyId: '',
-  accountingAccountId: '',
   isActive: true,
   notes: '',
   bankName: '',
@@ -406,7 +403,6 @@ function MoneyAccountFormDialog({
 }) {
   const branches = useBranches().data?.data ?? []
   const currencies = useCurrencies().data?.data ?? []
-  const accounts = useAccountTree({ classification: '0', postingAccountsOnly: true }).data ?? []
   const save = useSaveMoneyAccount(account?.id)
 
   const form = useForm<FormValue>({
@@ -418,7 +414,6 @@ function MoneyAccountFormDialog({
           type: account.type,
           branchId: account.branchId,
           currencyId: account.currencyId,
-          accountingAccountId: account.accountingAccountId,
           isActive: account.isActive,
           notes: account.notes ?? '',
           bankName: account.bankName ?? '',
@@ -442,7 +437,6 @@ function MoneyAccountFormDialog({
       type: values.type,
       branchId: values.branchId,
       currencyId: values.currencyId,
-      accountingAccountId: values.accountingAccountId,
       isActive: values.isActive,
       notes: clean(values.notes),
       bankName: values.type === MoneyAccountType.Bank ? clean(values.bankName) : null,
@@ -463,7 +457,7 @@ function MoneyAccountFormDialog({
           <DialogDescription>
             {account
               ? 'Update operational settings or descriptive details for this money account.'
-              : 'Register a new cashbox or bank account mapped to a branch, currency, and GL asset account.'}
+              : 'Register a new cashbox or bank account. A dedicated GL account will be automatically assigned from the Iraqi Unified Accounting System.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -518,16 +512,24 @@ function MoneyAccountFormDialog({
               </Select>
             </Field>
 
-            <Field label="Linked Posting GL Account" error={form.formState.errors.accountingAccountId?.message}>
-              <Select {...form.register('accountingAccountId')}>
-                <option value="">Select GL account</option>
-                {accounts.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.code} — {item.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {account ? (
+              <Field label="GL Account (auto-assigned)">
+                <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 dark:border-slate-800 dark:bg-slate-900/60">
+                  <span className="font-mono text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {account.accountingAccountCode}
+                  </span>
+                  <span className="ml-2 truncate text-xs text-muted-foreground">
+                    {account.accountingAccountName}
+                  </span>
+                </div>
+              </Field>
+            ) : (
+              <Field label="GL Account">
+                <div className="flex h-10 items-center rounded-md border border-dashed border-slate-300 bg-slate-50/60 px-3 text-xs text-muted-foreground dark:border-slate-700 dark:bg-slate-900/40">
+                  Auto-assigned on creation
+                </div>
+              </Field>
+            )}
           </div>
 
           {selectedType === 1 && (

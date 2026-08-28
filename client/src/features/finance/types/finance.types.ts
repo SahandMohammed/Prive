@@ -9,7 +9,7 @@ export type MoneyLedgerSourceType = typeof MoneyLedgerSourceType[keyof typeof Mo
 
 export interface PageFilters { page: number; pageSize: number; [key: string]: string | number | boolean | undefined }
 export interface MoneyAccount { id: string; code: string; name: string; type: MoneyAccountType; branchId: string; branchCode: string; branchName: string; currencyId: string; currencyCode: string; accountingAccountId: string; accountingAccountCode: string; accountingAccountName: string; balance: number; isActive: boolean; notes: string | null; bankName: string | null; accountNumberOrIban: string | null; currentUserAccess: MoneyAccountAccessLevel | null; createdAtUtc: string; updatedAtUtc: string }
-export interface MoneyAccountInput { code: string; name: string; type: MoneyAccountType; branchId: string; currencyId: string; accountingAccountId: string; isActive: boolean; notes: string | null; bankName: string | null; accountNumberOrIban: string | null }
+export interface MoneyAccountInput { code: string; name: string; type: MoneyAccountType; branchId: string; currencyId: string; isActive: boolean; notes: string | null; bankName: string | null; accountNumberOrIban: string | null }
 export interface MoneyAccountAccess { userId: string; username: string; accessLevel: MoneyAccountAccessLevel }
 export interface MoneyAccountAccessInput { userId: string; accessLevel: MoneyAccountAccessLevel }
 export interface OpeningBalanceInput { date: string; amount: number; exchangeRate: number | null; notes: string | null }
