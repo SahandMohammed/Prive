@@ -63,6 +63,7 @@ export interface Branch {
   country: string
   isMainBranch: boolean
   isActive: boolean
+  catalogMode: 'Shared' | 'Separate'
 }
 
 export interface BranchInput {
@@ -76,4 +77,5 @@ export interface BranchInput {
   country: string
   isMainBranch: boolean
   isActive: boolean
+  catalogMode: 'Shared' | 'Separate'
 }

@@ -171,7 +171,7 @@ export function ExpensesPage() {
             resetPage()
           }}
         >
-          <option value="">All Branches</option>
+          <option value="">Current branch</option>
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.code} — {b.name}

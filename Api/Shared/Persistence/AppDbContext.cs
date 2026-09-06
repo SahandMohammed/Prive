@@ -15,8 +15,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options, BranchContext? branchContext = null) : DbContext(options)
 {
+  public DbSet<UserBranchAccessEntity> UserBranchAccess => Set<UserBranchAccessEntity>();
   public DbSet<UserEntity> Users => Set<UserEntity>();
   public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
   public DbSet<BusinessEntity> Businesses => Set<BusinessEntity>();
@@ -64,5 +65,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
     modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+    ConfigureBranchFilters(modelBuilder);
   }
 }

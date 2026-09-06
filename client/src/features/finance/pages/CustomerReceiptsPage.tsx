@@ -138,7 +138,7 @@ export function CustomerReceiptsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Branches</option>
+          <option value="">Current branch</option>
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}

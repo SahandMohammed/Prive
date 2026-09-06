@@ -1,7 +1,8 @@
 namespace Api.Modules.Contact;
 
-public sealed class ContactEntity
+public sealed class ContactEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public ContactKind Kind { get; set; } = ContactKind.Individual;

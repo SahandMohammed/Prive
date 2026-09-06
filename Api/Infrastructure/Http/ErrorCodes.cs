@@ -35,6 +35,10 @@ public static class ErrorCodes
 
   public static class Branch
   {
+    public const string CatalogModeImmutable = "BRANCH_CATALOG_MODE_IMMUTABLE";
+    public const string SelectionRequired = "BRANCH_SELECTION_REQUIRED";
+    public const string AccessDenied = "BRANCH_ACCESS_DENIED";
+    public const string ScopeMismatch = "BRANCH_SCOPE_MISMATCH";
     public const string NotFound = "BRANCH_NOT_FOUND";
     public const string CodeTaken = "BRANCH_CODE_TAKEN";
     public const string MainBranchRequired = "BRANCH_MAIN_BRANCH_REQUIRED";

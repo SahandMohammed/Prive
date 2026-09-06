@@ -765,7 +765,7 @@ public sealed class InventoryService
     var document = new OpeningStockDocumentEntity
     {
       DocumentNumber = await NextDocumentNumberAsync(
-        _db.OpeningStockDocuments.Select(x => x.DocumentNumber),
+        _db.OpeningStockDocuments.IgnoreQueryFilters().Select(x => x.DocumentNumber),
         "OS",
         ct),
       DocumentDate = request.DocumentDate,
@@ -1007,7 +1007,7 @@ public sealed class InventoryService
     var document = new StockAdjustmentDocumentEntity
     {
       DocumentNumber = await NextDocumentNumberAsync(
-        _db.StockAdjustmentDocuments.Select(
+        _db.StockAdjustmentDocuments.IgnoreQueryFilters().Select(
           x => x.DocumentNumber),
         "ADJ",
         ct),
@@ -1306,7 +1306,7 @@ public sealed class InventoryService
     var document = new WarehouseTransferDocumentEntity
     {
       DocumentNumber = await NextDocumentNumberAsync(
-        _db.WarehouseTransferDocuments.Select(
+        _db.WarehouseTransferDocuments.IgnoreQueryFilters().Select(
           x => x.DocumentNumber),
         "TRF",
         ct),
@@ -2792,9 +2792,10 @@ public sealed class InventoryService
     Guid id,
     CancellationToken ct)
   {
-    return await _db.StockMovements.AnyAsync(x => x.ProductId == id, ct) ||
-      await _db.PurchaseInvoiceLines.AnyAsync(x => x.ProductId == id, ct) ||
-      await _db.SalesInvoiceLines.AnyAsync(x => x.ProductId == id, ct);
+    // Catalog definitions may be shared; protect history in all branches.
+    return await _db.StockMovements.IgnoreQueryFilters().AnyAsync(x => x.ProductId == id, ct) ||
+      await _db.PurchaseInvoiceLines.IgnoreQueryFilters().AnyAsync(x => x.ProductId == id, ct) ||
+      await _db.SalesInvoiceLines.IgnoreQueryFilters().AnyAsync(x => x.ProductId == id, ct);
   }
 
   private async Task EnsureProductCodes(

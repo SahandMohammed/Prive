@@ -1,3 +1,4 @@
+import { getSelectedBranchId } from '@/features/business'
 import { useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -170,7 +171,7 @@ export function MoneyAccountsPage() {
             resetPage()
           }}
         >
-          <option value="">All branches</option>
+          <option value="">Current branch</option>
           {branches.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
@@ -446,12 +447,12 @@ function MoneyAccountFormDialog({
           bankName: account.bankName ?? '',
           accountNumberOrIban: account.accountNumberOrIban ?? '',
         }
-      : emptyForm,
+      : { ...emptyForm, branchId: getSelectedBranchId() },
   })
 
   const closeDialog = () => {
     save.reset()
-    form.reset(emptyForm)
+    form.reset({ ...emptyForm, branchId: getSelectedBranchId() })
     onOpenChange(false)
   }
 
@@ -513,7 +514,7 @@ function MoneyAccountFormDialog({
 
             <Field label="Branch" error={form.formState.errors.branchId?.message}>
               <Select {...form.register('branchId')}>
-                <option value="">Select branch</option>
+
                 {branches
                   .filter((item) => item.isActive || item.id === account?.branchId)
                   .map((item) => (

@@ -16,6 +16,7 @@ import {
   StoreIcon,
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '@/features/auth'
+import { BranchSelector } from '@/features/business'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
@@ -29,6 +30,8 @@ export function Sidebar() {
         <h1 className="text-xl font-heading font-bold text-foreground">Prive MVP</h1>
         <p className="text-xs text-muted-foreground mt-1">Management System</p>
       </div>
+
+      <div className="px-4"><BranchSelector /></div>
 
       <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto max-h-[calc(100vh-180px)]">
         <NavItem to="/dashboard" icon={<LayoutDashboardIcon className="w-4 h-4" />}>

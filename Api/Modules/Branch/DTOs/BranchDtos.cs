@@ -9,6 +9,8 @@ public sealed class BranchListQuery : PaginationRequest
   public bool? IsActive { get; init; }
 }
 
+public sealed record UpdateBranchAccessRequest([Required] Guid[] BranchIds);
+
 public sealed record BranchResponse(
   Guid Id,
   string Code,
@@ -20,7 +22,8 @@ public sealed record BranchResponse(
   string Region,
   string Country,
   bool IsMainBranch,
-  bool IsActive);
+  bool IsActive,
+  BranchCatalogMode CatalogMode = BranchCatalogMode.Shared);
 
 public sealed record CreateBranchRequest(
   [Required, MaxLength(20)] string Code,
@@ -32,7 +35,8 @@ public sealed record CreateBranchRequest(
   [Required, MaxLength(100)] string Region,
   [Required, MaxLength(100)] string Country,
   bool IsMainBranch,
-  bool IsActive = true);
+  bool IsActive = true,
+  [EnumDataType(typeof(BranchCatalogMode))] BranchCatalogMode CatalogMode = BranchCatalogMode.Shared);
 
 public sealed record UpdateBranchRequest(
   [Required, MaxLength(20)] string Code,
@@ -44,4 +48,5 @@ public sealed record UpdateBranchRequest(
   [Required, MaxLength(100)] string Region,
   [Required, MaxLength(100)] string Country,
   bool IsMainBranch,
-  bool IsActive);
+  bool IsActive,
+  BranchCatalogMode CatalogMode = BranchCatalogMode.Shared);

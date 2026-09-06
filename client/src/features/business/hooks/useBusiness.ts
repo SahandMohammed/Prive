@@ -56,6 +56,10 @@ export function useSaveCurrency(editingId: string | null) {
 }
 
 export function useBranches() {
+  return useQuery({ queryKey: ['business', 'selected-branch'], queryFn: businessApi.selectedBranch })
+}
+
+export function useAllBranches() {
   return useQuery({ queryKey: BRANCHES_QUERY_KEY, queryFn: businessApi.listBranches })
 }
 
@@ -90,7 +94,7 @@ export function useSaveBranch(editingId: string | null) {
         ? { ...current, data: current.data.map((item) => item.id === context.optimisticId ? branch : item) }
         : current)
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: BRANCHES_QUERY_KEY }),
+    onSettled: () => Promise.all([queryClient.invalidateQueries({ queryKey: BRANCHES_QUERY_KEY }), queryClient.invalidateQueries({ queryKey: ['branch-access'] })]),
   })
 }
 
@@ -109,7 +113,7 @@ export function useDeactivateBranch() {
     onError: (_error, _id, context) => {
       queryClient.setQueryData(BRANCHES_QUERY_KEY, context?.previous)
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: BRANCHES_QUERY_KEY }),
+    onSettled: () => Promise.all([queryClient.invalidateQueries({ queryKey: BRANCHES_QUERY_KEY }), queryClient.invalidateQueries({ queryKey: ['branch-access'] })]),
   })
 }
 

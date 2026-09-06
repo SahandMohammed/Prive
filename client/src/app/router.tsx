@@ -1,7 +1,8 @@
+import { UsersPage } from '@/features/users'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
-import { AppLayout } from '@/components/layout/AppLayout'
+import { AppLayout } from './layout/AppLayout'
 import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
 import { LoginPage } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
@@ -124,6 +125,7 @@ export const router = createBrowserRouter([
 
           // Settings
           { path: '/settings/business', element: <BaseBusinessSettingsPage /> },
+          { path: '/users', element: <UsersPage /> },
           { path: '/settings/branches', element: <BranchesPage /> },
           { path: '/settings/currencies', element: <BaseCurrenciesPage /> },
           { path: '/settings/items', element: <ItemsPage /> },

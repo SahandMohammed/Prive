@@ -138,7 +138,7 @@ public sealed class SalesService
   {
     var service = await _db.Services.SingleOrDefaultAsync(item => item.Id == id, ct)
       ?? throw new NotFoundException(ErrorCodes.Sales.ServiceNotFound, "Service not found.");
-    if (await _db.SalesInvoiceLines.AnyAsync(line => line.ServiceId == id, ct))
+    if (await _db.SalesInvoiceLines.IgnoreQueryFilters().AnyAsync(line => line.ServiceId == id, ct))
       throw new BadRequestException(ErrorCodes.Sales.ServiceHasHistory, "A service with sales history cannot be deleted. Deactivate it instead.");
     _db.Services.Remove(service);
     await _db.SaveChangesAsync(ct);
@@ -753,7 +753,7 @@ public sealed class SalesService
 
   private async Task<string> NextDocumentNumberAsync(CancellationToken ct)
   {
-    var last = await _db.SalesInvoices.Select(invoice => invoice.DocumentNumber)
+    var last = await _db.SalesInvoices.IgnoreQueryFilters().Select(invoice => invoice.DocumentNumber)
       .Where(number => number.StartsWith("SI-"))
       .OrderByDescending(number => number)
       .FirstOrDefaultAsync(ct);

@@ -118,7 +118,7 @@ export function JournalEntriesPage() {
             onChange={(e) => { setBranchFilter(e.target.value); setPage(1) }}
             className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
           >
-            <option value="all">All Branches</option>
+            <option value="all">Current branch</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.code} — {b.name}

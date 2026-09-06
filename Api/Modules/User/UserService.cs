@@ -59,6 +59,10 @@ public sealed class UserService
     user.PasswordHash = _hasher.HashPassword(user, request.Password);
 
     _db.Users.Add(user);
+    var mainBranchId = await _db.Branches.Where(branch => branch.IsMainBranch && branch.IsActive)
+      .Select(branch => (Guid?)branch.Id).SingleOrDefaultAsync();
+    if (mainBranchId is not null && user.Role is UserRole.Manager or UserRole.Cashier or UserRole.Professional)
+      _db.UserBranchAccess.Add(new Api.Modules.Branch.UserBranchAccessEntity { UserId = user.Id, BranchId = mainBranchId.Value });
     await _db.SaveChangesAsync();
 
     return ToResponse(user);

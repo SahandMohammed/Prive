@@ -6,10 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Modules.Branch;
 
+[BranchIndependent]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/branches")]
-[Authorize(Roles = "SuperAdmin,Manager")]
+[Authorize(Roles = "SuperAdmin,Owner,Manager")]
 public sealed class BranchController : ControllerBase
 {
   private readonly BranchService _branchService;

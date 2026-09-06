@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Modules.Currency;
 
+[BranchIndependent]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/currencies")]

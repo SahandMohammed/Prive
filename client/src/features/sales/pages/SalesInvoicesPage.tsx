@@ -43,7 +43,7 @@ export function SalesInvoicesPage() {
     <div className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-4">
       <Input aria-label="Search Sales Invoices" placeholder="Document number or customer" value={search} onChange={(event) => { setSearch(event.target.value); resetPage() }} />
       <Select aria-label="Customer filter" value={customerId} onChange={(event) => { setCustomerId(event.target.value); resetPage() }}><option value="">All customers</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
-      <Select aria-label="Branch filter" value={branchId} onChange={(event) => { setBranchId(event.target.value); resetPage() }}><option value="">All branches</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
+      <Select aria-label="Branch filter" value={branchId} onChange={(event) => { setBranchId(event.target.value); resetPage() }}><option value="">Current branch</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
       <Select aria-label="Currency filter" value={currencyId} onChange={(event) => { setCurrencyId(event.target.value); resetPage() }}><option value="">All currencies</option>{currencies.map((item) => <option key={item.id} value={item.id}>{item.code}</option>)}</Select>
       <Select aria-label="Status filter" value={status} onChange={(event) => { setStatus(event.target.value); resetPage() }}><option value="">All statuses</option><option value="0">Draft</option><option value="1">Posted</option></Select>
       <Input aria-label="From date" type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); resetPage() }} />

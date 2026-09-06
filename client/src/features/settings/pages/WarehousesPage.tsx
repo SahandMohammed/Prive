@@ -1,3 +1,4 @@
+import { getSelectedBranchId } from '@/features/business'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertCircle, Box, MapPin, Plus, Search, WarehouseIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -143,11 +144,11 @@ function CreateWarehouseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const createWarehouse = useSaveWarehouse(null)
   const form = useForm<WarehouseInput>({
     resolver: zodResolver(warehouseSchema),
-    defaultValues: warehouseDefaults,
+    defaultValues: { ...warehouseDefaults, branchId: getSelectedBranchId() },
   })
   const close = () => {
     createWarehouse.reset()
-    form.reset(warehouseDefaults)
+    form.reset({ ...warehouseDefaults, branchId: getSelectedBranchId() })
     onOpenChange(false)
   }
   const onSubmit = (values: WarehouseInput) => createWarehouse.mutate(values, {

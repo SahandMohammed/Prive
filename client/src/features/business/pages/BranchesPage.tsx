@@ -9,13 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { branchSchema, type BranchFormValues } from '../schemas/business.schemas'
-import { useBranches, useDeactivateBranch, useSaveBranch } from '../hooks/useBusiness'
+import { useAllBranches, useDeactivateBranch, useSaveBranch } from '../hooks/useBusiness'
 import type { Branch, BranchInput } from '../types/business.types'
 
-const defaults: BranchFormValues = { code: '', name: '', phoneNumber: '', email: '', address: '', city: '', region: '', country: '', isMainBranch: false, isActive: true }
+const defaults: BranchFormValues = { code: '', name: '', phoneNumber: '', email: '', address: '', city: '', region: '', country: '', isMainBranch: false, isActive: true, catalogMode: 'Shared' }
 
 export function BranchesPage() {
-  const branchesQuery = useBranches()
+  const branchesQuery = useAllBranches()
   const [editing, setEditing] = useState<Branch | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -177,6 +177,15 @@ export function BranchesPage() {
             <Field label="Address" error={form.formState.errors.address?.message}><Input {...form.register('address')} /></Field>
             <div className="grid gap-4 sm:grid-cols-2"><Field label="City" error={form.formState.errors.city?.message}><Input {...form.register('city')} /></Field><Field label="Region / governorate" error={form.formState.errors.region?.message}><Input {...form.register('region')} /></Field></div>
             <Field label="Country" error={form.formState.errors.country?.message}><Input {...form.register('country')} /></Field>
+            <fieldset className="space-y-2 rounded-md border border-border p-4">
+              <legend className="px-1 text-sm font-medium">Customers, suppliers, and item definitions</legend>
+              {editing ? <p className="text-sm">{editing.catalogMode === 'Shared' ? 'Shared business catalog' : 'Separate branch catalog'}</p> : <>
+              <label className="flex items-center gap-2 text-sm"><input type="radio" value="Shared" {...form.register('catalogMode')} /> Share the business catalog</label>
+              <label className="flex items-center gap-2 text-sm"><input type="radio" value="Separate" {...form.register('catalogMode')} /> Separate catalog for this branch</label>
+              </>}
+              <p className="text-xs text-muted-foreground">Shared branches use the same contacts, products, services, categories, and units. Separate branches start with an empty catalog. This choice is fixed after creation.</p>
+              <p className="text-xs text-muted-foreground">The chart of accounts and currencies are always shared. Transactions and balances belong to the selected branch.</p>
+            </fieldset>
             <div className="flex flex-wrap gap-4"><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isMainBranch')} /> Main branch</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} /> Active</label></div>
             {saveBranch.isError && <p className="text-sm text-destructive">{saveBranch.error.message}</p>}
             <DialogFooter>

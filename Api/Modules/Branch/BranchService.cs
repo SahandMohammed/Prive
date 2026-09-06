@@ -1,4 +1,5 @@
 using Api.Infrastructure.Http;
+using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,50 @@ public sealed class BranchService
   private readonly AppDbContext _db;
 
   public BranchService(AppDbContext db) => _db = db;
+
+  public async Task<PagedResult<BranchResponse>> GetAccessibleAsync(Guid userId, BranchListQuery request, CancellationToken ct = default)
+  {
+    var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == userId && user.IsActive, ct)
+      ?? throw new ForbiddenException(ErrorCodes.Branch.AccessDenied, "Your user account is inactive or unavailable.");
+    var query = _db.Branches.AsNoTracking().Where(branch => branch.IsActive);
+    if (user.Role is not (UserRole.SuperAdmin or UserRole.Owner))
+      query = query.Where(branch => _db.UserBranchAccess.Any(access => access.UserId == userId && access.BranchId == branch.Id));
+    return await query.OrderByDescending(branch => branch.IsMainBranch).ThenBy(branch => branch.Name).ThenBy(branch => branch.Id)
+      .Select(branch => ToResponse(branch)).ToPagedResultAsync(request, ct);
+  }
+
+  public async Task<BranchResponse> ValidateSelectionAsync(Guid userId, string? selection, CancellationToken ct = default)
+  {
+    if (!Guid.TryParse(selection, out var branchId) || branchId == Guid.Empty)
+      throw new BadRequestException(ErrorCodes.Branch.SelectionRequired, "Select a branch before accessing branch data.");
+    var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == userId && user.IsActive, ct);
+    if (user is null || !await _db.Branches.AnyAsync(branch => branch.Id == branchId && branch.IsActive, ct)
+      || (user.Role is not (UserRole.SuperAdmin or UserRole.Owner)
+        && !await _db.UserBranchAccess.AnyAsync(access => access.UserId == userId && access.BranchId == branchId, ct)))
+      throw new ForbiddenException(ErrorCodes.Branch.AccessDenied, "You do not have access to this active branch.");
+    return await GetByIdAsync(branchId, ct);
+  }
+
+  public async Task<List<Guid>> GetUserAccessAsync(Guid userId, CancellationToken ct)
+  {
+    if (!await _db.Users.AnyAsync(user => user.Id == userId, ct))
+      throw new NotFoundException(ErrorCodes.User.NotFound, "User not found.");
+    return await _db.UserBranchAccess.Where(access => access.UserId == userId).Select(access => access.BranchId).ToListAsync(ct);
+  }
+
+  public async Task SetUserAccessAsync(Guid userId, UpdateBranchAccessRequest request, CancellationToken ct)
+  {
+    if (!await _db.Users.AnyAsync(user => user.Id == userId, ct))
+      throw new NotFoundException(ErrorCodes.User.NotFound, "User not found.");
+    var branchIds = request.BranchIds.Distinct().ToArray();
+    if (await _db.Branches.CountAsync(branch => branchIds.Contains(branch.Id) && branch.IsActive, ct) != branchIds.Length)
+      throw new BadRequestException(ErrorCodes.Branch.NotFound, "Choose active branches only.");
+    var existing = await _db.UserBranchAccess.Where(access => access.UserId == userId).ToListAsync(ct);
+    _db.UserBranchAccess.RemoveRange(existing.Where(access => !branchIds.Contains(access.BranchId)));
+    _db.UserBranchAccess.AddRange(branchIds.Where(id => existing.All(access => access.BranchId != id))
+      .Select(id => new UserBranchAccessEntity { UserId = userId, BranchId = id }));
+    await _db.SaveChangesAsync(ct);
+  }
 
   public async Task<PagedResult<BranchResponse>> GetAllAsync(BranchListQuery request, CancellationToken ct = default)
   {
@@ -50,10 +95,16 @@ public sealed class BranchService
     if (request.IsMainBranch && !request.IsActive)
       throw new BadRequestException(ErrorCodes.Branch.MainBranchDeactivationNotAllowed, "The main branch must remain active.");
 
-    var branch = new BranchEntity { IsMainBranch = false };
+    var branch = new BranchEntity { IsMainBranch = false, CatalogMode = request.CatalogMode };
     Apply(branch, request, code);
     branch.IsMainBranch = false;
     _db.Branches.Add(branch);
+    if (!hasMainBranch)
+    {
+      var staffIds = await _db.Users.Where(user => user.Role == UserRole.Manager || user.Role == UserRole.Cashier || user.Role == UserRole.Professional)
+        .Select(user => user.Id).ToListAsync(ct);
+      _db.UserBranchAccess.AddRange(staffIds.Select(userId => new UserBranchAccessEntity { UserId = userId, BranchId = branch.Id }));
+    }
     await _db.SaveChangesAsync(ct);
 
     if (request.IsMainBranch)
@@ -70,6 +121,8 @@ public sealed class BranchService
     var branch = await _db.Branches.SingleOrDefaultAsync(branch => branch.Id == id, ct)
       ?? throw new NotFoundException(ErrorCodes.Branch.NotFound, $"Branch with id '{id}' was not found.");
     var code = NormalizeCode(request.Code);
+    if (request.CatalogMode != branch.CatalogMode)
+      throw new BadRequestException(ErrorCodes.Branch.CatalogModeImmutable, "Catalog sharing is chosen when a branch is created and cannot be changed.");
 
     if (code != branch.Code && await _db.Branches.AnyAsync(other => other.Code == code && other.Id != id, ct))
       throw new ConflictException(ErrorCodes.Branch.CodeTaken, $"Branch code '{code}' is already in use.");
@@ -153,5 +206,6 @@ public sealed class BranchService
     branch.Region,
     branch.Country,
     branch.IsMainBranch,
-    branch.IsActive);
+    branch.IsActive,
+    branch.CatalogMode);
 }

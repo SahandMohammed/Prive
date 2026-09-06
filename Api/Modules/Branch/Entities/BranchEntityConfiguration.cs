@@ -9,6 +9,7 @@ public sealed class BranchEntityConfiguration : IEntityTypeConfiguration<BranchE
   {
     builder.ToTable("branches");
     builder.HasKey(branch => branch.Id);
+    builder.Property(branch => branch.CatalogMode).HasConversion<string>().HasMaxLength(16).IsRequired();
     builder.Property(branch => branch.Code).HasMaxLength(20).IsRequired();
     builder.HasIndex(branch => branch.Code).IsUnique();
     builder.Property(branch => branch.Name).HasMaxLength(200).IsRequired();

@@ -1,3 +1,4 @@
+import { getSelectedBranchId } from '@/features/business'
 import { useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -81,7 +82,7 @@ export function CreateJournalEntryPage() {
       entryDate: today,
       reference: null,
       description: '',
-      branchId: '',
+      branchId: getSelectedBranchId(),
       type: 0,
       lines: [blankLine(baseCurrencyId)],
     }),

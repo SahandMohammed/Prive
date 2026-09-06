@@ -1,3 +1,4 @@
+import { getSelectedBranchId } from '@/features/business'
 import { useEffect, useRef } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, BookOpen, Loader2, PackageSearch, Plus, Send, Trash2 } from 'lucide-react'
@@ -44,7 +45,7 @@ export function PurchaseInvoicePage() {
   const currencies = useCurrencies().data?.data ?? []
   const business = useCurrentBusiness().data
   const products = useProducts().data?.data ?? []
-  const form = useForm<PurchaseForm>({ resolver: zodResolver(purchaseInvoiceSchema), defaultValues: { supplierId: '', invoiceDate: today(), supplierReference: '', branchId: '', warehouseId: '', currencyId: '', exchangeRate: 1, notes: '', lines: [emptyLine()] } })
+  const form = useForm<PurchaseForm>({ resolver: zodResolver(purchaseInvoiceSchema), defaultValues: { supplierId: '', invoiceDate: today(), supplierReference: '', branchId: getSelectedBranchId(), warehouseId: '', currencyId: '', exchangeRate: 1, notes: '', lines: [emptyLine()] } })
   const lineFields = useFieldArray({ control: form.control, name: 'lines' })
   const values = useWatch({ control: form.control })
   const invoice = invoiceQuery.data
@@ -125,7 +126,7 @@ export function PurchaseInvoicePage() {
         <Field label="Supplier" error={form.formState.errors.supplierId?.message}><Select {...form.register('supplierId')}><option value="">Select active supplier</option>{activeSuppliers.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select></Field>
         <Field label="Invoice date" error={form.formState.errors.invoiceDate?.message}><Input type="date" {...form.register('invoiceDate')} /></Field>
         <Field label="Supplier reference" error={form.formState.errors.supplierReference?.message}><Input placeholder="Optional" {...form.register('supplierReference')} /></Field>
-        <Field label="Branch" error={form.formState.errors.branchId?.message}><Select {...form.register('branchId', { onChange: () => form.setValue('warehouseId', '', { shouldDirty: true }) })}><option value="">Select branch</option>{branches.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
+        <Field label="Branch" error={form.formState.errors.branchId?.message}><Select {...form.register('branchId', { onChange: () => form.setValue('warehouseId', '', { shouldDirty: true }) })}>{branches.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
         <Field label="Receiving warehouse" error={form.formState.errors.warehouseId?.message}><Select {...form.register('warehouseId')}><option value="">Select warehouse</option>{availableWarehouses.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
         <Field label="Currency" error={form.formState.errors.currencyId?.message}><Select {...form.register('currencyId', { onChange: handleCurrencyChange })}><option value="">Select currency</option>{currencies.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
         {isForeign && <Field label={`Rate: 1 ${currencies.find((item) => item.id === selectedCurrencyId)?.code ?? ''} in ${business?.baseCurrencyCode ?? 'base currency'}`} error={form.formState.errors.exchangeRate?.message ?? effectiveRateQuery.error?.message}><Input type="number" min="0.000001" step="0.000001" {...form.register('exchangeRate', { setValueAs: (value) => value === '' ? null : Number(value) })} /></Field>}

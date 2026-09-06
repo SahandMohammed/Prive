@@ -36,7 +36,7 @@ export function TrialBalancePage() {
 
   const [fromDate, setFromDate] = useState(searchParams.get('fromDate') ?? '')
   const [toDate, setToDate] = useState(searchParams.get('toDate') ?? '')
-  const [branchId, setBranchId] = useState(searchParams.get('branchId') ?? '')
+  const [branchId, setBranchId] = useState('')
   const [search, setSearch] = useState('')
   const [classificationFilter, setClassificationFilter] = useState<string>('all')
   const [hideZeroBalances, setHideZeroBalances] = useState(true)
@@ -379,7 +379,7 @@ export function TrialBalancePage() {
             onChange={(e) => setBranchId(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="">All Branches</option>
+            <option value="">Current branch</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.code} — {b.name}

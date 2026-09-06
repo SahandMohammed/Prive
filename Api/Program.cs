@@ -201,7 +201,7 @@ try
   // #6: Dynamically registers one Swagger document per discovered API version.
   builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
   builder.Services
-    .AddControllers()
+    .AddControllers(options => options.Filters.AddService<BranchScopeFilter>())
     .ConfigureApiBehaviorOptions(options =>
     {
       options.InvalidModelStateResponseFactory = context =>

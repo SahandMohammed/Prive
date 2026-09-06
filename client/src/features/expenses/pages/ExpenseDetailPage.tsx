@@ -1,3 +1,4 @@
+import { getSelectedBranchId } from '@/features/business'
 import { useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useFieldArray, useWatch } from 'react-hook-form'
@@ -60,7 +61,7 @@ export function ExpenseDetailPage() {
   const form = useForm<ExpenseDraftInput>({
     resolver: zodResolver(expenseDraftSchema),
     defaultValues: {
-      branchId: '',
+      branchId: getSelectedBranchId(),
       expenseDate: new Date().toISOString().slice(0, 10),
       moneyAccountId: '',
       exchangeRate: null,
