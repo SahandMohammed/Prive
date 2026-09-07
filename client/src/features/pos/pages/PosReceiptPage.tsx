@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   ArrowLeft,
   BookOpen,
@@ -7,7 +8,7 @@ import {
   ReceiptText,
   ShoppingCart,
 } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -23,8 +24,16 @@ import { usePosSale } from '../hooks/usePos'
 
 export function PosReceiptPage() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const query = usePosSale(id)
   const sale = query.data
+
+  useEffect(() => {
+    if (!sale || searchParams.get('print') !== '1') return
+    const timer = window.setTimeout(() => window.print(), 250)
+    return () => window.clearTimeout(timer)
+  }, [sale, searchParams])
+
   if (query.isPending)
     return (
       <div className="grid h-72 place-items-center text-muted-foreground">Loading receipt…</div>
@@ -35,7 +44,7 @@ export function PosReceiptPage() {
     )
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 print:max-w-none">
+    <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
       <header className="flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
           <Link to="/pos">
