@@ -87,7 +87,9 @@ public sealed class UserService
     user.LinkedProfessionalId = request.LinkedProfessionalId;
     user.IsActive = request.IsActive;
 
-    if (wasPrivileged && becomesScoped && !await _db.UserBranchAccess.AnyAsync(access => access.UserId == id))
+    var hasActiveBranchAccess = await _db.UserBranchAccess
+      .AnyAsync(access => access.UserId == id && access.Branch.IsActive);
+    if (wasPrivileged && becomesScoped && !hasActiveBranchAccess)
     {
       var mainBranchId = await GetActiveMainBranchIdAsync();
       if (mainBranchId is not null)
