@@ -1,8 +1,6 @@
 import { z } from 'zod'
 
 export const posCheckoutSchema = z.object({
-  customerId: z.string(),
-  customerSearch: z.string().max(200),
   tenders: z
     .array(
       z.object({
