@@ -33,6 +33,9 @@ export function useCompletePosSale() {
       client.invalidateQueries({ queryKey: ['finance'] })
       return client.invalidateQueries({ queryKey: ['accounting'] })
     },
-    onError: () => client.invalidateQueries({ queryKey: [...POS_KEY, 'setup'] }),
+    onError: () => Promise.all([
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'setup'] }),
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'catalog'] }),
+    ]),
   })
 }
