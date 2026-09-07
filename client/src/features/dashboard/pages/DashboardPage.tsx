@@ -80,19 +80,24 @@ export function DashboardPage() {
       {/* 2. Top 4 KPI Cards with Wavy Sparklines */}
       <KpiCards summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
 
-      {/* 3. Main Dashboard Row matching Zenith reference: Overview Spline on Left, Traffic Sources + Monthly Goals on Right */}
+      {/* 3. Main Dashboard Content: Left Column (Trend Chart + Recent Transactions) & Right Column (Sales Mix + Goals + Activity) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Overview Monthly Spline Chart */}
-        <div className="lg:col-span-7 xl:col-span-8">
+        {/* Left Column: Overview Monthly Spline Chart + Recent Transactions */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
           <SalesExpenseTrendChart
             data={trendsQuery.data}
             isLoading={trendsQuery.isLoading}
             selectedDays={selectedDays}
             onDaysChange={setSelectedDays}
           />
+
+          <RecentTransactionsTable
+            transactions={transactionsQuery.data}
+            isLoading={transactionsQuery.isLoading}
+          />
         </div>
 
-        {/* Right Column: Traffic Sources & Monthly Goals */}
+        {/* Right Column: Sales Mix, Monthly Goals, Needs Attention, Activity */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-6">
           <SalesMixChart
             data={salesMixQuery.data}
@@ -100,21 +105,7 @@ export function DashboardPage() {
           />
 
           <MonthlyGoalsCard isLoading={summaryQuery.isLoading} />
-        </div>
-      </div>
 
-      {/* 4. Operational Activity & Audit Trail Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pt-2">
-        {/* Left: Recent Transactions Table */}
-        <div className="lg:col-span-7 xl:col-span-8">
-          <RecentTransactionsTable
-            transactions={transactionsQuery.data}
-            isLoading={transactionsQuery.isLoading}
-          />
-        </div>
-
-        {/* Right: Needs Attention & Team Activity */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
           <NeedsAttentionPanel
             summary={summaryQuery.data}
             isLoading={summaryQuery.isLoading}

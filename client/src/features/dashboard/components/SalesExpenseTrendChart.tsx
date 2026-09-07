@@ -37,9 +37,9 @@ export function SalesExpenseTrendChart({
   const hasEmptyData = items !== undefined && items.length === 0
   const chartData = defaultMonths
 
-  // Dimensions
-  const width = 780
-  const height = 280
+  // Dimensions (generous, well-balanced SaaS spline chart)
+  const width = 840
+  const height = 300
   const paddingLeft = 50
   const paddingRight = 25
   const paddingTop = 20
@@ -93,7 +93,7 @@ export function SalesExpenseTrendChart({
   const activeItem = hoverIndex !== null && chartData[hoverIndex] ? chartData[hoverIndex] : null
 
   return (
-    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
+    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
         <div>
@@ -126,18 +126,19 @@ export function SalesExpenseTrendChart({
 
       {/* SVG Smooth Spline Chart */}
       {isLoading ? (
-        <div className="w-full h-[260px] flex items-center justify-center bg-muted/20 rounded-xl animate-pulse">
+        <div className="w-full h-[280px] sm:h-[310px] flex items-center justify-center bg-muted/20 rounded-xl animate-pulse">
           <span className="text-xs text-muted-foreground">Loading chart data...</span>
         </div>
       ) : hasEmptyData ? (
-        <div className="w-full h-[260px] flex items-center justify-center border border-dashed border-border rounded-xl">
+        <div className="w-full h-[280px] sm:h-[310px] flex items-center justify-center border border-dashed border-border rounded-xl">
           <p className="text-xs text-muted-foreground">No transaction data for this period.</p>
         </div>
       ) : (
-        <div className="relative w-full overflow-hidden pt-2">
+        <div className="relative w-full h-[280px] sm:h-[310px] overflow-hidden pt-1">
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="w-full h-auto overflow-visible select-none"
+            preserveAspectRatio="none"
+            className="w-full h-full overflow-visible select-none"
             onMouseLeave={() => setHoverIndex(null)}
           >
             <defs>
