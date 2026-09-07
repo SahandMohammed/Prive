@@ -4,7 +4,7 @@
 
 ## Decision
 
-One active branch is selected per signed-in browser session. The sidebar lists only active branches the current user can access. SuperAdmins and Owners can access all active branches. Other users require a `user_branch_access` assignment; the migration assigns existing Managers, Professionals, and Cashiers to the main branch. User mutations and branch access management require an Owner or SuperAdmin, preventing staff from granting themselves access through role or credential changes.
+One active branch is selected per signed-in browser session. The sidebar lists only active branches the current user can access. SuperAdmins and Owners can access all active branches. Other users require a `user_branch_access` assignment; the migration assigns existing Managers, Professionals, and Cashiers to the main branch. User mutations, branch access management, and branch create/update/deactivate operations require an Owner or SuperAdmin, preventing staff from granting themselves access or changing the branch structure. Managers may still read branch setup information required by the administration UI.
 
 Operational requests carry `X-Branch-Id`. `BranchScopeFilter` verifies the active user, branch status, and current assignments against the database on every request. A DTO's `BranchId`, when provided, must match the header. Missing selection returns `BRANCH_SELECTION_REQUIRED`; inaccessible selection returns `BRANCH_ACCESS_DENIED`; mismatched rows or references return `BRANCH_SCOPE_MISMATCH`.
 
@@ -17,9 +17,9 @@ The client remembers only a selected branch ID per user in session storage. TanS
 - **Shared** (default): branches use one business catalog of customers/suppliers, products, services, categories, units, and conversions. Saving a definition updates this shared catalog.
 - **Separate**: the branch starts with an empty private catalog of those definitions. Catalog records are created in its own scope and cannot reference a different catalog.
 
-`CatalogBranchId = null` identifies shared definitions; a branch ID identifies private definitions. Scoped unique indexes allow private branches to reuse item codes and category names. Existing definitions remain shared, without copying or reassignment. `CatalogMode` is fixed at creation: changing it later would need a separate migration workflow to preserve historical references.
+`CatalogBranchId = null` identifies shared definitions; a branch ID identifies private definitions. Scoped unique indexes allow private branches to reuse item codes and category names. Existing definitions remain shared, without copying or reassignment. `CatalogMode` is fixed at creation and is not part of the branch update contract; changing it later would need a separate migration workflow to preserve historical references.
 
-The chart of accounts, currencies, exchange rates, business settings, and expense categories remain business-wide. Transactions and balances always follow the selected branch, including for shared contacts and items. History checks protecting shared definitions inspect all branches. Document numbering also remains global to preserve existing unique document numbers. New transfers must reference warehouses/accounts in the selected branch.
+The chart of accounts, currencies, exchange rates, business settings, and expense categories remain business-wide. Transactions and balances always follow the selected branch, including for shared contacts and items. History checks protecting shared definitions inspect all branches. Document numbering also remains global to preserve existing unique document numbers. Money Account and Warehouse codes also remain globally unique business identifiers even though their rows are branch-scoped. New transfers must reference warehouses/accounts in the selected branch.
 
 ## Research and rationale
 

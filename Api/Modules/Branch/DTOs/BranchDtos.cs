@@ -48,5 +48,4 @@ public sealed record UpdateBranchRequest(
   [Required, MaxLength(100)] string Region,
   [Required, MaxLength(100)] string Country,
   bool IsMainBranch,
-  bool IsActive,
-  BranchCatalogMode CatalogMode = BranchCatalogMode.Shared);
+  bool IsActive);

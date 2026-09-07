@@ -59,9 +59,8 @@ public sealed class UserService
     user.PasswordHash = _hasher.HashPassword(user, request.Password);
 
     _db.Users.Add(user);
-    var mainBranchId = await _db.Branches.Where(branch => branch.IsMainBranch && branch.IsActive)
-      .Select(branch => (Guid?)branch.Id).SingleOrDefaultAsync();
-    if (mainBranchId is not null && user.Role is UserRole.Manager or UserRole.Cashier or UserRole.Professional)
+    var mainBranchId = await GetActiveMainBranchIdAsync();
+    if (mainBranchId is not null && IsScopedRole(user.Role))
       _db.UserBranchAccess.Add(new Api.Modules.Branch.UserBranchAccessEntity { UserId = user.Id, BranchId = mainBranchId.Value });
     await _db.SaveChangesAsync();
 
@@ -81,9 +80,21 @@ public sealed class UserService
       user.Username = request.Username;
     }
 
+    var wasPrivileged = IsPrivilegedRole(user.Role);
+    var becomesScoped = IsScopedRole(request.Role);
+
     user.Role = request.Role;
     user.LinkedProfessionalId = request.LinkedProfessionalId;
     user.IsActive = request.IsActive;
+
+    var hasActiveBranchAccess = await _db.UserBranchAccess
+      .AnyAsync(access => access.UserId == id && access.Branch.IsActive);
+    if (wasPrivileged && becomesScoped && !hasActiveBranchAccess)
+    {
+      var mainBranchId = await GetActiveMainBranchIdAsync();
+      if (mainBranchId is not null)
+        _db.UserBranchAccess.Add(new Api.Modules.Branch.UserBranchAccessEntity { UserId = id, BranchId = mainBranchId.Value });
+    }
 
     await _db.SaveChangesAsync();
     return ToResponse(user);
@@ -108,6 +119,14 @@ public sealed class UserService
     _db.Users.Remove(user);
     await _db.SaveChangesAsync();
   }
+
+  private async Task<Guid?> GetActiveMainBranchIdAsync() => await _db.Branches
+    .Where(branch => branch.IsMainBranch && branch.IsActive)
+    .Select(branch => (Guid?)branch.Id)
+    .SingleOrDefaultAsync();
+
+  private static bool IsPrivilegedRole(UserRole role) => role is UserRole.SuperAdmin or UserRole.Owner;
+  private static bool IsScopedRole(UserRole role) => role is UserRole.Manager or UserRole.Cashier or UserRole.Professional;
 
   private static UserResponse ToResponse(UserEntity u) => new(
     u.Id,
