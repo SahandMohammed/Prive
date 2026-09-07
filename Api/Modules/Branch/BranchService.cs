@@ -121,8 +121,6 @@ public sealed class BranchService
     var branch = await _db.Branches.SingleOrDefaultAsync(branch => branch.Id == id, ct)
       ?? throw new NotFoundException(ErrorCodes.Branch.NotFound, $"Branch with id '{id}' was not found.");
     var code = NormalizeCode(request.Code);
-    if (request.CatalogMode != branch.CatalogMode)
-      throw new BadRequestException(ErrorCodes.Branch.CatalogModeImmutable, "Catalog sharing is chosen when a branch is created and cannot be changed.");
 
     if (code != branch.Code && await _db.Branches.AnyAsync(other => other.Code == code && other.Id != id, ct))
       throw new ConflictException(ErrorCodes.Branch.CodeTaken, $"Branch code '{code}' is already in use.");
@@ -180,17 +178,18 @@ public sealed class BranchService
     branch.IsActive = request.IsActive;
   }
 
-  private static void Apply(BranchEntity branch, UpdateBranchRequest request, string code) => Apply(branch, new CreateBranchRequest(
-    request.Code,
-    request.Name,
-    request.PhoneNumber,
-    request.Email,
-    request.Address,
-    request.City,
-    request.Region,
-    request.Country,
-    request.IsMainBranch,
-    request.IsActive), code);
+  private static void Apply(BranchEntity branch, UpdateBranchRequest request, string code)
+  {
+    branch.Code = code;
+    branch.Name = request.Name.Trim();
+    branch.PhoneNumber = TrimOrNull(request.PhoneNumber);
+    branch.Email = TrimOrNull(request.Email);
+    branch.Address = request.Address.Trim();
+    branch.City = request.City.Trim();
+    branch.Region = request.Region.Trim();
+    branch.Country = request.Country.Trim();
+    branch.IsActive = request.IsActive;
+  }
 
   private static string NormalizeCode(string code) => code.Trim().ToUpperInvariant();
   private static string? TrimOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
