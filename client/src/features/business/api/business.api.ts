@@ -35,6 +35,17 @@ export const businessApi = {
   },
   listBranches: () => apiClient.getPaginated<Branch>('/branches?page=1&pageSize=100'),
   createBranch: (body: BranchInput) => apiClient.post<Branch>('/branches', body),
-  updateBranch: (id: string, body: BranchInput) => apiClient.put<Branch>(`/branches/${id}`, body),
+  updateBranch: (id: string, body: BranchInput) => apiClient.put<Branch>(`/branches/${id}`, {
+    code: body.code,
+    name: body.name,
+    phoneNumber: body.phoneNumber,
+    email: body.email,
+    address: body.address,
+    city: body.city,
+    region: body.region,
+    country: body.country,
+    isMainBranch: body.isMainBranch,
+    isActive: body.isActive,
+  }),
   deactivateBranch: (id: string) => apiClient.delete<void>(`/branches/${id}`),
 }
