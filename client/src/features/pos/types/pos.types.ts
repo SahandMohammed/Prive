@@ -71,6 +71,14 @@ export interface PosCustomer {
   primaryPhoneNumber: string | null
 }
 
+export interface PosCartLine {
+  item: PosCatalogItem
+  quantity: number
+  unitOfMeasureId: string
+  unitPriceBase: number
+  professionalUserId: string
+}
+
 export interface PosCatalogFilters {
   page: number
   pageSize: number
