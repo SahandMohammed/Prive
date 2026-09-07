@@ -5,8 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useCurrentUser } from '@/features/auth'
 import { useBranchSelectionStore } from '@/features/business'
-import { convertToBaseQuantity } from '@/features/inventory'
-import type { UnitConvertibleProduct } from '@/features/inventory'
 import { CheckoutDialog } from '../components/CheckoutDialog'
 import { PosCart } from '../components/PosCart'
 import { PosCatalogGrid } from '../components/PosCatalogGrid'
@@ -14,6 +12,7 @@ import { PosCategoryNav } from '../components/PosCategoryNav'
 import { PosTopBar } from '../components/PosTopBar'
 import { SaleCompleteDialog } from '../components/SaleCompleteDialog'
 import { usePosCatalog, usePosSetup } from '../hooks/usePos'
+import { addCatalogItemToCart, posCartTotal } from '../lib/posCart'
 import { PosCatalogItemType } from '../types/pos.types'
 import type {
   PosCartLine,
@@ -74,7 +73,7 @@ export function PosPage() {
     warehouseId: warehouseId || undefined,
   })
   const items = catalogQuery.data?.data ?? []
-  const total = cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
+  const total = posCartTotal(cart)
 
   const chooseType = (type: '' | PosCatalogItemType) => {
     setItemType(type)
@@ -89,40 +88,7 @@ export function PosPage() {
   }
 
   const addItem = (item: PosCatalogItem) => {
-    setCart((current) => {
-      const index = current.findIndex(
-        (line) => line.item.itemType === item.itemType && line.item.id === item.id
-      )
-      if (index >= 0) {
-        const existing = current[index]
-        const nextQuantity = existing.quantity + 1
-        if (item.itemType === PosCatalogItemType.Product) {
-          const baseQuantity = convertToBaseQuantity(
-            asUnitProduct(item),
-            existing.unitOfMeasureId,
-            nextQuantity
-          )
-          if (baseQuantity === null || baseQuantity > (item.availableQuantity ?? 0)) return current
-        }
-        return current.map((line, currentIndex) =>
-          currentIndex === index ? { ...line, quantity: nextQuantity } : line
-        )
-      }
-
-      if (item.itemType === PosCatalogItemType.Product && (item.availableQuantity ?? 0) <= 0)
-        return current
-
-      return [
-        ...current,
-        {
-          item,
-          quantity: 1,
-          unitOfMeasureId: item.unitOfMeasureId ?? '',
-          unitPriceBase: item.unitPriceBase,
-          professionalUserId: '',
-        },
-      ]
-    })
+    setCart((current) => addCatalogItemToCart(current, item))
   }
 
   const changeWarehouse = (nextWarehouseId: string) => {
@@ -289,15 +255,6 @@ export function PosPage() {
       <SaleCompleteDialog sale={completedSale} onNewSale={() => setCompletedSale(null)} />
     </div>
   )
-}
-
-function asUnitProduct(item: PosCatalogItem): UnitConvertibleProduct {
-  return {
-    unitOfMeasureId: item.unitOfMeasureId ?? '',
-    unitName: item.unitName ?? '',
-    unitCode: item.unitCode ?? '',
-    unitConversions: item.unitConversions,
-  }
 }
 
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
