@@ -88,7 +88,6 @@ public sealed record PosCatalogItemResponse(
   Guid CategoryId,
   string CategoryName,
   decimal UnitPriceBase,
-  int? DurationMinutes,
   string? SKU,
   string? Barcode,
   Guid? UnitOfMeasureId,
