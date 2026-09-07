@@ -11,6 +11,7 @@ using Api.Modules.Finance;
 using Api.Modules.Sales;
 using Api.Modules.Pos;
 using Api.Modules.Expenses;
+using Api.Modules.Dashboard;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
@@ -61,6 +62,7 @@ public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options,
   public DbSet<ExpenseCategoryEntity> ExpenseCategories => Set<ExpenseCategoryEntity>();
   public DbSet<ExpenseDocumentEntity> ExpenseDocuments => Set<ExpenseDocumentEntity>();
   public DbSet<ExpenseLineEntity> ExpenseLines => Set<ExpenseLineEntity>();
+  public DbSet<ActivityLogEntity> ActivityLogs => Set<ActivityLogEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {

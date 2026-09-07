@@ -46,7 +46,7 @@ export function MoneyLedgerPage() {
                 <TableCell className="text-right font-mono text-emerald-700">{entry.amountIn ? amount(entry.amountIn) : '—'}</TableCell>
                 <TableCell className="text-right font-mono text-rose-700">{entry.amountOut ? amount(entry.amountOut) : '—'}</TableCell>
                 <TableCell className="text-right font-mono">{amount(Math.abs(entry.baseAmount))} {entry.baseCurrencyCode}</TableCell>
-                <TableCell><p>{entry.performedByUsername}</p><p className="text-xs text-muted-foreground">{entry.notes ?? '—'}</p><Link className="text-xs text-[#d85430]" to={`/accounting/journal?search=${encodeURIComponent(entry.documentNumber)}`}>Accounting journal</Link></TableCell>
+                <TableCell><p>{entry.performedByUsername}</p><p className="text-xs text-muted-foreground">{entry.notes ?? '—'}</p><Link className="text-xs text-primary" to={`/accounting/journal?search=${encodeURIComponent(entry.documentNumber)}`}>Accounting journal</Link></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -59,9 +59,9 @@ export function MoneyLedgerPage() {
 
 function SourceLink({ entry }: { entry: MoneyLedgerEntry }) {
   if (entry.sourceType === MoneyLedgerSourceType.CustomerReceipt)
-    return <Link className="font-mono text-xs text-[#d85430]" to={`/finance/customer-receipts/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
+    return <Link className="font-mono text-xs text-primary" to={`/finance/customer-receipts/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
   if (entry.sourceType === MoneyLedgerSourceType.PosSale)
-    return <Link className="font-mono text-xs text-[#d85430]" to={`/pos/sales/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
+    return <Link className="font-mono text-xs text-primary" to={`/pos/sales/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
   return <p className="font-mono text-xs text-primary">{entry.documentNumber}</p>
 }
 

@@ -56,7 +56,7 @@ export function ProductsPage() {
           <h2 className="text-xl font-semibold">Items</h2>
           <p className="mt-1 text-sm text-muted-foreground">Define inventory items, their base units, and selling or purchasing conversions.</p>
         </div>
-        <Link to="/settings/items/new"><Button className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"><Plus className="size-4" />Add item</Button></Link>
+        <Link to="/settings/items/new"><Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"><Plus className="size-4" />Add item</Button></Link>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -118,4 +118,4 @@ function Select({ value, onChange, label, children }: { value: string; onChange:
   return <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm"><option value="">{label}</option>{children}</select>
 }
 
-const head = 'border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60'
+const head = 'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'

@@ -89,20 +89,20 @@ public sealed class BranchScopeTests
     var options = Options();
     var a = new BranchEntity();
     var b = new BranchEntity();
-    var foreign = new WarehouseEntity { Branch = b };
+    var foreign = new WarehouseEntity { Branch = b, Code = "WH-B" };
     await using (var seed = new AppDbContext(options)) { seed.AddRange(a, foreign); await seed.SaveChangesAsync(); }
     await using var db = new AppDbContext(options, new BranchContext { BranchId = a.Id });
-    db.Warehouses.Add(new WarehouseEntity { BranchId = b.Id });
+    db.Warehouses.Add(new WarehouseEntity { BranchId = b.Id, Code = "WH-B2" });
     await Assert.ThrowsAsync<ForbiddenException>(() => db.SaveChangesAsync());
     db.ChangeTracker.Clear();
     db.StockMovements.Add(new StockMovementEntity { WarehouseId = foreign.Id });
     await Assert.ThrowsAsync<ForbiddenException>(() => db.SaveChangesAsync());
     db.ChangeTracker.Clear();
-    var spoofed = new WarehouseEntity { Id = foreign.Id, BranchId = a.Id, Name = "Changed" };
+    var spoofed = new WarehouseEntity { Id = foreign.Id, BranchId = a.Id, Name = "Changed", Code = "WH-B" };
     db.Update(spoofed);
     await Assert.ThrowsAsync<ForbiddenException>(() => db.SaveChangesAsync());
     db.ChangeTracker.Clear();
-    var valid = new WarehouseEntity { BranchId = a.Id };
+    var valid = new WarehouseEntity { BranchId = a.Id, Code = "WH-A" };
     db.Add(valid);
     await db.SaveChangesAsync();
     Assert.Equal(a.Id, (await db.Warehouses.SingleAsync()).BranchId);

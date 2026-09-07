@@ -7,6 +7,7 @@ using Api.Modules.Inventory;
 using Api.Modules.Pos;
 using Api.Modules.Purchase;
 using Api.Modules.Sales;
+using Api.Modules.Dashboard;
 using Api.Infrastructure.Http;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,17 +55,20 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<ProductUnitConversionEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ServiceCategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ServiceEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
+    modelBuilder.Entity<ActivityLogEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
   }
 
   public override int SaveChanges(bool acceptAllChangesOnSuccess)
   {
     ValidateBranchWritesAsync(CancellationToken.None).GetAwaiter().GetResult();
+    RecordAutomaticActivityLogs();
     return base.SaveChanges(acceptAllChangesOnSuccess);
   }
 
   public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
   {
     await ValidateBranchWritesAsync(cancellationToken);
+    RecordAutomaticActivityLogs();
     return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
   }
 
@@ -149,4 +153,224 @@ public sealed partial class AppDbContext
 
   private static void ThrowScopeMismatch() => throw new ForbiddenException(ErrorCodes.Branch.ScopeMismatch,
     "This record or one of its references belongs to a different branch or catalog. Select the correct branch and try again.");
+
+  private void RecordAutomaticActivityLogs()
+  {
+    if (SelectedBranchId is not Guid branchId) return;
+
+    var entries = ChangeTracker.Entries()
+      .Where(e => e.Entity is not ActivityLogEntity && (e.State == EntityState.Added || e.State == EntityState.Modified))
+      .ToList();
+
+    foreach (var entry in entries)
+    {
+      if (entry.Entity is PosSaleEntity posSale && entry.State == EntityState.Added)
+      {
+        ActivityLogs.Add(new ActivityLogEntity
+        {
+          BranchId = branchId,
+          UserId = posSale.CashierUserId,
+          Action = "completed",
+          EntityType = "POS Sale",
+          EntityId = posSale.Id,
+          DocumentNumber = posSale.DocumentNumber,
+          Description = "Completed POS sale",
+          TimestampUtc = posSale.CompletedAtUtc
+        });
+      }
+      else if (entry.Entity is SalesInvoiceEntity sale)
+      {
+        if (entry.State == EntityState.Added && sale.PosSale == null)
+        {
+          ActivityLogs.Add(new ActivityLogEntity
+          {
+            BranchId = branchId,
+            UserId = sale.CreatedByUserId,
+            Action = sale.Status == SalesInvoiceStatus.Posted ? "posted" : "created",
+            EntityType = "Sales Invoice",
+            EntityId = sale.Id,
+            DocumentNumber = sale.DocumentNumber,
+            Description = sale.Status == SalesInvoiceStatus.Posted ? "Posted sales invoice" : "Created sales invoice draft",
+            TimestampUtc = sale.PostedAtUtc ?? sale.CreatedAtUtc
+          });
+        }
+        else if (entry.State == EntityState.Modified && sale.PosSale == null)
+        {
+          var statusProp = entry.Property(nameof(SalesInvoiceEntity.Status));
+          if (statusProp.IsModified && sale.Status == SalesInvoiceStatus.Posted && (SalesInvoiceStatus)statusProp.OriginalValue! != SalesInvoiceStatus.Posted)
+          {
+            ActivityLogs.Add(new ActivityLogEntity
+            {
+              BranchId = branchId,
+              UserId = sale.CreatedByUserId,
+              Action = "posted",
+              EntityType = "Sales Invoice",
+              EntityId = sale.Id,
+              DocumentNumber = sale.DocumentNumber,
+              Description = "Posted sales invoice",
+              TimestampUtc = sale.PostedAtUtc ?? DateTime.UtcNow
+            });
+          }
+        }
+      }
+      else if (entry.Entity is ExpenseDocumentEntity expense)
+      {
+        if (entry.State == EntityState.Added)
+        {
+          ActivityLogs.Add(new ActivityLogEntity
+          {
+            BranchId = branchId,
+            UserId = expense.CreatedByUserId,
+            Action = expense.Status == ExpenseDocumentStatus.Posted ? "posted" : "created",
+            EntityType = "Expense",
+            EntityId = expense.Id,
+            DocumentNumber = expense.DocumentNumber,
+            Description = expense.PayeeName ?? expense.Reference ?? "Recorded expense",
+            TimestampUtc = expense.PostedAtUtc ?? expense.CreatedAtUtc
+          });
+        }
+        else if (entry.State == EntityState.Modified)
+        {
+          var statusProp = entry.Property(nameof(ExpenseDocumentEntity.Status));
+          if (statusProp.IsModified && expense.Status == ExpenseDocumentStatus.Posted && (ExpenseDocumentStatus)statusProp.OriginalValue! != ExpenseDocumentStatus.Posted)
+          {
+            ActivityLogs.Add(new ActivityLogEntity
+            {
+              BranchId = branchId,
+              UserId = expense.PostedByUserId ?? expense.CreatedByUserId,
+              Action = "posted",
+              EntityType = "Expense",
+              EntityId = expense.Id,
+              DocumentNumber = expense.DocumentNumber,
+              Description = expense.PayeeName ?? expense.Reference ?? "Posted expense",
+              TimestampUtc = expense.PostedAtUtc ?? DateTime.UtcNow
+            });
+          }
+        }
+      }
+      else if (entry.Entity is CustomerReceiptEntity receipt)
+      {
+        if (entry.State == EntityState.Added)
+        {
+          ActivityLogs.Add(new ActivityLogEntity
+          {
+            BranchId = branchId,
+            UserId = receipt.CreatedByUserId,
+            Action = receipt.Status == FinanceDocumentStatus.Posted ? "posted" : "created",
+            EntityType = "Customer Receipt",
+            EntityId = receipt.Id,
+            DocumentNumber = receipt.DocumentNumber,
+            Description = "Recorded customer receipt",
+            TimestampUtc = receipt.PostedAtUtc ?? receipt.CreatedAtUtc
+          });
+        }
+        else if (entry.State == EntityState.Modified)
+        {
+          var statusProp = entry.Property(nameof(CustomerReceiptEntity.Status));
+          if (statusProp.IsModified && receipt.Status == FinanceDocumentStatus.Posted && (FinanceDocumentStatus)statusProp.OriginalValue! != FinanceDocumentStatus.Posted)
+          {
+            ActivityLogs.Add(new ActivityLogEntity
+            {
+              BranchId = branchId,
+              UserId = receipt.CreatedByUserId,
+              Action = "posted",
+              EntityType = "Customer Receipt",
+              EntityId = receipt.Id,
+              DocumentNumber = receipt.DocumentNumber,
+              Description = "Posted customer receipt",
+              TimestampUtc = receipt.PostedAtUtc ?? DateTime.UtcNow
+            });
+          }
+        }
+      }
+      else if (entry.Entity is SupplierPaymentEntity payment)
+      {
+        if (entry.State == EntityState.Added)
+        {
+          ActivityLogs.Add(new ActivityLogEntity
+          {
+            BranchId = branchId,
+            UserId = payment.CreatedByUserId,
+            Action = payment.Status == FinanceDocumentStatus.Posted ? "posted" : "created",
+            EntityType = "Supplier Payment",
+            EntityId = payment.Id,
+            DocumentNumber = payment.DocumentNumber,
+            Description = "Recorded supplier payment",
+            TimestampUtc = payment.PostedAtUtc ?? payment.CreatedAtUtc
+          });
+        }
+        else if (entry.State == EntityState.Modified)
+        {
+          var statusProp = entry.Property(nameof(SupplierPaymentEntity.Status));
+          if (statusProp.IsModified && payment.Status == FinanceDocumentStatus.Posted && (FinanceDocumentStatus)statusProp.OriginalValue! != FinanceDocumentStatus.Posted)
+          {
+            ActivityLogs.Add(new ActivityLogEntity
+            {
+              BranchId = branchId,
+              UserId = payment.CreatedByUserId,
+              Action = "posted",
+              EntityType = "Supplier Payment",
+              EntityId = payment.Id,
+              DocumentNumber = payment.DocumentNumber,
+              Description = "Posted supplier payment",
+              TimestampUtc = payment.PostedAtUtc ?? DateTime.UtcNow
+            });
+          }
+        }
+      }
+      else if (entry.Entity is PurchaseInvoiceEntity purchase)
+      {
+        if (entry.State == EntityState.Added)
+        {
+          ActivityLogs.Add(new ActivityLogEntity
+          {
+            BranchId = branchId,
+            UserId = purchase.CreatedByUserId,
+            Action = purchase.Status == PurchaseInvoiceStatus.Posted ? "posted" : "created",
+            EntityType = "Purchase Invoice",
+            EntityId = purchase.Id,
+            DocumentNumber = purchase.DocumentNumber,
+            Description = "Recorded purchase invoice",
+            TimestampUtc = purchase.PostedAtUtc ?? purchase.CreatedAtUtc
+          });
+        }
+        else if (entry.State == EntityState.Modified)
+        {
+          var statusProp = entry.Property(nameof(PurchaseInvoiceEntity.Status));
+          if (statusProp.IsModified && purchase.Status == PurchaseInvoiceStatus.Posted && (PurchaseInvoiceStatus)statusProp.OriginalValue! != PurchaseInvoiceStatus.Posted)
+          {
+            ActivityLogs.Add(new ActivityLogEntity
+            {
+              BranchId = branchId,
+              UserId = purchase.CreatedByUserId,
+              Action = "posted",
+              EntityType = "Purchase Invoice",
+              EntityId = purchase.Id,
+              DocumentNumber = purchase.DocumentNumber,
+              Description = "Posted purchase invoice",
+              TimestampUtc = purchase.PostedAtUtc ?? DateTime.UtcNow
+            });
+          }
+        }
+      }
+      else if (entry.Entity is MoneyTransferEntity transfer && entry.State == EntityState.Modified)
+      {
+        var statusProp = entry.Property(nameof(MoneyTransferEntity.Status));
+        if (statusProp.IsModified && transfer.Status == FinanceDocumentStatus.Posted && (FinanceDocumentStatus)statusProp.OriginalValue! != FinanceDocumentStatus.Posted)
+        {
+          ActivityLogs.Add(new ActivityLogEntity
+          {
+            BranchId = branchId,
+            UserId = transfer.CreatedByUserId,
+            Action = "posted",
+            EntityType = "Money Transfer",
+            EntityId = transfer.Id,
+            DocumentNumber = transfer.DocumentNumber,
+            Description = "Posted money transfer",
+            TimestampUtc = transfer.PostedAtUtc ?? DateTime.UtcNow
+          });
+        }
+      }
+    }
+  }
 }

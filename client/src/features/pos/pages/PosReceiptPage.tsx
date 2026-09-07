@@ -46,7 +46,7 @@ export function PosReceiptPage() {
           <div>
             <h1 className="text-2xl font-bold">
               Sale complete ·{' '}
-              <span className="font-mono text-[#d85430]">{sale.documentNumber}</span>
+              <span className="font-mono text-primary">{sale.documentNumber}</span>
             </h1>
             <p className="text-sm text-muted-foreground">
               All Sales, Inventory, Money Ledger, and Accounting effects were committed together.
@@ -75,7 +75,7 @@ export function PosReceiptPage() {
                 <ReceiptText />
                 Prive Lounge POS Receipt
               </CardTitle>
-              <p className="mt-1 font-mono text-lg text-[#d85430]">{sale.documentNumber}</p>
+              <p className="mt-1 font-mono text-lg text-primary">{sale.documentNumber}</p>
             </div>
             <div className="text-right text-sm">
               <p>{new Date(sale.completedAtUtc).toLocaleString()}</p>

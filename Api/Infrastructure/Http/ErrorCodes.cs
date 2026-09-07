@@ -258,6 +258,12 @@ public static class ErrorCodes
     public const string PostedDocumentImmutable = "EXPENSES_DOCUMENT_POSTED_IMMUTABLE";
   }
 
+  public static class Dashboard
+  {
+    public const string BusinessNotConfigured = "DASHBOARD_BUSINESS_NOT_CONFIGURED";
+    public const string InvalidTrendRange = "DASHBOARD_INVALID_TREND_RANGE";
+  }
+
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";

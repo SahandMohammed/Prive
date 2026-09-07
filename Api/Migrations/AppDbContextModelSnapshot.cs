@@ -478,6 +478,52 @@ namespace api.Migrations
                     b.ToTable("currencies", (string)null);
                 });
 
+            modelBuilder.Entity("Api.Modules.Dashboard.ActivityLogEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("BranchId", "TimestampUtc");
+
+                    b.ToTable("activity_logs", (string)null);
+                });
+
             modelBuilder.Entity("Api.Modules.Expenses.ExpenseCategoryEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2539,6 +2585,25 @@ namespace api.Migrations
                         .WithMany()
                         .HasForeignKey("CatalogBranchId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Api.Modules.Dashboard.ActivityLogEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.User.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Api.Modules.Expenses.ExpenseCategoryEntity", b =>

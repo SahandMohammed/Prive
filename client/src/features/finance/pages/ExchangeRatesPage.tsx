@@ -185,7 +185,7 @@ export function ExchangeRatesPage() {
           {admin && (
             <Button
               size="sm"
-              className="gap-1.5 bg-[#e05d38] font-medium text-white shadow-xs hover:bg-[#c94f2d]"
+              className="gap-1.5 bg-primary font-medium text-white shadow-xs hover:bg-primary/90"
               onClick={() => setIsDialogOpen(true)}
             >
               <Plus className="size-4 stroke-[2.5]" />
@@ -328,7 +328,7 @@ export function ExchangeRatesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                 <TableHead className="w-48 px-4 py-3">Currency Pair</TableHead>
                 <TableHead className="px-4 py-3 text-right">Exchange Rate</TableHead>
                 <TableHead className="px-4 py-3 text-right">Inverse Rate</TableHead>
@@ -642,7 +642,7 @@ function AddRateDialog({
             <Button
               type="submit"
               disabled={actions.create.isPending}
-              className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
             >
               {actions.create.isPending && <Loader2 className="size-4 animate-spin" />}
               Save Exchange Rate

@@ -243,7 +243,7 @@ export function ExpenseDetailPage() {
 
           {isPosted && (
             <Link to="/expenses/new">
-              <Button className="bg-[#e05d38] text-white hover:bg-[#c94f2d]">
+              <Button className="bg-primarytext-primary-foregroundhover:bg-primary/90">
                 <FilePlus2 className="size-4 mr-1.5" />
                 New Expense
               </Button>
@@ -461,7 +461,7 @@ export function ExpenseDetailPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60">
+                  <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60">
                     <TableHead className="w-[30%]">Expense Category</TableHead>
                     {isPosted && <TableHead className="w-[20%]">GL Account</TableHead>}
                     <TableHead className="w-[35%]">Description</TableHead>

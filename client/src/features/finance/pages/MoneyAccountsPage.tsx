@@ -147,7 +147,7 @@ export function MoneyAccountsPage() {
             One cashbox or bank account per currency. Balances come only from posted Money Ledger movements.
           </p>
         </div>
-        <Button className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]" onClick={openCreate}>
+        <Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={openCreate}>
           <Plus className="size-4" />
           New Money Account
         </Button>
@@ -247,7 +247,7 @@ export function MoneyAccountsPage() {
                       <p>No Money Accounts found.</p>
                       <Button
                         size="sm"
-                        className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                        className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
                         onClick={openCreate}
                       >
                         <Plus className="size-4" /> Add Money Account
@@ -262,7 +262,7 @@ export function MoneyAccountsPage() {
                       <button
                         type="button"
                         onClick={() => setDetailAccount(account)}
-                        className="text-left font-mono font-semibold text-[#d85430] hover:underline"
+                        className="text-left font-mono font-semibold text-primary hover:underline"
                       >
                         {account.code}
                       </button>
@@ -583,7 +583,7 @@ function MoneyAccountFormDialog({
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
-              className="size-4 rounded border-slate-300 accent-[#e05d38]"
+              className="size-4 rounded border-slate-300 accent-primary"
               {...form.register('isActive')}
             />
             <span>Active for new postings</span>
@@ -627,7 +627,7 @@ function MoneyAccountFormDialog({
               <Button type="button" variant="outline" onClick={closeDialog} disabled={save.isPending}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" disabled={save.isPending}>
+              <Button type="submit" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={save.isPending}>
                 {save.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
                 {account ? 'Save changes' : 'Add account'}
               </Button>
@@ -687,7 +687,7 @@ function AccountAccessDialog({
 
         {accessQuery.isPending || usersQuery.isPending ? (
           <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-6 animate-spin text-[#e05d38]" />
+            <Loader2 className="size-6 animate-spin text-primary" />
             <span>Loading user permissions…</span>
           </div>
         ) : (
@@ -740,7 +740,7 @@ function AccountAccessDialog({
               </Button>
               <Button
                 type="submit"
-                className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={replaceAccess.isPending}
               >
                 {replaceAccess.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
@@ -850,7 +850,7 @@ function OpeningBalanceDialog({
             </Button>
             <Button
               type="submit"
-              className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={opening.isPending}
             >
               {opening.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
@@ -942,7 +942,7 @@ function AccountDetailDialog({
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
               <Link
                 to={`/finance/money-ledger?moneyAccountId=${account.id}`}
-                className="text-xs font-medium text-[#d85430] hover:underline"
+                className="text-xs font-medium text-primary hover:underline"
               >
                 View related Money Ledger movements →
               </Link>
@@ -1071,7 +1071,7 @@ function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       className={cn(
-        'h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-[#e05d38] focus:ring-1 focus:ring-[#e05d38] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900',
+        'h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-primary focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900',
         className
       )}
       {...props}
@@ -1097,5 +1097,5 @@ const formatAmount = (value: number) =>
   value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 const today = () => new Date().toISOString().slice(0, 10)
 const head =
-  'border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60'
+  'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'
 

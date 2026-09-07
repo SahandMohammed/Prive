@@ -14,6 +14,7 @@ using Api.Modules.Finance;
 using Api.Modules.Sales;
 using Api.Modules.Pos;
 using Api.Modules.Expenses;
+using Api.Modules.Dashboard;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -250,7 +251,8 @@ try
     .AddFinanceModule(builder.Configuration)
     .AddSalesModule(builder.Configuration)
     .AddPosModule()
-    .AddExpensesModule();
+    .AddExpensesModule()
+    .AddDashboardModule();
 
   var app = builder.Build();
 

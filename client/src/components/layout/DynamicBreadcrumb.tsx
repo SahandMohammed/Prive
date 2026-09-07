@@ -10,7 +10,9 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 
-export function DynamicBreadcrumb() {
+import { cn } from '@/lib/utils'
+
+export function DynamicBreadcrumb({ className }: { className?: string } = {}) {
   const location = useLocation()
   const pathnames = location.pathname.split('/').filter((x) => x)
 
@@ -19,7 +21,7 @@ export function DynamicBreadcrumb() {
   }
 
   return (
-    <Breadcrumb className="mb-4 px-1">
+    <Breadcrumb className={cn("px-1", className)}>
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink render={<Link to="/" />}>

@@ -449,7 +449,7 @@ export function TrialBalancePage() {
                 </TableHead>
               </TableRow>
               {/* Sub Columns */}
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/70 text-[11px] font-semibold uppercase text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold uppercase text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
                 <TableHead className="border-l border-slate-200 px-3 text-right dark:border-slate-700">
                   Debit
                 </TableHead>

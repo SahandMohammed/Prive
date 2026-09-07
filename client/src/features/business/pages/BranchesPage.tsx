@@ -71,7 +71,7 @@ export function BranchesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Branches</h1>
           <p className="mt-1 text-sm text-slate-500">Manage the locations where business operations take place.</p>
         </div>
-        <Button className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]" onClick={openCreateDialog}>
+        <Button className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 stroke-[2.5]" />
           Add branch
         </Button>
@@ -94,7 +94,7 @@ export function BranchesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Code</TableHead>
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Branch</TableHead>
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Location</TableHead>
@@ -114,7 +114,7 @@ export function BranchesPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800 dark:text-slate-200">{branch.name}</span>
                       {branch.isMainBranch && (
-                        <span className="inline-flex items-center rounded bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-[#e05d38] dark:bg-orange-950/40">Main</span>
+                        <span className="inline-flex items-center rounded bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-primary dark:bg-orange-950/40">Main</span>
                       )}
                     </div>
                   </TableCell>
@@ -190,7 +190,7 @@ export function BranchesPage() {
             {saveBranch.isError && <p className="text-sm text-destructive">{saveBranch.error.message}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog} disabled={saveBranch.isPending}>Cancel</Button>
-              <Button type="submit" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" disabled={saveBranch.isPending}>{saveBranch.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add branch'}</Button>
+              <Button type="submit" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={saveBranch.isPending}>{saveBranch.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add branch'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -208,7 +208,7 @@ function LoadingRow() {
     <TableRow>
       <TableCell colSpan={6} className="h-48 text-center text-sm text-slate-500">
         <div className="flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin text-[#e05d38]" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
           <span>Loading branches...</span>
         </div>
       </TableCell>
@@ -241,7 +241,7 @@ function EmptyRow({ onAdd }: { onAdd: () => void }) {
             <p className="font-medium text-slate-800 dark:text-slate-200">No branches found</p>
             <p className="mt-1 text-sm text-slate-500">Create your main branch to get started.</p>
           </div>
-          <Button size="sm" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" onClick={onAdd}>
+          <Button size="sm" className="bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={onAdd}>
             <Plus className="h-4 w-4" /> Add branch
           </Button>
         </div>

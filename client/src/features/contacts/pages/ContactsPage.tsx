@@ -119,7 +119,7 @@ export function ContactsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Contacts</h1>
           <p className="mt-1 text-sm text-slate-500">Manage the people and businesses used by sales and purchases.</p>
         </div>
-        <Button className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]" onClick={openCreate}>
+        <Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={openCreate}>
           <Plus className="size-4" /> Add contact
         </Button>
       </div>
@@ -172,7 +172,7 @@ export function ContactsPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead className="px-4">Contact</TableHead>
                 <TableHead className="px-4">Role</TableHead>
                 <TableHead className="px-4">Phone</TableHead>
@@ -385,7 +385,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 function Checkbox({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  return <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" className="size-4 rounded border-slate-300 accent-[#e05d38]" {...props} />{label}</label>
+  return <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" className="size-4 rounded border-slate-300 accent-primary" {...props} />{label}</label>
 }
 
 function RoleBadge({ contact }: { contact: Contact }) {
@@ -402,7 +402,7 @@ function ActionButton({ label, destructive, children, ...props }: React.Componen
 }
 
 function LoadingRow() {
-  return <TableRow><TableCell colSpan={7} className="h-48 text-center text-sm text-slate-500"><Loader2 className="mx-auto mb-2 size-6 animate-spin text-[#e05d38]" />Loading contacts…</TableCell></TableRow>
+  return <TableRow><TableCell colSpan={7} className="h-48 text-center text-sm text-slate-500"><Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />Loading contacts…</TableCell></TableRow>
 }
 
 function ErrorRow() {

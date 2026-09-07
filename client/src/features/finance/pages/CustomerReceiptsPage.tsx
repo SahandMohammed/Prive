@@ -92,7 +92,7 @@ export function CustomerReceiptsPage() {
           </p>
         </div>
         <Link to="/finance/customer-receipts/new">
-          <Button className="gap-1.5 bg-[#e05d38] font-medium text-white shadow-xs hover:bg-[#c94f2d]">
+          <Button className="gap-1.5 bg-primary font-medium text-white shadow-xs hover:bg-primary/90">
             <Plus className="size-4 stroke-[2.5]" />
             New Customer Receipt
           </Button>
@@ -233,7 +233,7 @@ export function CustomerReceiptsPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                 <TableHead className="px-4 py-3">Receipt #</TableHead>
                 <TableHead className="px-4 py-3">Date</TableHead>
                 <TableHead className="px-4 py-3">Customer</TableHead>
@@ -286,7 +286,7 @@ export function CustomerReceiptsPage() {
                   >
                     <TableCell className="px-4 py-3.5">
                       <Link
-                        className="font-mono text-xs font-bold text-[#d85430] hover:underline"
+                        className="font-mono text-xs font-bold text-primary hover:underline"
                         to={`/finance/customer-receipts/${receipt.id}`}
                       >
                         {receipt.documentNumber}
@@ -323,7 +323,7 @@ export function CustomerReceiptsPage() {
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             size="xs"
-                            className="gap-1 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                            className="gap-1 bg-primarytext-primary-foregroundhover:bg-primary/90"
                             disabled={actions.post.isPending}
                             onClick={() => {
                               if (

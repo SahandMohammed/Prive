@@ -49,7 +49,7 @@ export function WarehousesPage() {
           <p className="mt-1 text-sm text-slate-500">Manage the locations used for inventory movement and fulfillment.</p>
         </div>
         <Button
-          className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]"
+          className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90"
           onClick={() => setIsCreateOpen(true)}
         >
           <Plus className="h-4 w-4 stroke-[2.5]" />
@@ -79,7 +79,7 @@ export function WarehousesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Code</TableHead>
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Warehouse</TableHead>
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Branch</TableHead>
@@ -97,7 +97,7 @@ export function WarehousesPage() {
                   <TableCell className="px-4 py-3.5 font-mono text-sm text-slate-500">{warehouse.code}</TableCell>
                   <TableCell className="px-4 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-md bg-orange-50 p-2 text-[#e05d38]">
+                      <div className="rounded-md bg-orange-50 p-2 text-primary">
                         <WarehouseIcon className="h-4 w-4" />
                       </div>
                       <span className="font-medium text-slate-800 dark:text-slate-200">{warehouse.name}</span>
@@ -172,7 +172,7 @@ function CreateWarehouseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <FormField label="Branch" error={form.formState.errors.branchId?.message}>
             <select
               {...form.register('branchId')}
-              className="h-10 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-sm shadow-xs focus:outline-none focus:ring-1 focus:ring-[#e05d38] dark:border-slate-800 dark:bg-slate-800/50"
+              className="h-10 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-sm shadow-xs focus:outline-none focus:ring-1 focus:ring-ring dark:border-slate-800 dark:bg-slate-800/50"
               disabled={branchQuery.isLoading}
             >
               <option value="">{branchQuery.isLoading ? 'Loading branches...' : 'Select a branch'}</option>
@@ -191,7 +191,7 @@ function CreateWarehouseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             <Button type="button" variant="outline" onClick={close} disabled={createWarehouse.isPending}>Cancel</Button>
             <Button
               type="submit"
-              className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={createWarehouse.isPending || branchQuery.isLoading || branches.length === 0}
             >
               {createWarehouse.isPending ? 'Creating...' : 'Create warehouse'}

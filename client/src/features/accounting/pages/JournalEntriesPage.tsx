@@ -72,7 +72,7 @@ export function JournalEntriesPage() {
           </p>
         </div>
         <Link to="/accounting/journal/new">
-          <Button className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]">
+          <Button className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90">
             <Plus className="h-4 w-4 stroke-[2.5]" />
             Create Journal Entry
           </Button>
@@ -149,7 +149,7 @@ export function JournalEntriesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead className="w-32 px-4 font-semibold text-slate-600 dark:text-slate-300">Date</TableHead>
                 <TableHead className="w-36 px-4 font-semibold text-slate-600 dark:text-slate-300">Reference</TableHead>
                 <TableHead className="min-w-64 px-4 font-semibold text-slate-600 dark:text-slate-300">Description / Memo</TableHead>
@@ -176,7 +176,7 @@ export function JournalEntriesPage() {
                       {journal.entryDate}
                     </TableCell>
                     <TableCell className="px-4 py-3.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {journal.sourcePurchaseInvoiceId ? <Link className="text-[#d85430]" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.sourcePosSaleId ? <Link className="text-[#d85430]" to={`/pos/sales/${journal.sourcePosSaleId}`}>{journal.reference || 'POS Sale'}</Link> : journal.sourceSalesInvoiceId ? <Link className="text-[#d85430]" to={`/sales/invoices/${journal.sourceSalesInvoiceId}`}>{journal.reference || 'Sale'}</Link> : journal.sourceCustomerReceiptId ? <Link className="text-[#d85430]" to={`/finance/customer-receipts/${journal.sourceCustomerReceiptId}`}>{journal.reference || 'Receipt'}</Link> : journal.reference || '—'}
+                      {journal.sourcePurchaseInvoiceId ? <Link className="text-primary" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.sourcePosSaleId ? <Link className="text-primary" to={`/pos/sales/${journal.sourcePosSaleId}`}>{journal.reference || 'POS Sale'}</Link> : journal.sourceSalesInvoiceId ? <Link className="text-primary" to={`/sales/invoices/${journal.sourceSalesInvoiceId}`}>{journal.reference || 'Sale'}</Link> : journal.sourceCustomerReceiptId ? <Link className="text-primary" to={`/finance/customer-receipts/${journal.sourceCustomerReceiptId}`}>{journal.reference || 'Receipt'}</Link> : journal.reference || '—'}
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
                       <div className="max-w-md truncate font-medium text-slate-800 dark:text-slate-200">
@@ -335,7 +335,7 @@ function EmptyRow() {
             </p>
           </div>
           <Link to="/accounting/journal/new">
-            <Button size="sm" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]">
+            <Button size="sm" className="bg-primarytext-primary-foregroundhover:bg-primary/90">
               <FilePlus className="h-4 w-4" /> Create Journal Entry
             </Button>
           </Link>
