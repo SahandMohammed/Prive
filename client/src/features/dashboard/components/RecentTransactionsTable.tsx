@@ -31,17 +31,17 @@ function getTypeBadgeStyle(type: string) {
 
 export function RecentTransactionsTable({ transactions, isLoading }: RecentTransactionsTableProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-heading font-semibold text-foreground">
+          <h2 className="text-base font-bold font-heading text-foreground">
             Recent Transactions
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Operational cash and document movements
           </p>
         </div>
-        <span className="text-xs text-muted-foreground font-mono">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-muted-foreground">
           {transactions ? `${transactions.length} items` : ''}
         </span>
       </div>

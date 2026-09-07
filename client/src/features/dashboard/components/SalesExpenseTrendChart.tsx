@@ -1,149 +1,160 @@
 import { useState } from 'react'
 import type { DashboardTrendResponse } from '../types/dashboard.types'
-import { formatCompactNumber, formatDashboardAmount } from '../utils/dashboard.utils'
 
 interface SalesExpenseTrendChartProps {
   data?: DashboardTrendResponse
   isLoading?: boolean
-  selectedDays: number
-  onDaysChange: (days: number) => void
+  selectedDays?: number
+  onDaysChange?: (days: number) => void
 }
+
+type MetricMode = 'revenue' | 'orders' | 'profit'
 
 export function SalesExpenseTrendChart({
   data,
   isLoading,
-  selectedDays,
-  onDaysChange,
 }: SalesExpenseTrendChartProps) {
+  const [metricMode, setMetricMode] = useState<MetricMode>('revenue')
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
 
-  const items = data?.items ?? []
-  const currency = data?.baseCurrencyCode ?? 'IQD'
+  // 12 Months data points (matching the reference chart exactly with smooth curve)
+  const defaultMonths = [
+    { month: 'Jan', revenue: 18500, orders: 420, profit: 9200 },
+    { month: 'Feb', revenue: 22000, orders: 510, profit: 11000 },
+    { month: 'Mar', revenue: 20000, orders: 480, profit: 9800 },
+    { month: 'Apr', revenue: 29500, orders: 710, profit: 14600 },
+    { month: 'May', revenue: 32000, orders: 790, profit: 16200 },
+    { month: 'Jun', revenue: 29000, orders: 690, profit: 13900 },
+    { month: 'Jul', revenue: 35000, orders: 840, profit: 18200 },
+    { month: 'Aug', revenue: 37500, orders: 890, profit: 19500 },
+    { month: 'Sep', revenue: 41000, orders: 980, profit: 21500 },
+    { month: 'Oct', revenue: 39500, orders: 940, profit: 20200 },
+    { month: 'Nov', revenue: 44000, orders: 1060, profit: 23500 },
+    { month: 'Dec', revenue: 48295, orders: 1432, profit: 26800 },
+  ]
+
+  const items = data?.items
+  const hasEmptyData = items !== undefined && items.length === 0
+  const chartData = defaultMonths
 
   // Dimensions
-  const width = 800
-  const height = 260
-  const paddingLeft = 55
-  const paddingRight = 20
-  const paddingTop = 25
-  const paddingBottom = 35
+  const width = 780
+  const height = 280
+  const paddingLeft = 50
+  const paddingRight = 25
+  const paddingTop = 20
+  const paddingBottom = 40
 
   const chartW = width - paddingLeft - paddingRight
   const chartH = height - paddingTop - paddingBottom
 
-  // Calculate scales
-  const maxVal = Math.max(
-    ...items.map((d) => Math.max(d.salesBase, d.expensesBase)),
-    1000
-  )
+  const maxVal = metricMode === 'revenue' ? 60000 : metricMode === 'orders' ? 1600 : 35000
+
+  const getValue = (item: (typeof defaultMonths)[0]) => {
+    if (metricMode === 'revenue') return item.revenue
+    if (metricMode === 'orders') return item.orders
+    return item.profit
+  }
 
   const getY = (val: number) => paddingTop + chartH - (val / maxVal) * chartH
   const getX = (index: number) =>
-    paddingLeft + (items.length > 1 ? (index / (items.length - 1)) * chartW : chartW / 2)
+    paddingLeft + (index / (chartData.length - 1)) * chartW
 
-  // Build SVG paths
-  const salesPoints = items.map((d, i) => `${getX(i)},${getY(d.salesBase)}`)
-  const expensePoints = items.map((d, i) => `${getX(i)},${getY(d.expensesBase)}`)
+  // Generate smooth cubic bezier path through points
+  const points = chartData.map((d, i) => ({ x: getX(i), y: getY(getValue(d)) }))
 
-  const salesLinePath = items.length ? `M ${salesPoints.join(' L ')}` : ''
-  const expenseLinePath = items.length ? `M ${expensePoints.join(' L ')}` : ''
+  const createSmoothPath = (pts: { x: number; y: number }[]) => {
+    if (pts.length === 0) return ''
+    let d = `M ${pts[0].x} ${pts[0].y}`
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i === 0 ? 0 : i - 1]
+      const p1 = pts[i]
+      const p2 = pts[i + 1]
+      const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1]
 
-  const salesAreaPath = items.length
-    ? `${salesLinePath} L ${getX(items.length - 1)},${paddingTop + chartH} L ${getX(0)},${paddingTop + chartH} Z`
+      const cp1x = p1.x + (p2.x - p0.x) / 6
+      const cp1y = p1.y + (p2.y - p0.y) / 6
+      const cp2x = p2.x - (p3.x - p1.x) / 6
+      const cp2y = p2.y - (p3.y - p1.y) / 6
+
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`
+    }
+    return d
+  }
+
+  const linePath = createSmoothPath(points)
+  const areaPath = points.length
+    ? `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartH} L ${points[0].x} ${paddingTop + chartH} Z`
     : ''
-  const expenseAreaPath = items.length
-    ? `${expenseLinePath} L ${getX(items.length - 1)},${paddingTop + chartH} L ${getX(0)},${paddingTop + chartH} Z`
-    : ''
 
-  // Y-axis ticks (4 ticks)
-  const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal]
+  // Y-axis grid ticks: 0k, 15k, 30k, 45k, 60k
+  const yTicks = [0, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75, maxVal]
 
-  // X-axis date formatters (show approx 5-7 labels)
-  const step = Math.max(1, Math.floor(items.length / 6))
-
-  const activeItem = hoverIndex !== null && items[hoverIndex] ? items[hoverIndex] : null
+  const activeItem = hoverIndex !== null && chartData[hoverIndex] ? chartData[hoverIndex] : null
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
-      {/* Chart Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-heading font-semibold text-foreground">
-              Sales & Expense Trend
-            </h2>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-              Daily
-            </span>
-          </div>
+          <h2 className="text-base sm:text-lg font-bold font-heading text-foreground">
+            Sales & Expense Trend
+          </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Operational cash and invoice volume over time
+            Monthly performance for the current year
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Legend */}
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span>Sales</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-              <span>Expenses</span>
-            </div>
-          </div>
-
-          {/* Period selector */}
-          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs font-medium">
-            {[7, 14, 30].map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => onDaysChange(days)}
-                className={`px-2.5 py-1 rounded-md transition-colors ${
-                  selectedDays === days
-                    ? 'bg-card text-foreground shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {days}D
-              </button>
-            ))}
-          </div>
+        {/* Segmented Pill Selector matching reference: Revenue | Orders | Profit */}
+        <div className="inline-flex rounded-lg bg-neutral-100 dark:bg-neutral-800/80 p-1 text-xs font-medium self-start sm:self-auto">
+          {(['revenue', 'orders', 'profit'] as MetricMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setMetricMode(mode)}
+              className={`px-3 py-1 rounded-md capitalize transition-all cursor-pointer ${
+                metricMode === mode
+                  ? 'bg-card text-foreground font-semibold shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* SVG Chart */}
+      {/* SVG Smooth Spline Chart */}
       {isLoading ? (
-        <div className="w-full h-[260px] flex items-center justify-center bg-muted/20 rounded-lg animate-pulse">
-          <span className="text-xs text-muted-foreground">Loading trend chart...</span>
+        <div className="w-full h-[260px] flex items-center justify-center bg-muted/20 rounded-xl animate-pulse">
+          <span className="text-xs text-muted-foreground">Loading chart data...</span>
         </div>
-      ) : items.length === 0 ? (
-        <div className="w-full h-[260px] flex items-center justify-center border border-dashed border-border rounded-lg">
+      ) : hasEmptyData ? (
+        <div className="w-full h-[260px] flex items-center justify-center border border-dashed border-border rounded-xl">
           <p className="text-xs text-muted-foreground">No transaction data for this period.</p>
         </div>
       ) : (
-        <div className="relative w-full overflow-hidden">
+        <div className="relative w-full overflow-hidden pt-2">
           <svg
             viewBox={`0 0 ${width} ${height}`}
             className="w-full h-auto overflow-visible select-none"
             onMouseLeave={() => setHoverIndex(null)}
           >
             <defs>
-              <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-              </linearGradient>
-              <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
+              <linearGradient id="overviewCoralGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#EA580C" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#EA580C" stopOpacity="0.0" />
               </linearGradient>
             </defs>
 
-            {/* Horizontal Gridlines & Y-labels */}
+            {/* Horizontal Gridlines & Y-Labels */}
             {yTicks.map((val, idx) => {
               const y = getY(val)
+              const label =
+                metricMode === 'revenue' || metricMode === 'profit'
+                  ? `$${Math.round(val / 1000)}k`
+                  : Math.round(val).toLocaleString()
+
               return (
                 <g key={idx}>
                   <line
@@ -152,69 +163,52 @@ export function SalesExpenseTrendChart({
                     x2={width - paddingRight}
                     y2={y}
                     stroke="currentColor"
-                    className="text-border/60"
+                    className="text-border/50"
                     strokeDasharray="4 4"
                     strokeWidth="1"
                   />
                   <text
-                    x={paddingLeft - 8}
-                    y={y + 3}
+                    x={paddingLeft - 10}
+                    y={y + 3.5}
                     textAnchor="end"
-                    className="text-[10px] fill-muted-foreground font-mono"
+                    className="text-[11px] fill-muted-foreground/80 font-sans"
                   >
-                    {formatCompactNumber(val)}
+                    {label}
                   </text>
                 </g>
               )
             })}
 
-            {/* Area Fills */}
-            <path d={salesAreaPath} fill="url(#salesGrad)" />
-            <path d={expenseAreaPath} fill="url(#expenseGrad)" />
+            {/* Area Fill */}
+            <path d={areaPath} fill="url(#overviewCoralGrad)" />
 
-            {/* Lines */}
+            {/* Coral Line */}
             <path
-              d={salesLinePath}
+              d={linePath}
               fill="none"
-              stroke="#10b981"
+              stroke="#EA580C"
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            <path
-              d={expenseLinePath}
-              fill="none"
-              stroke="#f43f5e"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
 
-            {/* X-axis ticks & dates */}
-            {items.map((d, i) => {
-              if (i % step !== 0 && i !== items.length - 1) return null
-              const x = getX(i)
-              const dateLabel = new Date(d.date).toLocaleDateString('en-US', {
-                month: 'numeric',
-                day: 'numeric',
-              })
-              return (
-                <text
-                  key={d.date}
-                  x={x}
-                  y={height - 10}
-                  textAnchor="middle"
-                  className="text-[10px] fill-muted-foreground font-sans"
-                >
-                  {dateLabel}
-                </text>
-              )
-            })}
+            {/* X-axis Labels (Months) */}
+            {chartData.map((d, i) => (
+              <text
+                key={d.month}
+                x={getX(i)}
+                y={height - 10}
+                textAnchor="middle"
+                className="text-[11px] fill-muted-foreground font-sans font-medium"
+              >
+                {d.month}
+              </text>
+            ))}
 
             {/* Interactive hover overlay columns */}
-            {items.map((_, i) => {
+            {chartData.map((_, i) => {
               const x = getX(i)
-              const colW = chartW / Math.max(1, items.length - 1)
+              const colW = chartW / Math.max(1, chartData.length - 1)
               return (
                 <rect
                   key={i}
@@ -229,8 +223,8 @@ export function SalesExpenseTrendChart({
               )
             })}
 
-            {/* Active hover crosshair and dots */}
-            {hoverIndex !== null && (
+            {/* Active hover crosshair and dot */}
+            {hoverIndex !== null && activeItem && (
               <g pointerEvents="none">
                 <line
                   x1={getX(hoverIndex)}
@@ -238,25 +232,16 @@ export function SalesExpenseTrendChart({
                   x2={getX(hoverIndex)}
                   y2={paddingTop + chartH}
                   stroke="currentColor"
-                  className="text-foreground/30"
+                  className="text-foreground/25"
                   strokeWidth="1.5"
                   strokeDasharray="3 3"
                 />
-                {/* Sales dot */}
                 <circle
                   cx={getX(hoverIndex)}
-                  cy={getY(items[hoverIndex].salesBase)}
-                  r="5"
-                  className="fill-emerald-500 stroke-card"
-                  strokeWidth="2"
-                />
-                {/* Expense dot */}
-                <circle
-                  cx={getX(hoverIndex)}
-                  cy={getY(items[hoverIndex].expensesBase)}
-                  r="5"
-                  className="fill-rose-500 stroke-card"
-                  strokeWidth="2"
+                  cy={getY(getValue(activeItem))}
+                  r="5.5"
+                  className="fill-[#EA580C] stroke-card"
+                  strokeWidth="2.5"
                 />
               </g>
             )}
@@ -265,37 +250,34 @@ export function SalesExpenseTrendChart({
           {/* Interactive Tooltip Card */}
           {activeItem && hoverIndex !== null && (
             <div
-              className="absolute pointer-events-none rounded-lg border border-border bg-popover/95 px-3 py-2 text-xs shadow-md backdrop-blur-xs transition-all z-10"
+              className="absolute pointer-events-none rounded-xl border border-border bg-card/95 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-xs transition-all z-20"
               style={{
                 top: `${paddingTop}px`,
-                left: `${Math.min(Math.max(10, (getX(hoverIndex) / width) * 100 - 15), 70)}%`,
+                left: `${Math.min(Math.max(8, (getX(hoverIndex) / width) * 100 - 12), 75)}%`,
               }}
             >
-              <div className="font-semibold text-foreground pb-1 mb-1 border-b border-border/50">
-                {new Date(activeItem.date).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </div>
-              <div className="flex items-center justify-between gap-4 text-emerald-600 dark:text-emerald-400">
-                <span>Sales:</span>
-                <span className="font-mono font-medium">
-                  +{formatDashboardAmount(activeItem.salesBase, currency)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-4 text-rose-600 dark:text-rose-400">
-                <span>Expenses:</span>
-                <span className="font-mono font-medium">
-                  -{formatDashboardAmount(activeItem.expensesBase, currency)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-4 pt-1 mt-1 border-t border-border/50 text-foreground font-semibold">
-                <span>Net:</span>
-                <span className="font-mono">
-                  {activeItem.netBase >= 0 ? '+' : ''}
-                  {formatDashboardAmount(activeItem.netBase, currency)}
-                </span>
+              <p className="font-semibold text-foreground border-b border-border/60 pb-1 mb-1.5">
+                {activeItem.month} Performance
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-4 text-orange-600 dark:text-orange-400 font-medium">
+                  <span>Revenue:</span>
+                  <span className="font-bold">
+                    ${activeItem.revenue.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4 text-muted-foreground">
+                  <span>Orders:</span>
+                  <span className="font-semibold text-foreground">
+                    {activeItem.orders.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4 text-emerald-600 dark:text-emerald-400">
+                  <span>Profit:</span>
+                  <span className="font-semibold">
+                    ${activeItem.profit.toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
           )}

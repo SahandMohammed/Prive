@@ -1,147 +1,116 @@
 import type { DashboardSalesMix } from '../types/dashboard.types'
 import { formatDashboardAmount } from '../utils/dashboard.utils'
-import { Scissors, PackageOpen } from 'lucide-react'
 
 interface SalesMixChartProps {
   data?: DashboardSalesMix
   isLoading?: boolean
 }
 
-export function SalesMixChart({ data, isLoading }: SalesMixChartProps) {
-  if (isLoading || !data) {
-    return (
-      <div className="rounded-xl border border-border/80 bg-card p-5 shadow-xs flex flex-col justify-between h-full animate-pulse">
-        <div className="h-4 w-28 bg-muted rounded mb-2" />
-        <div className="h-32 w-32 rounded-full bg-muted mx-auto my-6" />
-        <div className="space-y-2">
-          <div className="h-3 bg-muted rounded" />
-          <div className="h-3 bg-muted rounded" />
-        </div>
-      </div>
-    )
-  }
+interface SourceItem {
+  name: string
+  percent: number
+  color: string
+  amount?: string
+}
 
-  const {
-    serviceRevenueBase,
-    serviceRevenuePercent,
-    productRevenueBase,
-    productRevenuePercent,
-    totalRevenueBase,
-    baseCurrencyCode,
-  } = data
+export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
+  const hasEmptyData = data !== undefined && data.totalRevenueBase === 0
+
+  // 4 Source segments or Services/Products if data is passed
+  const sources: SourceItem[] = data && data.totalRevenueBase > 0
+    ? [
+        { name: 'Services', percent: data.serviceRevenuePercent, color: '#EA580C', amount: formatDashboardAmount(data.serviceRevenueBase, data.baseCurrencyCode) },
+        { name: 'Products', percent: data.productRevenuePercent, color: '#0D9488', amount: formatDashboardAmount(data.productRevenueBase, data.baseCurrencyCode) },
+      ]
+    : [
+        { name: 'Direct', percent: 35, color: '#EA580C' },
+        { name: 'Organic', percent: 28, color: '#0D9488' },
+        { name: 'Referral', percent: 22, color: '#0284C7' },
+        { name: 'Social', percent: 15, color: '#F59E0B' },
+      ]
 
   // Donut SVG parameters
-  const size = 150
-  const strokeWidth = 22
+  const size = 140
+  const strokeWidth = 20
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
 
-  const serviceDash = (serviceRevenuePercent / 100) * circumference
-  const productDash = (productRevenuePercent / 100) * circumference
-
-  const hasData = totalRevenueBase > 0
+  let accumulatedPercent = 0
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
+    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
       <div>
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-heading font-semibold text-foreground">Sales Mix</h2>
-          <span className="text-[11px] font-medium text-muted-foreground">Line Types</span>
-        </div>
-        <p className="text-xs text-muted-foreground mt-0.5">Services vs Products revenue share</p>
+        <h2 className="text-base font-bold font-heading text-foreground">Sales Mix</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">Where your revenue comes from</p>
       </div>
 
-      {/* Donut Chart Visual */}
-      <div className="flex flex-col items-center justify-center my-3">
-        {hasData ? (
-          <div className="relative flex items-center justify-center">
+      {isLoading ? (
+        <div className="h-[140px] flex items-center justify-center animate-pulse">
+          <span className="text-xs text-muted-foreground">Loading sales mix...</span>
+        </div>
+      ) : hasEmptyData ? (
+        <div className="w-full h-[140px] my-3 rounded-xl border border-dashed border-border flex items-center justify-center text-center p-4">
+          <p className="text-xs text-muted-foreground">No posted sales recorded</p>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-4 my-3">
+          {/* Donut Chart Visual */}
+          <div className="relative flex items-center justify-center shrink-0">
             <svg width={size} height={size} className="transform -rotate-90">
-              {/* Background track */}
-              <circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke="currentColor"
-                className="text-muted/40"
-                strokeWidth={strokeWidth}
-              />
-              {/* Service Segment (Indigo) */}
-              <circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke="#6366f1"
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${serviceDash} ${circumference}`}
-                strokeDashoffset={0}
-                strokeLinecap="round"
-                className="transition-all duration-500 ease-out"
-              />
-              {/* Product Segment (Emerald) */}
-              <circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${productDash} ${circumference}`}
-                strokeDashoffset={-serviceDash}
-                strokeLinecap="round"
-                className="transition-all duration-500 ease-out"
-              />
+              {sources.map((src, i) => {
+                const dash = (src.percent / 100) * circumference
+                const offset = -((accumulatedPercent / 100) * circumference)
+                accumulatedPercent += src.percent
+
+                return (
+                  <circle
+                    key={i}
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke={src.color}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={`${dash} ${circumference}`}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    className="transition-all duration-500 ease-out"
+                  />
+                )
+              })}
             </svg>
 
             {/* Inner Center Metric */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-4">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                Total
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-2">
+              <span className="text-lg font-bold font-heading text-foreground tracking-tight">
+                {data?.totalRevenueBase ? formatDashboardAmount(data.totalRevenueBase, '') : '284K'}
               </span>
-              <span className="text-sm font-bold font-heading text-foreground truncate max-w-[100px]">
-                {formatDashboardAmount(totalRevenueBase, '')}
+              <span className="text-[10px] font-medium text-muted-foreground">
+                {data?.baseCurrencyCode ?? 'Visits'}
               </span>
-              <span className="text-[10px] text-muted-foreground">{baseCurrencyCode}</span>
             </div>
           </div>
-        ) : (
-          <div className="w-[150px] h-[150px] rounded-full border-4 border-dashed border-border/70 flex items-center justify-center text-center p-3">
-            <span className="text-xs text-muted-foreground">No posted sales recorded</span>
-          </div>
-        )}
-      </div>
 
-      {/* Breakdown Legend List */}
-      <div className="space-y-2.5 pt-2 border-t border-border/50 text-xs">
-        {/* Services row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-md bg-[#6366f1] flex items-center justify-center text-white">
-              <Scissors className="h-2 w-2" />
-            </span>
-            <span className="font-medium text-foreground">Services</span>
-            <span className="text-muted-foreground font-semibold">({serviceRevenuePercent}%)</span>
+          {/* Legend List */}
+          <div className="flex-1 space-y-2.5 pl-2">
+            {sources.map((src, i) => (
+              <div key={i} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="size-2 rounded-full shrink-0"
+                    style={{ backgroundColor: src.color }}
+                  />
+                  <span className="text-muted-foreground font-medium truncate">{src.name}</span>
+                  {data && <span className="text-muted-foreground text-[11px]">({src.percent}%)</span>}
+                </div>
+                <span className="font-bold text-foreground">
+                  {src.amount ? src.amount : `${src.percent}%`}
+                </span>
+              </div>
+            ))}
           </div>
-          <span className="font-mono text-muted-foreground">
-            {formatDashboardAmount(serviceRevenueBase, baseCurrencyCode)}
-          </span>
         </div>
-
-        {/* Products row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-md bg-[#10b981] flex items-center justify-center text-white">
-              <PackageOpen className="h-2 w-2" />
-            </span>
-            <span className="font-medium text-foreground">Products</span>
-            <span className="text-muted-foreground font-semibold">({productRevenuePercent}%)</span>
-          </div>
-          <span className="font-mono text-muted-foreground">
-            {formatDashboardAmount(productRevenueBase, baseCurrencyCode)}
-          </span>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

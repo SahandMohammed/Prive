@@ -17,6 +17,8 @@ import { RecentActivityList } from '../components/RecentActivityList'
 import { NeedsAttentionPanel } from '../components/NeedsAttentionPanel'
 import { AlertCircle, RotateCw } from 'lucide-react'
 
+import { MonthlyGoalsCard } from '../components/MonthlyGoalsCard'
+
 export function DashboardPage() {
   const queryClient = useQueryClient()
   const [selectedDays, setSelectedDays] = useState(14)
@@ -53,8 +55,8 @@ export function DashboardPage() {
     return (
       <div className="space-y-6">
         <DashboardHeader onRefresh={handleRefresh} isRefreshing={isRefreshing} />
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-          <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <AlertCircle className="size-8 text-destructive mx-auto mb-2" />
           <h3 className="text-sm font-semibold text-destructive">Error Loading Dashboard</h3>
           <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">{errorMessage}</p>
           <button
@@ -62,7 +64,7 @@ export function DashboardPage() {
             onClick={handleRefresh}
             className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
           >
-            <RotateCw className="h-3.5 w-3.5" />
+            <RotateCw className="size-3.5" />
             Try Again
           </button>
         </div>
@@ -71,46 +73,56 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      {/* 1. Header */}
+    <div className="space-y-6 pb-12">
+      {/* 1. Header with greeting */}
       <DashboardHeader onRefresh={handleRefresh} isRefreshing={isRefreshing} />
 
-      {/* 2. Main KPI Cards */}
+      {/* 2. Top 4 KPI Cards with Wavy Sparklines */}
       <KpiCards summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
 
-      {/* 3. Sales and Expense Trend Chart */}
-      <SalesExpenseTrendChart
-        data={trendsQuery.data}
-        isLoading={trendsQuery.isLoading}
-        selectedDays={selectedDays}
-        onDaysChange={setSelectedDays}
-      />
-
-      {/* 4. Bottom Grid Layout */}
+      {/* 3. Main Dashboard Row matching Zenith reference: Overview Spline on Left, Traffic Sources + Monthly Goals on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Recent Transactions and Activity */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
-          <RecentTransactionsTable
-            transactions={transactionsQuery.data}
-            isLoading={transactionsQuery.isLoading}
-          />
-
-          <RecentActivityList
-            activities={activityQuery.data}
-            isLoading={activityQuery.isLoading}
+        {/* Left Column: Overview Monthly Spline Chart */}
+        <div className="lg:col-span-7 xl:col-span-8">
+          <SalesExpenseTrendChart
+            data={trendsQuery.data}
+            isLoading={trendsQuery.isLoading}
+            selectedDays={selectedDays}
+            onDaysChange={setSelectedDays}
           />
         </div>
 
-        {/* Right Column: Sales Mix and Attention Panel */}
+        {/* Right Column: Traffic Sources & Monthly Goals */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-6">
           <SalesMixChart
             data={salesMixQuery.data}
             isLoading={salesMixQuery.isLoading}
           />
 
+          <MonthlyGoalsCard isLoading={summaryQuery.isLoading} />
+        </div>
+      </div>
+
+      {/* 4. Operational Activity & Audit Trail Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pt-2">
+        {/* Left: Recent Transactions Table */}
+        <div className="lg:col-span-7 xl:col-span-8">
+          <RecentTransactionsTable
+            transactions={transactionsQuery.data}
+            isLoading={transactionsQuery.isLoading}
+          />
+        </div>
+
+        {/* Right: Needs Attention & Team Activity */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
           <NeedsAttentionPanel
             summary={summaryQuery.data}
             isLoading={summaryQuery.isLoading}
+          />
+
+          <RecentActivityList
+            activities={activityQuery.data}
+            isLoading={activityQuery.isLoading}
           />
         </div>
       </div>

@@ -9,17 +9,17 @@ interface RecentActivityListProps {
 
 export function RecentActivityList({ activities, isLoading }: RecentActivityListProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-heading font-semibold text-foreground">
+          <h2 className="text-base font-bold font-heading text-foreground">
             Recent Activity
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Team actions and audit trail
           </p>
         </div>
-        <UserCheck className="h-4 w-4 text-muted-foreground" />
+        <UserCheck className="size-4 text-muted-foreground" />
       </div>
 
       <div className="flex-1">

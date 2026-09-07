@@ -75,14 +75,14 @@ export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelP
   const totalUrgent = items.filter((i) => i.count > 0).length
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-heading font-semibold text-foreground">
+          <h2 className="text-base font-bold font-heading text-foreground">
             Needs Attention
           </h2>
           {totalUrgent > 0 && (
-            <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+            <span className="flex size-2 rounded-full bg-rose-500 animate-pulse" />
           )}
         </div>
         <AlertCircle className="h-4 w-4 text-muted-foreground" />
