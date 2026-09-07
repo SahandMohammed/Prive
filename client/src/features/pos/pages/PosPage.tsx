@@ -192,11 +192,11 @@ export function PosPage() {
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="hidden w-56 shrink-0 border-r bg-card lg:block">
-          <div className="border-b px-4 py-3">
+        <aside className="hidden w-56 shrink-0 flex-col border-r bg-card lg:flex">
+          <div className="shrink-0 border-b px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catalog</p>
           </div>
-          <div className="h-[calc(100%-45px)]">
+          <div className="min-h-0 flex-1">
             <PosCategoryNav
               categories={setup.categories}
               itemType={itemType}
