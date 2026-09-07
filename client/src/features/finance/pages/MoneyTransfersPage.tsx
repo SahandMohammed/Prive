@@ -119,7 +119,7 @@ export function MoneyTransfersPage() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
           onClick={openCreate}
         >
           <FilePlus2 className="size-4" />
@@ -229,7 +229,7 @@ export function MoneyTransfersPage() {
                       <p>No Money Transfers found.</p>
                       <Button
                         size="sm"
-                        className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                        className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
                         onClick={openCreate}
                       >
                         <FilePlus2 className="size-4" /> Create Money Transfer
@@ -247,7 +247,7 @@ export function MoneyTransfersPage() {
                       <button
                         type="button"
                         onClick={() => setDetailTransfer(transfer)}
-                        className="text-left font-mono font-semibold text-[#d85430] hover:underline"
+                        className="text-left font-mono font-semibold text-primary hover:underline"
                       >
                         {transfer.documentNumber}
                       </button>
@@ -317,7 +317,7 @@ export function MoneyTransfersPage() {
                               size="icon-sm"
                               title="Post transfer"
                               aria-label={`Post transfer ${transfer.documentNumber}`}
-                              className="text-[#e05d38] hover:bg-[#e05d38]/10 hover:text-[#c94f2d]"
+                              className="text-primary hover:bg-primary/10 hover:text-primary"
                               disabled={actions.post.isPending}
                               onClick={() => {
                                 if (
@@ -591,10 +591,10 @@ function MoneyTransferFormDialog({
 
                 {/* Arrow */}
                 <div className="flex flex-col items-center justify-center text-center">
-                  <div className="flex size-7 items-center justify-center rounded-full bg-[#e05d38]/10 text-[#e05d38]">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <ArrowRight className="size-4" />
                   </div>
-                  <p className="mt-0.5 font-mono text-xs font-bold text-[#d85430]">
+                  <p className="mt-0.5 font-mono text-xs font-bold text-primary">
                     {transferAmount > 0 ? formatAmount(transferAmount) : '—'}
                   </p>
                 </div>
@@ -645,7 +645,7 @@ function MoneyTransferFormDialog({
             </Button>
             <Button
               type="submit"
-              className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={isPending}
             >
               {isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
@@ -733,10 +733,10 @@ function MoneyTransferDetailDialog({
 
               {/* Arrow + Amount */}
               <div className="flex flex-col items-center justify-center text-center">
-                <div className="flex size-8 items-center justify-center rounded-full bg-[#e05d38]/10 text-[#e05d38]">
+                <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <ArrowRight className="size-4" />
                 </div>
-                <p className="mt-1 font-mono text-sm font-bold text-[#d85430]">
+                <p className="mt-1 font-mono text-sm font-bold text-primary">
                   {formatAmount(transfer.amount)} {transfer.currencyCode}
                 </p>
               </div>
@@ -846,7 +846,7 @@ function MoneyTransferDetailDialog({
               <Button
                 type="button"
                 size="sm"
-                className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={actions.post.isPending}
                 onClick={handlePost}
               >
@@ -902,7 +902,7 @@ function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       className={cn(
-        'h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-[#e05d38] focus:ring-1 focus:ring-[#e05d38] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900',
+        'h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-primary focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900',
         className
       )}
       {...props}
@@ -927,4 +927,4 @@ const formatAmount = (value: number) =>
   value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 const formatTimestamp = (value: string) => new Date(value).toLocaleString()
 const head =
-  'border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60'
+  'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'

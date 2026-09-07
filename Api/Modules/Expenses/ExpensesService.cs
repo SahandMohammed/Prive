@@ -163,7 +163,7 @@ public sealed class ExpensesService
     var category = await _db.ExpenseCategories.SingleOrDefaultAsync(c => c.Id == id, ct)
       ?? throw new NotFoundException(ErrorCodes.Expenses.CategoryNotFound, $"Expense category with id '{id}' was not found.");
 
-    var isUsed = await _db.ExpenseLines.AnyAsync(l => l.ExpenseCategoryId == id, ct);
+    var isUsed = await _db.ExpenseLines.IgnoreQueryFilters().AnyAsync(l => l.ExpenseCategoryId == id, ct);
     if (isUsed)
     {
       throw new ConflictException(
@@ -752,7 +752,7 @@ public sealed class ExpensesService
 
   private async Task<string> NextExpenseNumberAsync(CancellationToken ct)
   {
-    var last = await _db.ExpenseDocuments.Select(d => d.DocumentNumber)
+    var last = await _db.ExpenseDocuments.IgnoreQueryFilters().Select(d => d.DocumentNumber)
       .OrderByDescending(n => n)
       .FirstOrDefaultAsync(ct);
 

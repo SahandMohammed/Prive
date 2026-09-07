@@ -844,7 +844,7 @@ function Summary({
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn('mt-1 font-mono text-lg font-bold', accent && 'text-[#d85430]')}>{value}</p>
+      <p className={cn('mt-1 font-mono text-lg font-bold', accent && 'text-primary')}>{value}</p>
     </div>
   )
 }

@@ -121,7 +121,7 @@ export function ExpenseCategoriesPage() {
             </p>
           </div>
         </div>
-        <Button onClick={openCreateDialog} className="bg-[#e05d38] text-white hover:bg-[#c94f2d]">
+        <Button onClick={openCreateDialog} className="bg-primarytext-primary-foregroundhover:bg-primary/90">
           <Plus className="size-4 mr-1.5" />
           Add Category
         </Button>
@@ -155,7 +155,7 @@ export function ExpenseCategoriesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead>Code</TableHead>
                 <TableHead>Category Name</TableHead>
                 <TableHead>Mapped Expense GL Account</TableHead>
@@ -357,7 +357,7 @@ export function ExpenseCategoriesPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                    className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                     disabled={saveCategory.isPending}
                   >
                     {saveCategory.isPending ? 'Saving…' : 'Save Category'}

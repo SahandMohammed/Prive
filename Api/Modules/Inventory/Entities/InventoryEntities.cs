@@ -5,8 +5,9 @@ using Api.Modules.User;
 
 namespace Api.Modules.Inventory;
 
-public sealed class ProductCategoryEntity
+public sealed class ProductCategoryEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public bool IsActive { get; set; } = true;
@@ -14,8 +15,9 @@ public sealed class ProductCategoryEntity
   public ICollection<ProductEntity> Products { get; set; } = new List<ProductEntity>();
 }
 
-public sealed class ProductSubcategoryEntity
+public sealed class ProductSubcategoryEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public Guid CategoryId { get; set; }
@@ -24,8 +26,9 @@ public sealed class ProductSubcategoryEntity
   public ICollection<ProductEntity> Products { get; set; } = new List<ProductEntity>();
 }
 
-public sealed class UnitOfMeasureEntity
+public sealed class UnitOfMeasureEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public string Code { get; set; } = string.Empty;
@@ -34,8 +37,9 @@ public sealed class UnitOfMeasureEntity
   public ICollection<ProductUnitConversionEntity> ProductConversions { get; set; } = new List<ProductUnitConversionEntity>();
 }
 
-public sealed class ProductEntity
+public sealed class ProductEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public string SKU { get; set; } = string.Empty;
@@ -57,8 +61,9 @@ public sealed class ProductEntity
   public ICollection<StockMovementEntity> StockMovements { get; set; } = new List<StockMovementEntity>();
 }
 
-public sealed class ProductUnitConversionEntity
+public sealed class ProductUnitConversionEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public Guid ProductId { get; set; }
   public ProductEntity Product { get; set; } = null!;

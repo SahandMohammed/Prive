@@ -7,6 +7,7 @@ using System.Security.Claims;
 
 namespace Api.Modules.User;
 
+[BranchIndependent]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/users")]
@@ -21,7 +22,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpGet]
-  [Authorize(Roles = "SuperAdmin,Manager")]
+  [Authorize(Roles = "SuperAdmin,Owner,Manager")]
   [ProducesResponseType(typeof(ApiResponse<List<UserResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetAll([FromQuery] UserListQuery query, CancellationToken ct)
   {
@@ -43,7 +44,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpGet("{id:guid}")]
-  [Authorize(Roles = "SuperAdmin,Manager")]
+  [Authorize(Roles = "SuperAdmin,Owner,Manager")]
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetById(Guid id)
@@ -53,7 +54,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpPost]
-  [Authorize(Roles = "SuperAdmin,Manager")]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status201Created)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
   public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
@@ -66,7 +67,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpPut("{id:guid}")]
-  [Authorize(Roles = "SuperAdmin,Manager")]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -77,7 +78,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpPost("{id:guid}/reset-password")]
-  [Authorize(Roles = "SuperAdmin,Manager")]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetPasswordRequest request)
@@ -87,7 +88,7 @@ public sealed class UserController : ControllerBase
   }
 
   [HttpDelete("{id:guid}")]
-  [Authorize(Roles = "SuperAdmin,Manager")]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> Delete(Guid id)

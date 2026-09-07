@@ -23,9 +23,25 @@ const rawClient = axios.create({
 // for the explicit app-startup path.
 
 let inMemoryAccessToken: string | null = null
+let inMemoryBranchId: string | null = null
+
+export function setBranchId(branchId: string | null) {
+  inMemoryBranchId = branchId
+}
+
+let onBranchAccessDenied: (() => void) | null = null
+
+export function registerBranchAccessHandler(handler: (() => void) | null) {
+  onBranchAccessDenied = handler
+}
+
+function branchConfig() {
+  return { headers: inMemoryBranchId ? { 'X-Branch-Id': inMemoryBranchId } : {} }
+}
 
 export function setAccessToken(token: string | null) {
   inMemoryAccessToken = token
+  if (!token) inMemoryBranchId = null
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +117,9 @@ rawClient.interceptors.response.use(
   (response) => response,
 
   async (error) => {
-    const originalRequest = error.config as RetryableRequestConfig
+    const originalRequest = error.config as RetryableRequestConfig | undefined
+    if (!originalRequest) return Promise.reject(error)
+    if (error.response?.data?.error?.code === 'BRANCH_ACCESS_DENIED' && !originalRequest.url?.startsWith('/branches/accessible')) onBranchAccessDenied?.()
     const is401 = error.response?.status === 401
     const alreadyRetried = originalRequest._retry === true
     const isAuthEndpoint = SKIP_REFRESH_URLS.some((u) =>
@@ -204,11 +222,11 @@ async function unwrapPaginated<T>(promise: Promise<{ data: ApiEnvelope<T[]> }>):
 // ---------------------------------------------------------------------------
 
 export const apiClient = {
-  get: <T>(url: string) => unwrap<T>(rawClient.get<ApiEnvelope<T>>(url)),
-  getPaginated: <T>(url: string) => unwrapPaginated<T>(rawClient.get<ApiEnvelope<T[]>>(url)),
+  get: <T>(url: string) => unwrap<T>(rawClient.get<ApiEnvelope<T>>(url, branchConfig())),
+  getPaginated: <T>(url: string) => unwrapPaginated<T>(rawClient.get<ApiEnvelope<T[]>>(url, branchConfig())),
   post: <T>(url: string, body?: unknown) =>
-    unwrap<T>(rawClient.post<ApiEnvelope<T>>(url, body)),
+    unwrap<T>(rawClient.post<ApiEnvelope<T>>(url, body, branchConfig())),
   put: <T>(url: string, body?: unknown) =>
-    unwrap<T>(rawClient.put<ApiEnvelope<T>>(url, body)),
-  delete: <T>(url: string) => unwrap<T>(rawClient.delete<ApiEnvelope<T>>(url)),
+    unwrap<T>(rawClient.put<ApiEnvelope<T>>(url, body, branchConfig())),
+  delete: <T>(url: string) => unwrap<T>(rawClient.delete<ApiEnvelope<T>>(url, branchConfig())),
 }

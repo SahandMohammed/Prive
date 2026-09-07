@@ -206,6 +206,11 @@ namespace api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("CatalogMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("City")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -255,6 +260,28 @@ namespace api.Migrations
                         .HasFilter("\"IsMainBranch\" = true");
 
                     b.ToTable("branches", (string)null);
+                });
+
+            modelBuilder.Entity("Api.Modules.Branch.UserBranchAccessEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("UserId", "BranchId")
+                        .IsUnique();
+
+                    b.ToTable("user_branch_access", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.Business.BusinessEntity", b =>
@@ -343,6 +370,9 @@ namespace api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("CatalogBranchId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("City")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -400,6 +430,8 @@ namespace api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CatalogBranchId");
+
                     b.HasIndex("Name");
 
                     b.HasIndex("PrimaryPhoneNormalized");
@@ -444,6 +476,52 @@ namespace api.Migrations
                         .IsUnique();
 
                     b.ToTable("currencies", (string)null);
+                });
+
+            modelBuilder.Entity("Api.Modules.Dashboard.ActivityLogEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("BranchId", "TimestampUtc");
+
+                    b.ToTable("activity_logs", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.Expenses.ExpenseCategoryEntity", b =>
@@ -1271,6 +1349,9 @@ namespace api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CatalogBranchId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -1282,7 +1363,12 @@ namespace api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NULL");
+
+                    b.HasIndex("CatalogBranchId", "Name")
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NOT NULL");
 
                     b.ToTable("product_categories", (string)null);
                 });
@@ -1296,6 +1382,9 @@ namespace api.Migrations
                     b.Property<string>("Barcode")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("CatalogBranchId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
@@ -1347,16 +1436,25 @@ namespace api.Migrations
 
                     b.HasIndex("Barcode")
                         .IsUnique()
-                        .HasFilter("\"Barcode\" IS NOT NULL");
+                        .HasFilter("\"Barcode\" IS NOT NULL AND \"CatalogBranchId\" IS NULL");
 
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("SKU")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NULL");
 
                     b.HasIndex("SubcategoryId");
 
                     b.HasIndex("UnitOfMeasureId");
+
+                    b.HasIndex("CatalogBranchId", "Barcode")
+                        .IsUnique()
+                        .HasFilter("\"Barcode\" IS NOT NULL AND \"CatalogBranchId\" IS NOT NULL");
+
+                    b.HasIndex("CatalogBranchId", "SKU")
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NOT NULL");
 
                     b.ToTable("products", (string)null);
                 });
@@ -1365,6 +1463,9 @@ namespace api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CatalogBranchId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CategoryId")
@@ -1380,6 +1481,8 @@ namespace api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CatalogBranchId");
+
                     b.HasIndex("CategoryId", "Name")
                         .IsUnique();
 
@@ -1390,6 +1493,9 @@ namespace api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CatalogBranchId")
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Factor")
@@ -1408,6 +1514,8 @@ namespace api.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CatalogBranchId");
 
                     b.HasIndex("UnitOfMeasureId");
 
@@ -1627,6 +1735,9 @@ namespace api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CatalogBranchId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1643,7 +1754,12 @@ namespace api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NULL");
+
+                    b.HasIndex("CatalogBranchId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NOT NULL");
 
                     b.ToTable("units_of_measure", (string)null);
                 });
@@ -2253,6 +2369,9 @@ namespace api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CatalogBranchId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -2264,7 +2383,12 @@ namespace api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NULL");
+
+                    b.HasIndex("CatalogBranchId", "Name")
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NOT NULL");
 
                     b.ToTable("service_categories", (string)null);
                 });
@@ -2273,6 +2397,9 @@ namespace api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CatalogBranchId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CategoryId")
@@ -2301,6 +2428,8 @@ namespace api.Migrations
                         .HasColumnType("numeric(19,4)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CatalogBranchId");
 
                     b.HasIndex("CategoryId");
 
@@ -2420,6 +2549,25 @@ namespace api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Api.Modules.Branch.UserBranchAccessEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.User.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Api.Modules.Business.BusinessEntity", b =>
                 {
                     b.HasOne("Api.Modules.Currency.CurrencyEntity", "BaseCurrency")
@@ -2429,6 +2577,33 @@ namespace api.Migrations
                         .IsRequired();
 
                     b.Navigation("BaseCurrency");
+                });
+
+            modelBuilder.Entity("Api.Modules.Contact.ContactEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Api.Modules.Dashboard.ActivityLogEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.User.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Api.Modules.Expenses.ExpenseCategoryEntity", b =>
@@ -2890,8 +3065,21 @@ namespace api.Migrations
                     b.Navigation("UnitOfMeasure");
                 });
 
+            modelBuilder.Entity("Api.Modules.Inventory.ProductCategoryEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Api.Modules.Inventory.ProductEntity", b =>
                 {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Api.Modules.Inventory.ProductCategoryEntity", "Category")
                         .WithMany("Products")
                         .HasForeignKey("CategoryId")
@@ -2918,6 +3106,11 @@ namespace api.Migrations
 
             modelBuilder.Entity("Api.Modules.Inventory.ProductSubcategoryEntity", b =>
                 {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Api.Modules.Inventory.ProductCategoryEntity", "Category")
                         .WithMany("Subcategories")
                         .HasForeignKey("CategoryId")
@@ -2929,6 +3122,11 @@ namespace api.Migrations
 
             modelBuilder.Entity("Api.Modules.Inventory.ProductUnitConversionEntity", b =>
                 {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Api.Modules.Inventory.ProductEntity", "Product")
                         .WithMany("UnitConversions")
                         .HasForeignKey("ProductId")
@@ -3087,6 +3285,14 @@ namespace api.Migrations
                     b.Navigation("WarehouseTransferDocument");
 
                     b.Navigation("WarehouseTransferLine");
+                });
+
+            modelBuilder.Entity("Api.Modules.Inventory.UnitOfMeasureEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Api.Modules.Inventory.WarehouseEntity", b =>
@@ -3407,8 +3613,21 @@ namespace api.Migrations
                     b.Navigation("UnitOfMeasure");
                 });
 
+            modelBuilder.Entity("Api.Modules.Sales.ServiceCategoryEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Api.Modules.Sales.ServiceEntity", b =>
                 {
+                    b.HasOne("Api.Modules.Branch.BranchEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Api.Modules.Sales.ServiceCategoryEntity", "Category")
                         .WithMany("Services")
                         .HasForeignKey("CategoryId")

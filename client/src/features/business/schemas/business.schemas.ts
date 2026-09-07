@@ -37,6 +37,7 @@ export const branchSchema = z.object({
   country: z.string().trim().min(1, 'Country is required').max(100),
   isMainBranch: z.boolean(),
   isActive: z.boolean(),
+  catalogMode: z.enum(['Shared', 'Separate']),
 })
 
 export type BusinessFormValues = z.input<typeof businessSchema>

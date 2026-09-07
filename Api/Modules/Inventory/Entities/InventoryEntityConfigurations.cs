@@ -7,7 +7,9 @@ public sealed class ProductCategoryEntityConfiguration : IEntityTypeConfiguratio
 {
   public void Configure(EntityTypeBuilder<ProductCategoryEntity> b)
   {
-    b.ToTable("product_categories"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(100).IsRequired(); b.HasIndex(x => x.Name).IsUnique();
+    b.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
+    b.ToTable("product_categories"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(100).IsRequired(); b.HasIndex(x => x.Name).IsUnique().HasFilter("\"CatalogBranchId\" IS NULL");
+    b.HasIndex(x => new { x.CatalogBranchId, x.Name }).IsUnique().HasFilter("\"CatalogBranchId\" IS NOT NULL");
   }
 }
 
@@ -15,6 +17,7 @@ public sealed class ProductSubcategoryEntityConfiguration : IEntityTypeConfigura
 {
   public void Configure(EntityTypeBuilder<ProductSubcategoryEntity> b)
   {
+    b.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
     b.ToTable("product_subcategories");
     b.HasKey(x => x.Id);
     b.Property(x => x.Name).HasMaxLength(100).IsRequired();
@@ -27,7 +30,9 @@ public sealed class UnitOfMeasureEntityConfiguration : IEntityTypeConfiguration<
 {
   public void Configure(EntityTypeBuilder<UnitOfMeasureEntity> b)
   {
-    b.ToTable("units_of_measure"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(100).IsRequired(); b.Property(x => x.Code).HasMaxLength(20).IsRequired(); b.HasIndex(x => x.Code).IsUnique();
+    b.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
+    b.ToTable("units_of_measure"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(100).IsRequired(); b.Property(x => x.Code).HasMaxLength(20).IsRequired(); b.HasIndex(x => x.Code).IsUnique().HasFilter("\"CatalogBranchId\" IS NULL");
+    b.HasIndex(x => new { x.CatalogBranchId, x.Code }).IsUnique().HasFilter("\"CatalogBranchId\" IS NOT NULL");
   }
 }
 
@@ -35,7 +40,9 @@ public sealed class ProductEntityConfiguration : IEntityTypeConfiguration<Produc
 {
   public void Configure(EntityTypeBuilder<ProductEntity> b)
   {
-    b.ToTable("products"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(250).IsRequired(); b.Property(x => x.SKU).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.SKU).IsUnique(); b.Property(x => x.Barcode).HasMaxLength(64); b.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL"); b.Property(x => x.Purpose).HasConversion<string>().HasMaxLength(20).IsRequired(); b.Property(x => x.PurchasePriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.SellingPriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.ImageReference).HasMaxLength(2048); b.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.Subcategory).WithMany(x => x.Products).HasForeignKey(x => x.SubcategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.Products).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
+    b.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
+    b.ToTable("products"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(250).IsRequired(); b.Property(x => x.SKU).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.SKU).IsUnique().HasFilter("\"CatalogBranchId\" IS NULL");
+    b.HasIndex(x => new { x.CatalogBranchId, x.SKU }).IsUnique().HasFilter("\"CatalogBranchId\" IS NOT NULL"); b.Property(x => x.Barcode).HasMaxLength(64); b.HasIndex(x => x.Barcode).IsUnique().HasFilter("\"Barcode\" IS NOT NULL AND \"CatalogBranchId\" IS NULL"); b.HasIndex(x => new { x.CatalogBranchId, x.Barcode }).IsUnique().HasFilter("\"Barcode\" IS NOT NULL AND \"CatalogBranchId\" IS NOT NULL"); b.Property(x => x.Purpose).HasConversion<string>().HasMaxLength(20).IsRequired(); b.Property(x => x.PurchasePriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.SellingPriceBase).HasPrecision(19, 4).IsRequired(); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.ImageReference).HasMaxLength(2048); b.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.Subcategory).WithMany(x => x.Products).HasForeignKey(x => x.SubcategoryId).OnDelete(DeleteBehavior.Restrict); b.HasOne(x => x.UnitOfMeasure).WithMany(x => x.Products).HasForeignKey(x => x.UnitOfMeasureId).OnDelete(DeleteBehavior.Restrict);
   }
 }
 
@@ -43,6 +50,7 @@ public sealed class ProductUnitConversionEntityConfiguration : IEntityTypeConfig
 {
   public void Configure(EntityTypeBuilder<ProductUnitConversionEntity> b)
   {
+    b.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
     b.ToTable("product_unit_conversions");
     b.HasKey(x => x.Id);
     b.Property(x => x.Operation).HasConversion<string>().HasMaxLength(16).IsRequired();

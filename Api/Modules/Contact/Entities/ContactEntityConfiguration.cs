@@ -7,6 +7,7 @@ public sealed class ContactEntityConfiguration : IEntityTypeConfiguration<Contac
 {
   public void Configure(EntityTypeBuilder<ContactEntity> builder)
   {
+    builder.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
     builder.ToTable("contacts");
     builder.HasKey(contact => contact.Id);
     builder.Property(contact => contact.Name).HasMaxLength(200).IsRequired();

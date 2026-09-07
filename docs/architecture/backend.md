@@ -364,3 +364,7 @@ Query DTO extends PaginationRequest
 9. Chain `.Add<Name>Module()` in `Program.cs`
 10. Run `dotnet ef migrations add <MigrationName>`
 11. Run `dotnet build` — must pass with 0 errors, 0 warnings
+
+## Branch context
+
+Operational controllers require a validated `X-Branch-Id` through `BranchScopeFilter`. New branch-owned entities must define an ownership query filter in `AppDbContext.BranchScope.cs`; catalog definitions implement `IBranchCatalogEntity`. Persistence rejects references outside the selected branch or catalog. Only setup/auth/admin controllers use `[BranchIndependent]`. See [ADR-003](../decisions/003-branch-workspace.md) for sharing, access, migration, and intentional global history/numbering queries.

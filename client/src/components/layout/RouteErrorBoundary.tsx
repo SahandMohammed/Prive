@@ -1,67 +1,73 @@
 import { useRouteError, isRouteErrorResponse, useNavigate } from 'react-router-dom'
-import { AlertCircle, Home, RefreshCcw } from 'lucide-react'
+import { AlertTriangle, Home, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { NotFoundPage } from './NotFoundPage'
 
 export function RouteErrorBoundary() {
   const error = useRouteError()
   const navigate = useNavigate()
 
-  let title = 'An unexpected error occurred'
+  if (isRouteErrorResponse(error) && error.status === 404) {
+    return <NotFoundPage standalone />
+  }
+
+  let title = 'Application Error'
   let message = 'Something went wrong while trying to render this page.'
 
   if (isRouteErrorResponse(error)) {
     title = `${error.status} ${error.statusText}`
-    message = error.data?.message || error.data || 'We could not find the page you were looking for.'
+    message =
+      error.data?.message ||
+      (typeof error.data === 'string'
+        ? error.data
+        : 'We encountered an error processing your request.')
   } else if (error instanceof Error) {
-    title = 'Application Error'
     message = error.message
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
-      <Card className="max-w-md w-full shadow-lg border-slate-200 dark:border-slate-800">
-        <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center mb-4">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <CardTitle className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen w-full flex items-center justify-center p-6 bg-background">
+      <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-xs max-w-md w-full space-y-6 text-center">
+        <div className="mx-auto size-14 rounded-2xl bg-destructive/10 text-destructive border border-destructive/20 flex items-center justify-center shadow-xs">
+          <AlertTriangle className="size-7" />
+        </div>
+
+        <div className="space-y-1.5">
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground">
             {title}
-          </CardTitle>
-          <CardDescription className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
             {message}
-          </CardDescription>
-        </CardHeader>
-        
-        {/* We can show stack trace in development, but keeping it clean for users usually */}
+          </p>
+        </div>
+
         {error instanceof Error && import.meta.env.DEV && (
-          <CardContent>
-            <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-900 rounded-md overflow-x-auto text-left">
-              <pre className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
-                {error.stack}
-              </pre>
-            </div>
-          </CardContent>
+          <div className="p-3 bg-muted/50 border border-border/60 rounded-lg overflow-x-auto text-left">
+            <pre className="text-[11px] text-muted-foreground font-mono whitespace-pre-wrap break-all">
+              {error.stack}
+            </pre>
+          </div>
         )}
 
-        <CardFooter className="flex flex-col sm:flex-row gap-3 pt-6 pb-6 justify-center">
-          <Button 
-            variant="outline" 
+        <div className="flex flex-col sm:flex-row gap-2.5 pt-2 justify-center">
+          <Button
+            variant="outline"
             onClick={() => window.location.reload()}
-            className="w-full sm:w-auto gap-2 bg-white dark:bg-slate-900"
+            className="w-full sm:w-auto gap-2 border-border shadow-2xs"
           >
-            <RefreshCcw className="w-4 h-4" />
-            Try again
+            <RefreshCcw className="size-4" />
+            <span>Reload Page</span>
           </Button>
-          <Button 
+          <Button
             onClick={() => navigate('/dashboard')}
-            className="w-full sm:w-auto gap-2 bg-[#e05d38] hover:bg-[#c94f2d] text-white"
+            className="w-full sm:w-auto gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
           >
-            <Home className="w-4 h-4" />
-            Go to Dashboard
+            <Home className="size-4" />
+            <span>Go to Dashboard</span>
           </Button>
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }
+

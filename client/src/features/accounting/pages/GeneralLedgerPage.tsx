@@ -34,7 +34,7 @@ export function GeneralLedgerPage() {
   const [accountId, setAccountId] = useState(searchParams.get('accountId') ?? '')
   const [fromDate, setFromDate] = useState(searchParams.get('fromDate') ?? '')
   const [toDate, setToDate] = useState(searchParams.get('toDate') ?? '')
-  const [branchId, setBranchId] = useState(searchParams.get('branchId') ?? '')
+  const [branchId, setBranchId] = useState('')
   const [lineSearch, setLineSearch] = useState('')
 
   const accountsQuery = useAccountTree({ postingAccountsOnly: true })
@@ -361,7 +361,7 @@ export function GeneralLedgerPage() {
             onChange={(e) => setBranchId(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="">All Branches</option>
+            <option value="">Current branch</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.code} — {b.name}
@@ -457,7 +457,7 @@ export function GeneralLedgerPage() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-slate-200 bg-[#e9ecef]/70 text-xs font-bold uppercase tracking-wider text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+                <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-bold uppercase tracking-wider text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                   <TableHead className="w-32 px-4 py-3">Date</TableHead>
                   <TableHead className="w-36 px-4 py-3">Reference</TableHead>
                   <TableHead className="min-w-64 px-4 py-3">Journal Memo / Description</TableHead>
@@ -520,7 +520,7 @@ export function GeneralLedgerPage() {
                           to={`/accounting/journal?search=${encodeURIComponent(
                             line.reference || line.journalId
                           )}`}
-                          className="inline-flex items-center gap-1 text-[#d85430] hover:underline"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
                         >
                           {line.reference || 'Journal'}
                           <ArrowUpRight className="h-3 w-3" />

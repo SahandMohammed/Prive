@@ -12,3 +12,5 @@ Use a short-lived JWT access token for API authorization and a long-lived, datab
 - The refresh-token cookie requires HTTPS, including local development.
 - Do not bypass the auth store to call the API client's token setter.
 - Keep authorization enforcement at endpoints rather than in UI-only checks.
+
+Branch authorization is checked against current database assignments on every operational request. User creation, role changes, password resets, deletion, and branch-access assignments require an Owner or SuperAdmin; Managers retain user-list access. See [ADR-003](003-branch-workspace.md).

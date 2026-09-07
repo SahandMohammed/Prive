@@ -1,3 +1,4 @@
+import { getSelectedBranchId } from '@/features/business'
 import { useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -81,7 +82,7 @@ export function CreateJournalEntryPage() {
       entryDate: today,
       reference: null,
       description: '',
-      branchId: '',
+      branchId: getSelectedBranchId(),
       type: 0,
       lines: [blankLine(baseCurrencyId)],
     }),
@@ -348,7 +349,7 @@ export function CreateJournalEntryPage() {
           </Button>
           <Button
             size="sm"
-            className="h-9 gap-1.5 bg-[#e05d38] font-medium text-white shadow-sm hover:bg-[#c94f2d]"
+            className="h-9 gap-1.5 bg-primary font-medium text-white shadow-sm hover:bg-primary/90"
             disabled={isPending || !isBalanced}
             onClick={() => handleSave(true)}
             title={
@@ -466,7 +467,7 @@ export function CreateJournalEntryPage() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
+                <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
                   <TableHead className="w-10 px-2 text-center">#</TableHead>
                   <TableHead className="min-w-64 px-3 font-semibold text-slate-600 dark:text-slate-300">
                     Account (ComboBox)

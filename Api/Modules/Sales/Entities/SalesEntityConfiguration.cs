@@ -7,10 +7,12 @@ public sealed class ServiceCategoryEntityConfiguration : IEntityTypeConfiguratio
 {
   public void Configure(EntityTypeBuilder<ServiceCategoryEntity> builder)
   {
+    builder.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
     builder.ToTable("service_categories");
     builder.HasKey(category => category.Id);
     builder.Property(category => category.Name).HasMaxLength(100).IsRequired();
-    builder.HasIndex(category => category.Name).IsUnique();
+    builder.HasIndex(category => category.Name).IsUnique().HasFilter("\"CatalogBranchId\" IS NULL");
+    builder.HasIndex(category => new { category.CatalogBranchId, category.Name }).IsUnique().HasFilter("\"CatalogBranchId\" IS NOT NULL");
   }
 }
 
@@ -18,6 +20,7 @@ public sealed class ServiceEntityConfiguration : IEntityTypeConfiguration<Servic
 {
   public void Configure(EntityTypeBuilder<ServiceEntity> builder)
   {
+    builder.HasOne<Api.Modules.Branch.BranchEntity>().WithMany().HasForeignKey(x => x.CatalogBranchId).OnDelete(DeleteBehavior.Restrict);
     builder.ToTable("services");
     builder.HasKey(service => service.Id);
     builder.Property(service => service.Name).HasMaxLength(200).IsRequired();

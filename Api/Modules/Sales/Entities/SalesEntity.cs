@@ -9,16 +9,18 @@ using Api.Modules.User;
 
 namespace Api.Modules.Sales;
 
-public sealed class ServiceCategoryEntity
+public sealed class ServiceCategoryEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public bool IsActive { get; set; } = true;
   public ICollection<ServiceEntity> Services { get; set; } = new List<ServiceEntity>();
 }
 
-public sealed class ServiceEntity
+public sealed class ServiceEntity : Api.Shared.Persistence.IBranchCatalogEntity
 {
+  public Guid? CatalogBranchId { get; set; }
   public Guid Id { get; set; } = Guid.NewGuid();
   public string Name { get; set; } = string.Empty;
   public Guid CategoryId { get; set; }

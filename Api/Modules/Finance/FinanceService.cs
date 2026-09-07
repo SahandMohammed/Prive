@@ -1150,7 +1150,7 @@ public sealed class FinanceService
 
   private async Task<string> NextTransferNumberAsync(CancellationToken ct)
   {
-    var last = await _db.MoneyTransfers.Select(transfer => transfer.DocumentNumber)
+    var last = await _db.MoneyTransfers.IgnoreQueryFilters().Select(transfer => transfer.DocumentNumber)
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("TRF-FIN-") && int.TryParse(last[8..], out var value) ? value + 1 : 1;
     return $"TRF-FIN-{next:000000}";
@@ -1158,7 +1158,7 @@ public sealed class FinanceService
 
   private async Task<string> NextSupplierPaymentNumberAsync(CancellationToken ct)
   {
-    var last = await _db.SupplierPayments.Select(payment => payment.DocumentNumber)
+    var last = await _db.SupplierPayments.IgnoreQueryFilters().Select(payment => payment.DocumentNumber)
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("PAY-SUP-") && int.TryParse(last[8..], out var value) ? value + 1 : 1;
     return $"PAY-SUP-{next:000000}";
@@ -1166,7 +1166,7 @@ public sealed class FinanceService
 
   private async Task<string> NextCustomerReceiptNumberAsync(CancellationToken ct)
   {
-    var last = await _db.CustomerReceipts.Select(receipt => receipt.DocumentNumber)
+    var last = await _db.CustomerReceipts.IgnoreQueryFilters().Select(receipt => receipt.DocumentNumber)
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("REC-") && int.TryParse(last[4..], out var value) ? value + 1 : 1;
     return $"REC-{next:000000}";

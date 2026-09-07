@@ -1,8 +1,10 @@
+import { UsersPage } from '@/features/users'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
-import { AppLayout } from '@/components/layout/AppLayout'
+import { AppLayout } from './layout/AppLayout'
 import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
+import { NotFoundPage } from '@/components/layout/NotFoundPage'
 import { LoginPage } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
 import { 
@@ -59,7 +61,7 @@ import {
 
 export const router = createBrowserRouter([
   // Root redirect — always send / to /dashboard
-  { path: '/', element: <Navigate to="/dashboard" replace /> },
+  { path: '/', element: <Navigate to="/dashboard" replace />, errorElement: <RouteErrorBoundary /> },
 
   // Public-only routes (redirect to /dashboard if already authenticated)
   {
@@ -75,6 +77,7 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <AppLayout />,
+        errorElement: <RouteErrorBoundary />,
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/contacts', element: <ContactsPage /> },
@@ -124,6 +127,7 @@ export const router = createBrowserRouter([
 
           // Settings
           { path: '/settings/business', element: <BaseBusinessSettingsPage /> },
+          { path: '/users', element: <UsersPage /> },
           { path: '/settings/branches', element: <BranchesPage /> },
           { path: '/settings/currencies', element: <BaseCurrenciesPage /> },
           { path: '/settings/items', element: <ItemsPage /> },
@@ -146,8 +150,17 @@ export const router = createBrowserRouter([
           { path: '/inventory/categories', element: <CategoriesPage /> },
           { path: '/inventory/units', element: <UnitsPage /> },
           { path: '/inventory/warehouses', element: <InventoryWarehousesPage /> },
+          // Catch-all inside authenticated workspace
+          { path: '*', element: <NotFoundPage /> },
         ],
       },
     ],
+  },
+
+  // Fallback catch-all for any unmatched routes outside protected layout
+  {
+    path: '*',
+    element: <NotFoundPage standalone />,
+    errorElement: <RouteErrorBoundary />,
   },
 ])

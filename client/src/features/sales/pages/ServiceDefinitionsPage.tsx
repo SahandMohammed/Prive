@@ -143,7 +143,7 @@ function ServicesTab() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
           onClick={openCreate}
         >
           <Plus className="size-4" />
@@ -339,7 +339,7 @@ function ServiceCategoriesTab() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
           onClick={openCreate}
         >
           <Plus className="size-4" />
@@ -713,7 +713,7 @@ function LoadingRow({ colSpan }: { colSpan: number }) {
   return (
     <TableRow>
       <TableCell colSpan={colSpan} className="h-48 text-center text-sm text-slate-500">
-        <Loader2 className="mx-auto mb-2 size-6 animate-spin text-[#e05d38]" />
+        <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
         Loading…
       </TableCell>
     </TableRow>
@@ -753,4 +753,4 @@ function formatDuration(minutes: number) {
 }
 
 const tableHeadClass =
-  'border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60'
+  'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Auth;
 
+[BranchIndependent]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/auth")]

@@ -9,13 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { branchSchema, type BranchFormValues } from '../schemas/business.schemas'
-import { useBranches, useDeactivateBranch, useSaveBranch } from '../hooks/useBusiness'
+import { useAllBranches, useDeactivateBranch, useSaveBranch } from '../hooks/useBusiness'
 import type { Branch, BranchInput } from '../types/business.types'
 
-const defaults: BranchFormValues = { code: '', name: '', phoneNumber: '', email: '', address: '', city: '', region: '', country: '', isMainBranch: false, isActive: true }
+const defaults: BranchFormValues = { code: '', name: '', phoneNumber: '', email: '', address: '', city: '', region: '', country: '', isMainBranch: false, isActive: true, catalogMode: 'Shared' }
 
 export function BranchesPage() {
-  const branchesQuery = useBranches()
+  const branchesQuery = useAllBranches()
   const [editing, setEditing] = useState<Branch | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -71,7 +71,7 @@ export function BranchesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Branches</h1>
           <p className="mt-1 text-sm text-slate-500">Manage the locations where business operations take place.</p>
         </div>
-        <Button className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]" onClick={openCreateDialog}>
+        <Button className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 stroke-[2.5]" />
           Add branch
         </Button>
@@ -94,7 +94,7 @@ export function BranchesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Code</TableHead>
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Branch</TableHead>
                 <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Location</TableHead>
@@ -114,7 +114,7 @@ export function BranchesPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800 dark:text-slate-200">{branch.name}</span>
                       {branch.isMainBranch && (
-                        <span className="inline-flex items-center rounded bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-[#e05d38] dark:bg-orange-950/40">Main</span>
+                        <span className="inline-flex items-center rounded bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-primary dark:bg-orange-950/40">Main</span>
                       )}
                     </div>
                   </TableCell>
@@ -177,11 +177,20 @@ export function BranchesPage() {
             <Field label="Address" error={form.formState.errors.address?.message}><Input {...form.register('address')} /></Field>
             <div className="grid gap-4 sm:grid-cols-2"><Field label="City" error={form.formState.errors.city?.message}><Input {...form.register('city')} /></Field><Field label="Region / governorate" error={form.formState.errors.region?.message}><Input {...form.register('region')} /></Field></div>
             <Field label="Country" error={form.formState.errors.country?.message}><Input {...form.register('country')} /></Field>
+            <fieldset className="space-y-2 rounded-md border border-border p-4">
+              <legend className="px-1 text-sm font-medium">Customers, suppliers, and item definitions</legend>
+              {editing ? <p className="text-sm">{editing.catalogMode === 'Shared' ? 'Shared business catalog' : 'Separate branch catalog'}</p> : <>
+              <label className="flex items-center gap-2 text-sm"><input type="radio" value="Shared" {...form.register('catalogMode')} /> Share the business catalog</label>
+              <label className="flex items-center gap-2 text-sm"><input type="radio" value="Separate" {...form.register('catalogMode')} /> Separate catalog for this branch</label>
+              </>}
+              <p className="text-xs text-muted-foreground">Shared branches use the same contacts, products, services, categories, and units. Separate branches start with an empty catalog. This choice is fixed after creation.</p>
+              <p className="text-xs text-muted-foreground">The chart of accounts and currencies are always shared. Transactions and balances belong to the selected branch.</p>
+            </fieldset>
             <div className="flex flex-wrap gap-4"><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isMainBranch')} /> Main branch</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} /> Active</label></div>
             {saveBranch.isError && <p className="text-sm text-destructive">{saveBranch.error.message}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog} disabled={saveBranch.isPending}>Cancel</Button>
-              <Button type="submit" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" disabled={saveBranch.isPending}>{saveBranch.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add branch'}</Button>
+              <Button type="submit" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={saveBranch.isPending}>{saveBranch.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add branch'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -199,7 +208,7 @@ function LoadingRow() {
     <TableRow>
       <TableCell colSpan={6} className="h-48 text-center text-sm text-slate-500">
         <div className="flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin text-[#e05d38]" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
           <span>Loading branches...</span>
         </div>
       </TableCell>
@@ -232,7 +241,7 @@ function EmptyRow({ onAdd }: { onAdd: () => void }) {
             <p className="font-medium text-slate-800 dark:text-slate-200">No branches found</p>
             <p className="mt-1 text-sm text-slate-500">Create your main branch to get started.</p>
           </div>
-          <Button size="sm" className="bg-[#e05d38] text-white hover:bg-[#c94f2d]" onClick={onAdd}>
+          <Button size="sm" className="bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={onAdd}>
             <Plus className="h-4 w-4" /> Add branch
           </Button>
         </div>

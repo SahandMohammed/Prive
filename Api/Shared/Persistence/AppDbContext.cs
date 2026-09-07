@@ -11,12 +11,14 @@ using Api.Modules.Finance;
 using Api.Modules.Sales;
 using Api.Modules.Pos;
 using Api.Modules.Expenses;
+using Api.Modules.Dashboard;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options, BranchContext? branchContext = null) : DbContext(options)
 {
+  public DbSet<UserBranchAccessEntity> UserBranchAccess => Set<UserBranchAccessEntity>();
   public DbSet<UserEntity> Users => Set<UserEntity>();
   public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
   public DbSet<BusinessEntity> Businesses => Set<BusinessEntity>();
@@ -60,9 +62,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
   public DbSet<ExpenseCategoryEntity> ExpenseCategories => Set<ExpenseCategoryEntity>();
   public DbSet<ExpenseDocumentEntity> ExpenseDocuments => Set<ExpenseDocumentEntity>();
   public DbSet<ExpenseLineEntity> ExpenseLines => Set<ExpenseLineEntity>();
+  public DbSet<ActivityLogEntity> ActivityLogs => Set<ActivityLogEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
     modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+    ConfigureBranchFilters(modelBuilder);
   }
 }

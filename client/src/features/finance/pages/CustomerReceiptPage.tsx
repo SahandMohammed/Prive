@@ -195,7 +195,7 @@ export function CustomerReceiptPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
               Customer Receipt{' '}
-              <span className="font-mono text-[#d85430]">{receipt?.documentNumber ?? 'New draft'}</span>
+              <span className="font-mono text-primary">{receipt?.documentNumber ?? 'New draft'}</span>
             </h1>
             <p className="text-xs text-slate-500">
               {posted
@@ -355,7 +355,7 @@ export function CustomerReceiptPage() {
                   <Button
                     type="button"
                     size="sm"
-                    className="gap-1.5 bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                    className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
                     disabled={!values.customerId || !currencyId}
                     onClick={() => setIsInvoiceDialogOpen(true)}
                   >
@@ -369,7 +369,7 @@ export function CustomerReceiptPage() {
                 <div className="overflow-x-auto rounded-md border border-slate-100 dark:border-slate-800">
                   <Table>
                     <TableHeader>
-                      <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider text-slate-700 hover:bg-[#e9ecef]/60 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+                      <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                         <TableHead className="px-3 font-semibold">Invoice #</TableHead>
                         <TableHead className="px-3 font-semibold">Date</TableHead>
                         <TableHead className="px-3 text-right font-semibold">Original Total</TableHead>
@@ -423,7 +423,7 @@ export function CustomerReceiptPage() {
                             <TableRow key={alloc.salesInvoiceId}>
                               <TableCell className="px-3 py-2">
                                 <Link
-                                  className="font-mono text-xs font-bold text-[#d85430] hover:underline"
+                                  className="font-mono text-xs font-bold text-primary hover:underline"
                                   to={`/sales/invoices/${alloc.salesInvoiceId}`}
                                 >
                                   {invoice?.documentNumber ?? 'Sales Invoice'}
@@ -545,7 +545,7 @@ export function CustomerReceiptPage() {
                     <TableRow key={allocation.id}>
                       <TableCell>
                         <Link
-                          className="font-mono text-[#d85430]"
+                          className="font-mono text-primary"
                           to={`/sales/invoices/${allocation.salesInvoiceId}`}
                         >
                           {allocation.salesInvoiceDocumentNumber}

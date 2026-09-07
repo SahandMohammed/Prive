@@ -408,7 +408,7 @@ public sealed class PurchaseService
 
   private async Task<string> NextDocumentNumberAsync(CancellationToken ct)
   {
-    var last = await _db.PurchaseInvoices.Select(invoice => invoice.DocumentNumber)
+    var last = await _db.PurchaseInvoices.IgnoreQueryFilters().Select(invoice => invoice.DocumentNumber)
       .OrderByDescending(number => number)
       .FirstOrDefaultAsync(ct);
     var next = 1;

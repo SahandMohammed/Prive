@@ -32,7 +32,7 @@ public sealed class PosService
       ?? throw BusinessNotConfigured();
     var asOfUtc = DateTime.UtcNow;
 
-    var branches = await _db.Branches.AsNoTracking().Where(branch => branch.IsActive)
+    var branches = await _db.Branches.AsNoTracking().Where(branch => branch.IsActive && (_db.SelectedBranchId == null || branch.Id == _db.SelectedBranchId))
       .OrderByDescending(branch => branch.IsMainBranch).ThenBy(branch => branch.Name)
       .Select(branch => new PosBranchResponse(branch.Id, branch.Code, branch.Name, branch.IsMainBranch))
       .ToListAsync(ct);
@@ -619,7 +619,7 @@ public sealed class PosService
 
   private async Task<string> NextDocumentNumberAsync(CancellationToken ct)
   {
-    var last = await _db.PosSales.Select(sale => sale.DocumentNumber)
+    var last = await _db.PosSales.IgnoreQueryFilters().Select(sale => sale.DocumentNumber)
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("POS-") && int.TryParse(last[4..], out var value) ? value + 1 : 1;
     return $"POS-{next:000000}";

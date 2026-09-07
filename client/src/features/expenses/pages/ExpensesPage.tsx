@@ -87,7 +87,7 @@ export function ExpensesPage() {
             </Button>
           </Link>
           <Link to="/expenses/new">
-            <Button className="bg-[#e05d38] text-white hover:bg-[#c94f2d]">
+            <Button className="bg-primarytext-primary-foregroundhover:bg-primary/90">
               <FilePlus2 className="size-4 mr-1.5" />
               New Expense
             </Button>
@@ -171,7 +171,7 @@ export function ExpensesPage() {
             resetPage()
           }}
         >
-          <option value="">All Branches</option>
+          <option value="">Current branch</option>
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.code} — {b.name}
@@ -245,7 +245,7 @@ export function ExpensesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-200 bg-[#e9ecef]/60 text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60">
+              <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60">
                 <TableHead>Document</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Payee / Contact</TableHead>
@@ -268,7 +268,7 @@ export function ExpensesPage() {
                   <TableRow key={expense.id}>
                     <TableCell>
                       <Link
-                        className="font-mono font-semibold text-[#d85430] hover:underline"
+                        className="font-mono font-semibold text-primary hover:underline"
                         to={`/expenses/${expense.id}`}
                       >
                         {expense.documentNumber}

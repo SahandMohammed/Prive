@@ -168,7 +168,7 @@ export function ChartOfAccountsPage() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-[#e05d38] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#c94f2d]"
+          className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90"
           onClick={openCreateModal}
         >
           <Plus className="h-4 w-4 stroke-[2.5]" />
@@ -195,7 +195,7 @@ export function ChartOfAccountsPage() {
               <select
                 value={classification}
                 onChange={(event) => setClassification(event.target.value)}
-                className="h-9 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-xs shadow-xs outline-none focus:border-[#e05d38] focus:ring-1 focus:ring-[#e05d38] dark:border-slate-800 dark:bg-slate-900"
+                className="h-9 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-xs shadow-xs outline-none focus:border-primary focus:ring-1 focus:ring-ring dark:border-slate-800 dark:bg-slate-900"
               >
                 <option value="">All classifications</option>
                 {Object.entries(accountClassificationLabels).map(([value, label]) => (
@@ -248,7 +248,7 @@ export function ChartOfAccountsPage() {
 
           {accountsQuery.isPending ? (
             <div className="flex min-h-64 flex-col items-center justify-center gap-2 text-slate-500">
-              <Loader2 className="h-6 w-6 animate-spin text-[#e05d38]" />
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
               <p className="text-sm">Loading chart of accounts...</p>
             </div>
           ) : accountsQuery.isError ? (
@@ -335,7 +335,7 @@ export function ChartOfAccountsPage() {
               <select
                 {...form.register('classification', { valueAsNumber: true })}
                 disabled={Boolean(parentId)}
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-[#e05d38] focus:ring-1 focus:ring-[#e05d38] disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:disabled:bg-slate-800"
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-primary focus:ring-1 focus:ring-ring disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:disabled:bg-slate-800"
               >
                 {Object.entries(accountClassificationLabels).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -349,7 +349,7 @@ export function ChartOfAccountsPage() {
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
-                  className="size-4 rounded border-slate-300 accent-[#e05d38]"
+                  className="size-4 rounded border-slate-300 accent-primary"
                   {...form.register('isGroup')}
                 />
                 <span>Group / Summary account</span>
@@ -357,7 +357,7 @@ export function ChartOfAccountsPage() {
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
-                  className="size-4 rounded border-slate-300 accent-[#e05d38]"
+                  className="size-4 rounded border-slate-300 accent-primary"
                   {...form.register('isActive')}
                 />
                 <span>Active</span>
@@ -379,7 +379,7 @@ export function ChartOfAccountsPage() {
               </Button>
               <Button
                 type="submit"
-                className="bg-[#e05d38] text-white hover:bg-[#c94f2d]"
+                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={saveAccount.isPending}
               >
                 {saveAccount.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}

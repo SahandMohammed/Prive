@@ -6,10 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Modules.Branch;
 
+[BranchIndependent]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/branches")]
-[Authorize(Roles = "SuperAdmin,Manager")]
+[Authorize(Roles = "SuperAdmin,Owner,Manager")]
 public sealed class BranchController : ControllerBase
 {
   private readonly BranchService _branchService;
@@ -34,6 +35,7 @@ public sealed class BranchController : ControllerBase
   }
 
   [HttpPost]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(typeof(ApiResponse<BranchResponse>), StatusCodes.Status201Created)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
   public async Task<IActionResult> Create([FromBody] CreateBranchRequest request, CancellationToken ct)
@@ -44,6 +46,7 @@ public sealed class BranchController : ControllerBase
   }
 
   [HttpPut("{id:guid}")]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(typeof(ApiResponse<BranchResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -54,6 +57,7 @@ public sealed class BranchController : ControllerBase
   }
 
   [HttpDelete("{id:guid}")]
+  [Authorize(Roles = "SuperAdmin,Owner")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
