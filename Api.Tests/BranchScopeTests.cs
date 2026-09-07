@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -78,7 +79,6 @@ public sealed class BranchScopeTests
     Assert.Equal(2, await db.StockMovements.SumAsync(line => line.QuantityIn));
     Assert.Equal(5, await db.MoneyLedgerEntries.SumAsync(line => line.Amount));
     Assert.Null(await db.JournalEntries.SingleOrDefaultAsync(row => row.BranchId == b.Id));
-    // The same cached EF model must use the new context's branch, not its first value.
     await using var other = new AppDbContext(options, new BranchContext { BranchId = b.Id });
     Assert.Equal(90, await other.JournalLines.SumAsync(line => line.DebitBaseAmount));
   }
@@ -106,6 +106,44 @@ public sealed class BranchScopeTests
     db.Add(valid);
     await db.SaveChangesAsync();
     Assert.Equal(a.Id, (await db.Warehouses.SingleAsync()).BranchId);
+  }
+
+  [Fact]
+  public async Task Global_money_account_code_conflict_is_detected_across_branch_filter()
+  {
+    var options = Options();
+    var a = new BranchEntity();
+    var b = new BranchEntity();
+    await using (var seed = new AppDbContext(options))
+    {
+      seed.AddRange(a, b, new MoneyAccountEntity { Branch = b, Code = "CASH-01" });
+      await seed.SaveChangesAsync();
+    }
+
+    await using var db = new AppDbContext(options, new BranchContext { BranchId = a.Id });
+    Assert.Empty(await db.MoneyAccounts.ToListAsync());
+    db.MoneyAccounts.Add(new MoneyAccountEntity { BranchId = a.Id, Code = "CASH-01" });
+    var error = await Assert.ThrowsAsync<ConflictException>(() => db.SaveChangesAsync());
+    Assert.Equal(ErrorCodes.Finance.MoneyAccountCodeTaken, error.Code);
+  }
+
+  [Fact]
+  public async Task Global_warehouse_code_conflict_is_detected_across_branch_filter()
+  {
+    var options = Options();
+    var a = new BranchEntity();
+    var b = new BranchEntity();
+    await using (var seed = new AppDbContext(options))
+    {
+      seed.AddRange(a, b, new WarehouseEntity { Branch = b, Code = "WH-01" });
+      await seed.SaveChangesAsync();
+    }
+
+    await using var db = new AppDbContext(options, new BranchContext { BranchId = a.Id });
+    Assert.Empty(await db.Warehouses.ToListAsync());
+    db.Warehouses.Add(new WarehouseEntity { BranchId = a.Id, Code = "WH-01" });
+    var error = await Assert.ThrowsAsync<ConflictException>(() => db.SaveChangesAsync());
+    Assert.Equal(ErrorCodes.Inventory.WarehouseCodeTaken, error.Code);
   }
 
   [Fact]
@@ -138,7 +176,7 @@ public sealed class BranchScopeTests
     }
     await using var sharedAgain = new AppDbContext(options, new BranchContext { BranchId = a });
     Assert.Equal("Shared", (await sharedAgain.Contacts.SingleAsync()).Name);
-    Assert.Empty(await sharedAgain.Accounts.ToListAsync()); // Chart has no catalog filter.
+    Assert.Empty(await sharedAgain.Accounts.ToListAsync());
     Assert.Empty(sharedAgain.Model.FindEntityType(typeof(AccountEntity))!.GetDeclaredQueryFilters());
   }
 
@@ -155,16 +193,57 @@ public sealed class BranchScopeTests
   }
 
   [Fact]
-  public async Task Catalog_mode_cannot_be_changed_after_branch_creation()
+  public async Task Updating_separate_branch_does_not_require_catalog_mode_in_update_contract()
   {
     var options = Options();
     await using var db = new AppDbContext(options);
-    var branch = new BranchEntity { CatalogMode = BranchCatalogMode.Separate };
+    var branch = new BranchEntity
+    {
+      Code = "WEST",
+      Name = "West",
+      Address = "Address",
+      City = "City",
+      Region = "Region",
+      Country = "Country",
+      CatalogMode = BranchCatalogMode.Separate
+    };
     db.Add(branch);
     await db.SaveChangesAsync();
-    var error = await Assert.ThrowsAsync<BadRequestException>(() => new BranchService(db).UpdateAsync(branch.Id,
-      new("CODE", "Name", null, null, "Address", "City", "Region", "Country", false, true, BranchCatalogMode.Shared)));
-    Assert.Equal(ErrorCodes.Branch.CatalogModeImmutable, error.Code);
+
+    var result = await new BranchService(db).UpdateAsync(branch.Id,
+      new("WEST", "West Updated", null, null, "Address", "City", "Region", "Country", false, true));
+
+    Assert.Equal(BranchCatalogMode.Separate, result.CatalogMode);
+    Assert.Equal("West Updated", result.Name);
+  }
+
+  [Fact]
+  public async Task Demoting_privileged_user_to_scoped_role_assigns_active_main_branch_when_needed()
+  {
+    var options = Options();
+    await using var db = new AppDbContext(options);
+    var main = new BranchEntity { IsMainBranch = true, IsActive = true };
+    var owner = new UserEntity { Username = "owner", Role = UserRole.Owner };
+    db.AddRange(main, owner);
+    await db.SaveChangesAsync();
+
+    await new UserService(db).UpdateAsync(owner.Id, new(null, UserRole.Manager, null, true));
+
+    var assignment = await db.UserBranchAccess.SingleAsync(access => access.UserId == owner.Id);
+    Assert.Equal(main.Id, assignment.BranchId);
+  }
+
+  [Fact]
+  public void Branch_mutations_require_owner_or_superadmin_in_addition_to_controller_read_policy()
+  {
+    foreach (var methodName in new[] { nameof(BranchController.Create), nameof(BranchController.Update), nameof(BranchController.Deactivate) })
+    {
+      var method = typeof(BranchController).GetMethod(methodName)!;
+      var roles = method.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Roles).ToList();
+      Assert.Contains("SuperAdmin,Owner", roles);
+    }
+
+    Assert.Equal("SuperAdmin,Owner,Manager", typeof(BranchController).GetCustomAttribute<AuthorizeAttribute>()!.Roles);
   }
 
   [Fact]
