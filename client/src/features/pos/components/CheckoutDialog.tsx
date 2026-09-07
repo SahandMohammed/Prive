@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2 } from 'lucide-react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
@@ -40,6 +40,7 @@ export function CheckoutDialog({
 }) {
   const total = cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
   const complete = useCompletePosSale()
+  const resetComplete = complete.reset
   const accounts = useMemo(
     () => setup.moneyAccounts.filter((account) => account.branchId === branchId),
     [branchId, setup.moneyAccounts]
@@ -73,8 +74,8 @@ export function CheckoutDialog({
       changeMoneyAccountId: '',
       changeAmount: 0,
     })
-    complete.reset()
-  }, [defaultAccount, form, open, total])
+    resetComplete()
+  }, [defaultAccount, form, open, resetComplete, total])
 
   const tenderedBase = (values.tenders ?? []).reduce((sum, tender) => {
     const account = accounts.find((item) => item.id === tender?.moneyAccountId)
@@ -289,7 +290,7 @@ export function CheckoutDialog({
   )
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
     <label className="grid content-start gap-1.5 text-sm font-medium">
       {label}
@@ -299,7 +300,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
   )
 }
 
-function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={`h-9 w-full rounded-md border bg-background px-3 text-sm ${className ?? ''}`} {...props} />
 }
 
