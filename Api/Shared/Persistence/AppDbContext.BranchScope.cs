@@ -89,6 +89,8 @@ public sealed partial class AppDbContext
       }
     }
 
+    await ValidateGlobalOperationalCodesAsync(entries, ct);
+
     // Validate both row ownership and referenced scoped rows, including IDs sent directly by API clients.
     var references = new Dictionary<Type, HashSet<Guid>>();
     void RequireReference(Type type, Guid id)
@@ -117,6 +119,27 @@ public sealed partial class AppDbContext
       var method = typeof(AppDbContext).GetMethod(nameof(CountVisibleAsync), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
       var count = await (Task<int>)method.MakeGenericMethod(type).Invoke(this, [ids.ToArray(), ct])!;
       if (count != ids.Count) ThrowScopeMismatch();
+    }
+  }
+
+  private async Task ValidateGlobalOperationalCodesAsync(IReadOnlyCollection<Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry> entries, CancellationToken ct)
+  {
+    var moneyAccounts = entries.Where(entry => entry.State is EntityState.Added or EntityState.Modified)
+      .Select(entry => entry.Entity).OfType<MoneyAccountEntity>().ToList();
+    foreach (var account in moneyAccounts)
+    {
+      if (moneyAccounts.Any(other => other.Id != account.Id && other.Code == account.Code)
+        || await MoneyAccounts.IgnoreQueryFilters().AsNoTracking().AnyAsync(other => other.Id != account.Id && other.Code == account.Code, ct))
+        throw new ConflictException(ErrorCodes.Finance.MoneyAccountCodeTaken, $"Money Account code '{account.Code}' is already in use.");
+    }
+
+    var warehouses = entries.Where(entry => entry.State is EntityState.Added or EntityState.Modified)
+      .Select(entry => entry.Entity).OfType<WarehouseEntity>().ToList();
+    foreach (var warehouse in warehouses)
+    {
+      if (warehouses.Any(other => other.Id != warehouse.Id && other.Code == warehouse.Code)
+        || await Warehouses.IgnoreQueryFilters().AsNoTracking().AnyAsync(other => other.Id != warehouse.Id && other.Code == warehouse.Code, ct))
+        throw new ConflictException(ErrorCodes.Inventory.WarehouseCodeTaken, $"Warehouse code '{warehouse.Code}' is already in use.");
     }
   }
 
