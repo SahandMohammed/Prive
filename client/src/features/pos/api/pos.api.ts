@@ -43,7 +43,8 @@ export const posApi = {
   updateRegister: (id: string, body: { code: string; name: string; isActive: boolean }) =>
     apiClient.put<PosRegister>(`/pos/registers/${id}`, body),
 
-  activeSession: () => apiClient.get<PosSession | null>('/pos/sessions/active'),
+  activeSession: async (): Promise<PosSession | null> =>
+    (await apiClient.get<PosSession | null>('/pos/sessions/active')) ?? null,
   openSession: (body: OpenPosSessionInput) => apiClient.post<PosSession>('/pos/sessions/open', body),
   session: (id: string) => apiClient.get<PosSession>(`/pos/sessions/${id}`),
   sessions: (filters: PosSessionFilters) =>
