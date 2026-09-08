@@ -17,12 +17,14 @@ public sealed class PosService
   private readonly AppDbContext _db;
   private readonly SalesService _sales;
   private readonly FinanceService _finance;
+  private readonly PosSessionService _sessions;
 
-  public PosService(AppDbContext db, SalesService sales, FinanceService finance)
+  public PosService(AppDbContext db, SalesService sales, FinanceService finance, PosSessionService sessions)
   {
     _db = db;
     _sales = sales;
     _finance = finance;
+    _sessions = sessions;
   }
 
   public async Task<PosSetupResponse> GetSetupAsync(Guid userId, CancellationToken ct)
@@ -275,6 +277,13 @@ public sealed class PosService
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
 
+    var session = await _sessions.RequireOpenSessionForCheckoutAsync(
+      userId, request.PosSessionId, request.BranchId, ct);
+    if (_db.Database.IsRelational())
+      await _db.Database.ExecuteSqlRawAsync("SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {0} FOR UPDATE", session.Id);
+    if (session.Status != PosSessionStatus.Open)
+      throw new ConflictException(PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
+
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
@@ -418,6 +427,7 @@ public sealed class PosService
     {
       DocumentNumber = documentNumber,
       SalesInvoice = invoice,
+      PosSessionId = session.Id,
       Status = PosSaleStatus.Completed,
       CashierUserId = userId,
       CompletedAtUtc = completedAt
@@ -486,7 +496,7 @@ public sealed class PosService
     catch (Exception exception) when (IsConcurrentWrite(exception))
     {
       throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
-        "Another checkout changed stock, balance, or numbering. Review the cart and try again.");
+        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
     }
 
     return await GetSaleAsync(sale.Id, ct);
@@ -537,6 +547,7 @@ public sealed class PosService
       sale.Id,
       sale.DocumentNumber,
       sale.Status,
+      sale.PosSessionId,
       invoice.Id,
       invoice.CustomerId,
       invoice.Customer?.Name,
@@ -583,6 +594,8 @@ public sealed class PosService
 
   private static void ValidateRequestShape(CompletePosSaleRequest request)
   {
+    if (request.PosSessionId == Guid.Empty)
+      throw new BadRequestException(PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.LinesRequired, "Add at least one Service or Product.");
     if (request.Tenders.Count == 0)
@@ -654,6 +667,7 @@ public sealed class PosService
       selection.Value.Operation,
       selection.Value.Factor));
   }
+
   private static BadRequestException BusinessNotConfigured() => new(
     ErrorCodes.Pos.BusinessNotConfigured,
     "Complete Business Setup before using POS.");
