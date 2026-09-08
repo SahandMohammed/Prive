@@ -44,6 +44,13 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<SupplierPaymentAllocationEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SupplierPayment.MoneyAccount.BranchId == SelectedBranchId);
     modelBuilder.Entity<CustomerReceiptEntity>().HasQueryFilter(x => SelectedBranchId == null || x.MoneyAccount.BranchId == SelectedBranchId);
     modelBuilder.Entity<CustomerReceiptAllocationEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CustomerReceipt.MoneyAccount.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosRegisterEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosSessionEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosSessionOpeningCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSession.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosSessionClosingCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSession.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosZReportEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosZPaymentSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosZDrawerSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosSaleEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSale.SalesInvoice.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosChangeEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSale.SalesInvoice.BranchId == SelectedBranchId);

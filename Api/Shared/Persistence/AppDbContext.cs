@@ -56,6 +56,13 @@ public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options,
   public DbSet<ServiceEntity> Services => Set<ServiceEntity>();
   public DbSet<SalesInvoiceEntity> SalesInvoices => Set<SalesInvoiceEntity>();
   public DbSet<SalesInvoiceLineEntity> SalesInvoiceLines => Set<SalesInvoiceLineEntity>();
+  public DbSet<PosRegisterEntity> PosRegisters => Set<PosRegisterEntity>();
+  public DbSet<PosSessionEntity> PosSessions => Set<PosSessionEntity>();
+  public DbSet<PosSessionOpeningCountEntity> PosSessionOpeningCounts => Set<PosSessionOpeningCountEntity>();
+  public DbSet<PosSessionClosingCountEntity> PosSessionClosingCounts => Set<PosSessionClosingCountEntity>();
+  public DbSet<PosZReportEntity> PosZReports => Set<PosZReportEntity>();
+  public DbSet<PosZPaymentSummaryEntity> PosZPaymentSummaries => Set<PosZPaymentSummaryEntity>();
+  public DbSet<PosZDrawerSummaryEntity> PosZDrawerSummaries => Set<PosZDrawerSummaryEntity>();
   public DbSet<PosSaleEntity> PosSales => Set<PosSaleEntity>();
   public DbSet<PosTenderEntity> PosTenders => Set<PosTenderEntity>();
   public DbSet<PosChangeEntity> PosChanges => Set<PosChangeEntity>();

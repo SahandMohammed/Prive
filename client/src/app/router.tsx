@@ -7,7 +7,7 @@ import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
 import { NotFoundPage } from '@/components/layout/NotFoundPage'
 import { LoginPage } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
-import { 
+import {
   MoneyAccountsPage,
   MoneyLedgerPage,
   ExchangeRatesPage,
@@ -17,60 +17,48 @@ import {
   CustomerReceiptsPage,
   CustomerReceiptPage,
 } from '@/features/finance'
-import { 
-  AccountingDashboard, 
-  ChartOfAccountsPage, 
-  JournalEntriesPage, 
+import {
+  AccountingDashboard,
+  ChartOfAccountsPage,
+  JournalEntriesPage,
   CreateJournalEntryPage,
   CurrenciesPage,
   GeneralLedgerPage,
   TrialBalancePage,
 } from '@/features/accounting'
-import { 
-  ServicesPage,
-  SalesInvoicesPage, 
-  CreateSalesInvoicePage
-} from '@/features/sales'
-import { 
-  PurchaseInvoicePage,
-  PurchaseInvoicesPage, 
-} from '@/features/purchases'
+import { ServicesPage, SalesInvoicesPage, CreateSalesInvoicePage } from '@/features/sales'
+import { PurchaseInvoicePage, PurchaseInvoicesPage } from '@/features/purchases'
 import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
-import { AdjustmentDocumentPage, AdjustmentsListPage, InventoryOverviewPage, MovementHistoryPage, OpeningStockDocumentPage, OpeningStockListPage, ProductsPage, TransferDocumentPage, TransfersListPage, CategoriesPage, UnitsPage, WarehousesPage as InventoryWarehousesPage } from '@/features/inventory'
-import { BranchesPage, BusinessSettingsPage as BaseBusinessSettingsPage, CurrenciesPage as BaseCurrenciesPage } from '@/features/business'
-import { ContactsPage } from '@/features/contacts'
-import { PosPage, PosReceiptPage } from '@/features/pos'
 import {
-  ExpensesPage,
-  ExpenseDetailPage,
-  ExpenseCategoriesPage,
-} from '@/features/expenses'
-
-// ---------------------------------------------------------------------------
-// Route structure
-//
-//  /                    → redirect to /dashboard
-//  /login               → LoginPage (public only — redirects to /dashboard if authed)
-//  /dashboard           → protected placeholder (replace with DashboardPage)
-//
-// To add a new protected page:
-//   1. Create the page component in features/<name>/pages/
-//   2. Export it from features/<name>/index.ts
-//   3. Import and add it under the ProtectedRoute children array below
-// ---------------------------------------------------------------------------
+  AdjustmentDocumentPage,
+  AdjustmentsListPage,
+  InventoryOverviewPage,
+  MovementHistoryPage,
+  OpeningStockDocumentPage,
+  OpeningStockListPage,
+  ProductsPage,
+  TransferDocumentPage,
+  TransfersListPage,
+  CategoriesPage,
+  UnitsPage,
+  WarehousesPage as InventoryWarehousesPage,
+} from '@/features/inventory'
+import {
+  BranchesPage,
+  BusinessSettingsPage as BaseBusinessSettingsPage,
+  CurrenciesPage as BaseCurrenciesPage,
+} from '@/features/business'
+import { ContactsPage } from '@/features/contacts'
+import { PosPage, PosReceiptPage, PosSessionsPage, PosZReportPage } from '@/features/pos'
+import { ExpensesPage, ExpenseDetailPage, ExpenseCategoriesPage } from '@/features/expenses'
 
 export const router = createBrowserRouter([
-  // Root redirect — always send / to /dashboard
   { path: '/', element: <Navigate to="/dashboard" replace />, errorElement: <RouteErrorBoundary /> },
-
-  // Public-only routes (redirect to /dashboard if already authenticated)
   {
     element: <PublicOnlyRoute />,
     errorElement: <RouteErrorBoundary />,
     children: [{ path: '/login', element: <LoginPage /> }],
   },
-
-  // Protected routes (redirect to /login if not authenticated)
   {
     element: <ProtectedRoute />,
     errorElement: <RouteErrorBoundary />,
@@ -81,9 +69,13 @@ export const router = createBrowserRouter([
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/contacts', element: <ContactsPage /> },
+
+          // POS full-screen workspace and historical reports.
           { path: '/pos', element: <PosPage /> },
+          { path: '/pos/sessions', element: <PosSessionsPage /> },
+          { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
           { path: '/pos/sales/:id', element: <PosReceiptPage /> },
-          
+
           // Finance
           { path: '/finance', element: <Navigate to="/finance/money-accounts" replace /> },
           { path: '/finance/money-accounts', element: <MoneyAccountsPage /> },
@@ -135,6 +127,8 @@ export const router = createBrowserRouter([
           { path: '/settings/items/:id', element: <CreateItemPage /> },
           { path: '/settings/services', element: <ServicesPage /> },
           { path: '/settings/warehouses', element: <WarehousesPage /> },
+
+          // Inventory
           { path: '/inventory', element: <InventoryOverviewPage /> },
           { path: '/inventory/opening-stock', element: <OpeningStockListPage /> },
           { path: '/inventory/opening-stock/new', element: <OpeningStockDocumentPage /> },
@@ -150,17 +144,11 @@ export const router = createBrowserRouter([
           { path: '/inventory/categories', element: <CategoriesPage /> },
           { path: '/inventory/units', element: <UnitsPage /> },
           { path: '/inventory/warehouses', element: <InventoryWarehousesPage /> },
-          // Catch-all inside authenticated workspace
+
           { path: '*', element: <NotFoundPage /> },
         ],
       },
     ],
   },
-
-  // Fallback catch-all for any unmatched routes outside protected layout
-  {
-    path: '*',
-    element: <NotFoundPage standalone />,
-    errorElement: <RouteErrorBoundary />,
-  },
+  { path: '*', element: <NotFoundPage standalone />, errorElement: <RouteErrorBoundary /> },
 ])

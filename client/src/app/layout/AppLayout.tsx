@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
   Menu,
@@ -26,6 +26,7 @@ export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { data: user } = useCurrentUser()
   const { theme, toggleTheme } = useThemeStore()
   const { t, i18n } = useTranslation()
@@ -40,6 +41,17 @@ export function AppLayout() {
   const userInitials = user?.username
     ? user.username.slice(0, 2).toUpperCase()
     : 'AS'
+  const isPosWorkspace = pathname === '/pos' || pathname.startsWith('/pos/')
+
+  if (isPosWorkspace) {
+    return (
+      <div className="h-screen w-screen overflow-auto bg-background text-foreground">
+        <BranchWorkspace>
+          <Outlet />
+        </BranchWorkspace>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">

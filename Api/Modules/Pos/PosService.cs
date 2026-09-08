@@ -8,7 +8,6 @@ using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Api.Modules.Pos;
 
@@ -17,12 +16,14 @@ public sealed class PosService
   private readonly AppDbContext _db;
   private readonly SalesService _sales;
   private readonly FinanceService _finance;
+  private readonly PosSessionService _sessions;
 
-  public PosService(AppDbContext db, SalesService sales, FinanceService finance)
+  public PosService(AppDbContext db, SalesService sales, FinanceService finance, PosSessionService sessions)
   {
     _db = db;
     _sales = sales;
     _finance = finance;
+    _sessions = sessions;
   }
 
   public async Task<PosSetupResponse> GetSetupAsync(Guid userId, CancellationToken ct)
@@ -270,11 +271,29 @@ public sealed class PosService
     Guid userId,
     CancellationToken ct)
   {
+    try
+    {
+      return await CompleteSaleCoreAsync(request, userId, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
+        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
+    }
+  }
+
+  private async Task<PosSaleResponse> CompleteSaleCoreAsync(
+    CompletePosSaleRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
     ValidateRequestShape(request);
     await using var transaction = _db.Database.IsRelational()
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
 
+    var session = await _sessions.RequireOpenSessionForCheckoutAsync(
+      userId, request.PosSessionId, request.BranchId, ct);
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
@@ -418,6 +437,7 @@ public sealed class PosService
     {
       DocumentNumber = documentNumber,
       SalesInvoice = invoice,
+      PosSessionId = session.Id,
       Status = PosSaleStatus.Completed,
       CashierUserId = userId,
       CompletedAtUtc = completedAt
@@ -478,16 +498,8 @@ public sealed class PosService
     }
     _db.PosSales.Add(sale);
 
-    try
-    {
-      await _db.SaveChangesAsync(ct);
-      if (transaction is not null) await transaction.CommitAsync(ct);
-    }
-    catch (Exception exception) when (IsConcurrentWrite(exception))
-    {
-      throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
-        "Another checkout changed stock, balance, or numbering. Review the cart and try again.");
-    }
+    await _db.SaveChangesAsync(ct);
+    if (transaction is not null) await transaction.CommitAsync(ct);
 
     return await GetSaleAsync(sale.Id, ct);
   }
@@ -537,6 +549,7 @@ public sealed class PosService
       sale.Id,
       sale.DocumentNumber,
       sale.Status,
+      sale.PosSessionId,
       invoice.Id,
       invoice.CustomerId,
       invoice.Customer?.Name,
@@ -583,6 +596,8 @@ public sealed class PosService
 
   private static void ValidateRequestShape(CompletePosSaleRequest request)
   {
+    if (request.PosSessionId == Guid.Empty)
+      throw new BadRequestException(ErrorCodes.Pos.SessionRequired, "Open a POS Session before completing a checkout.");
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.LinesRequired, "Add at least one Service or Product.");
     if (request.Tenders.Count == 0)
@@ -625,18 +640,6 @@ public sealed class PosService
     return $"POS-{next:000000}";
   }
 
-  private static bool IsConcurrentWrite(Exception exception)
-  {
-    for (Exception? current = exception; current is not null; current = current.InnerException)
-    {
-      if (current is DbUpdateConcurrencyException) return true;
-      if (current is PostgresException postgres
-        && (postgres.SqlState == PostgresErrorCodes.SerializationFailure
-          || postgres.SqlState == PostgresErrorCodes.UniqueViolation)) return true;
-    }
-    return false;
-  }
-
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
 
   private static decimal SelectedProductPrice(ProductEntity product, Guid? unitOfMeasureId)
@@ -654,6 +657,7 @@ public sealed class PosService
       selection.Value.Operation,
       selection.Value.Factor));
   }
+
   private static BadRequestException BusinessNotConfigured() => new(
     ErrorCodes.Pos.BusinessNotConfigured,
     "Complete Business Setup before using POS.");
