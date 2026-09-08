@@ -17,11 +17,13 @@ public sealed class PosSessionController : ControllerBase
   public PosSessionController(PosSessionService service) => _service = service;
 
   [HttpGet("registers")]
+  [ProducesResponseType(typeof(ApiResponse<List<PosRegisterResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetRegisters([FromQuery] bool includeInactive, CancellationToken ct) =>
     Ok(ApiResponse<List<PosRegisterResponse>>.Ok(await _service.GetRegistersAsync(includeInactive, ct)));
 
   [HttpPost("registers")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]
+  [ProducesResponseType(typeof(ApiResponse<PosRegisterResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> CreateRegister([FromBody] CreatePosRegisterRequest request, CancellationToken ct)
   {
     var register = await _service.CreateRegisterAsync(request, ct);
@@ -30,10 +32,12 @@ public sealed class PosSessionController : ControllerBase
 
   [HttpPut("registers/{id:guid}")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]
+  [ProducesResponseType(typeof(ApiResponse<PosRegisterResponse>), StatusCodes.Status200OK)]
   public async Task<IActionResult> UpdateRegister(Guid id, [FromBody] UpdatePosRegisterRequest request, CancellationToken ct) =>
     Ok(ApiResponse<PosRegisterResponse>.Ok(await _service.UpdateRegisterAsync(id, request, ct)));
 
   [HttpGet("sessions/active")]
+  [ProducesResponseType(typeof(ApiResponse<PosSessionResponse?>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetActiveSession(CancellationToken ct)
   {
     var session = await _service.GetActiveSessionAsync(GetUserId(), ct);
@@ -41,6 +45,7 @@ public sealed class PosSessionController : ControllerBase
   }
 
   [HttpPost("sessions/open")]
+  [ProducesResponseType(typeof(ApiResponse<PosSessionResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> OpenSession([FromBody] OpenPosSessionRequest request, CancellationToken ct)
   {
     var session = await _service.OpenSessionAsync(GetUserId(), request, ct);
@@ -48,6 +53,7 @@ public sealed class PosSessionController : ControllerBase
   }
 
   [HttpGet("sessions")]
+  [ProducesResponseType(typeof(ApiResponse<List<PosSessionListResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetSessions([FromQuery] PosSessionListQuery query, CancellationToken ct)
   {
     var result = await _service.GetSessionsAsync(GetUserId(), query, ct);
@@ -55,18 +61,22 @@ public sealed class PosSessionController : ControllerBase
   }
 
   [HttpGet("sessions/{id:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<PosSessionResponse>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetSession(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosSessionResponse>.Ok(await _service.GetSessionAsync(GetUserId(), id, ct)));
 
   [HttpGet("sessions/{id:guid}/x-report")]
+  [ProducesResponseType(typeof(ApiResponse<PosXReportResponse>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetXReport(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosXReportResponse>.Ok(await _service.GetXReportAsync(GetUserId(), id, ct)));
 
   [HttpPost("sessions/{id:guid}/close")]
+  [ProducesResponseType(typeof(ApiResponse<PosZReportResponse>), StatusCodes.Status200OK)]
   public async Task<IActionResult> CloseSession(Guid id, [FromBody] ClosePosSessionRequest request, CancellationToken ct) =>
     Ok(ApiResponse<PosZReportResponse>.Ok(await _service.CloseSessionAsync(GetUserId(), id, request, ct)));
 
   [HttpGet("z-reports")]
+  [ProducesResponseType(typeof(ApiResponse<List<PosZReportListResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetZReports([FromQuery] PosZReportListQuery query, CancellationToken ct)
   {
     var result = await _service.GetZReportsAsync(GetUserId(), query, ct);
@@ -74,6 +84,7 @@ public sealed class PosSessionController : ControllerBase
   }
 
   [HttpGet("z-reports/{id:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<PosZReportResponse>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetZReport(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosZReportResponse>.Ok(await _service.GetZReportAsync(GetUserId(), id, ct)));
 
