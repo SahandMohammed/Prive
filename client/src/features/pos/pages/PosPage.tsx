@@ -6,12 +6,21 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useCurrentUser } from '@/features/auth'
 import { useBranchSelectionStore } from '@/features/business'
 import { CheckoutDialog } from '../components/CheckoutDialog'
+import { CloseSessionScreen } from '../components/CloseSessionScreen'
+import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { PosCart } from '../components/PosCart'
 import { PosCatalogGrid } from '../components/PosCatalogGrid'
 import { PosCategoryNav } from '../components/PosCategoryNav'
 import { PosTopBar } from '../components/PosTopBar'
 import { SaleCompleteDialog } from '../components/SaleCompleteDialog'
-import { usePosCatalog, usePosSetup } from '../hooks/usePos'
+import { SessionClosedScreen } from '../components/SessionClosedScreen'
+import { XReportDialog } from '../components/XReportDialog'
+import {
+  useActivePosSession,
+  usePosCatalog,
+  usePosRegisters,
+  usePosSetup,
+} from '../hooks/usePos'
 import { addCatalogItemToCart, posCartTotal } from '../lib/posCart'
 import { PosCatalogItemType } from '../types/pos.types'
 import type {
@@ -20,6 +29,9 @@ import type {
   PosCategory,
   PosCustomer,
   PosSale,
+  PosSession,
+  PosSetup,
+  PosZReport,
 } from '../types/pos.types'
 
 export function PosPage() {
@@ -27,8 +39,75 @@ export function PosPage() {
   const { data: user } = useCurrentUser()
   const selectedBranchId = useBranchSelectionStore((state) => state.branchId) ?? ''
   const setupQuery = usePosSetup()
+  const registersQuery = usePosRegisters()
+  const sessionQuery = useActivePosSession()
+  const [closedReport, setClosedReport] = useState<PosZReport | null>(null)
   const setup = setupQuery.data
+  const selectedBranch = setup?.branches.find((branch) => branch.id === selectedBranchId) ?? setup?.branches[0]
 
+  if (setupQuery.isPending || registersQuery.isPending || sessionQuery.isPending) {
+    return <FullState>Loading POS session…</FullState>
+  }
+
+  if (setupQuery.isError || registersQuery.isError || sessionQuery.isError || !setup) {
+    const message = setupQuery.error?.message ?? registersQuery.error?.message ?? sessionQuery.error?.message
+    return (
+      <div className="grid h-screen place-items-center bg-background p-6 text-center">
+        <div>
+          <p className="font-semibold text-destructive">POS setup is unavailable.</p>
+          <p className="mt-1 text-sm text-muted-foreground">{message ?? 'Refresh the page or return to the ERP workspace.'}</p>
+          <Button className="mt-4" variant="outline" onClick={() => navigate('/dashboard')}>Exit POS</Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (closedReport) {
+    return <SessionClosedScreen report={closedReport} onNewSession={() => setClosedReport(null)} />
+  }
+
+  if (!sessionQuery.data) {
+    return (
+      <OpenSessionScreen
+        setup={setup}
+        branch={selectedBranch}
+        registers={registersQuery.data ?? []}
+        cashier={user?.username ?? 'Cashier'}
+        onExit={() => navigate('/dashboard')}
+      />
+    )
+  }
+
+  return (
+    <PosWorkspace
+      setup={setup}
+      session={sessionQuery.data}
+      selectedBranchId={selectedBranchId}
+      cashier={user?.username ?? sessionQuery.data.cashierUsername}
+      onSessionClosed={setClosedReport}
+      onExit={() => navigate('/dashboard')}
+      onHistory={() => navigate('/pos/sessions')}
+    />
+  )
+}
+
+function PosWorkspace({
+  setup,
+  session,
+  selectedBranchId,
+  cashier,
+  onSessionClosed,
+  onExit,
+  onHistory,
+}: {
+  setup: PosSetup
+  session: PosSession
+  selectedBranchId: string
+  cashier: string
+  onSessionClosed: (report: PosZReport) => void
+  onExit: () => void
+  onHistory: () => void
+}) {
   const [warehouseId, setWarehouseId] = useState('')
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
@@ -40,13 +119,14 @@ export function PosPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [completedSale, setCompletedSale] = useState<PosSale | null>(null)
+  const [xReportOpen, setXReportOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
 
   const branchWarehouses = useMemo(
-    () => setup?.warehouses.filter((warehouse) => warehouse.branchId === selectedBranchId) ?? [],
-    [selectedBranchId, setup?.warehouses]
+    () => setup.warehouses.filter((warehouse) => warehouse.branchId === selectedBranchId),
+    [selectedBranchId, setup.warehouses]
   )
-  const selectedBranch =
-    setup?.branches.find((branch) => branch.id === selectedBranchId) ?? setup?.branches[0]
+  const selectedBranch = setup.branches.find((branch) => branch.id === selectedBranchId) ?? setup.branches[0]
 
   useEffect(() => {
     setWarehouseId((current) =>
@@ -62,7 +142,7 @@ export function PosPage() {
     setPage(1)
     setCheckoutOpen(false)
     setMobileCartOpen(false)
-  }, [selectedBranchId])
+  }, [selectedBranchId, session.id])
 
   const catalogQuery = usePosCatalog({
     page,
@@ -87,10 +167,6 @@ export function PosPage() {
     setPage(1)
   }
 
-  const addItem = (item: PosCatalogItem) => {
-    setCart((current) => addCatalogItemToCart(current, item))
-  }
-
   const changeWarehouse = (nextWarehouseId: string) => {
     if (nextWarehouseId === warehouseId) return
     setWarehouseId(nextWarehouseId)
@@ -105,27 +181,20 @@ export function PosPage() {
     setCompletedSale(sale)
   }
 
-  if (setupQuery.isPending) {
+  if (closing) {
     return (
-      <div className="grid h-screen place-items-center bg-background text-sm text-muted-foreground">
-        Loading POS workspace…
-      </div>
-    )
-  }
-
-  if (setupQuery.isError || !setup) {
-    return (
-      <div className="grid h-screen place-items-center bg-background p-6 text-center">
-        <div>
-          <p className="font-semibold text-destructive">POS setup is unavailable.</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {setupQuery.error?.message ?? 'Refresh the page or return to the ERP workspace.'}
-          </p>
-          <Button className="mt-4" variant="outline" onClick={() => navigate('/dashboard')}>
-            Exit POS
-          </Button>
-        </div>
-      </div>
+      <CloseSessionScreen
+        session={session}
+        onCancel={() => setClosing(false)}
+        onClosed={(report) => {
+          setCart([])
+          setCustomer(null)
+          setCheckoutOpen(false)
+          setMobileCartOpen(false)
+          setCompletedSale(null)
+          onSessionClosed(report)
+        }}
+      />
     )
   }
 
@@ -133,15 +202,19 @@ export function PosPage() {
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-muted/20">
       <PosTopBar
         branch={selectedBranch}
+        session={session}
         warehouses={branchWarehouses}
         warehouseId={warehouseId}
-        cashier={user?.username ?? 'Cashier'}
+        cashier={cashier}
         onWarehouseChange={changeWarehouse}
-        onExit={() => navigate('/dashboard')}
+        onXReport={() => setXReportOpen(true)}
+        onCloseSession={() => setClosing(true)}
+        onHistory={onHistory}
+        onExit={onExit}
       />
 
       {branchWarehouses.length > 1 && (
-        <div className="shrink-0 border-b bg-card px-3 py-2 lg:hidden">
+        <div className="shrink-0 border-b bg-card px-3 py-2 xl:hidden">
           <select
             aria-label="Product warehouse"
             value={warehouseId}
@@ -149,9 +222,7 @@ export function PosPage() {
             className="h-9 w-full rounded-lg border bg-background px-3 text-xs font-medium outline-none focus:ring-2 focus:ring-ring"
           >
             {branchWarehouses.map((warehouse) => (
-              <option key={warehouse.id} value={warehouse.id}>
-                {warehouse.code} — {warehouse.name}
-              </option>
+              <option key={warehouse.id} value={warehouse.id}>{warehouse.code} — {warehouse.name}</option>
             ))}
           </select>
         </div>
@@ -192,11 +263,8 @@ export function PosPage() {
             loading={catalogQuery.isPending}
             errorMessage={catalogQuery.isError ? catalogQuery.error.message : undefined}
             meta={catalogQuery.data?.meta}
-            onSearchChange={(value) => {
-              setSearch(value)
-              setPage(1)
-            }}
-            onAdd={addItem}
+            onSearchChange={(value) => { setSearch(value); setPage(1) }}
+            onAdd={(item: PosCatalogItem) => setCart((current) => addCatalogItemToCart(current, item))}
             onPreviousPage={() => setPage((value) => Math.max(1, value - 1))}
             onNextPage={() => setPage((value) => value + 1)}
           />
@@ -214,11 +282,7 @@ export function PosPage() {
         />
       </div>
 
-      <Button
-        type="button"
-        className="fixed bottom-4 right-4 z-40 h-12 rounded-full px-5 shadow-lg xl:hidden"
-        onClick={() => setMobileCartOpen(true)}
-      >
+      <Button type="button" className="fixed bottom-4 right-4 z-40 h-12 rounded-full px-5 shadow-lg xl:hidden" onClick={() => setMobileCartOpen(true)}>
         <ShoppingCart className="size-4" />
         Cart {cart.length > 0 ? `(${cart.length}) · ${amount(total)} ${setup.baseCurrencyCode}` : ''}
       </Button>
@@ -233,10 +297,7 @@ export function PosPage() {
             warehouseSelected={Boolean(warehouseId)}
             onCartChange={setCart}
             onCustomerChange={setCustomer}
-            onCheckout={() => {
-              setMobileCartOpen(false)
-              setCheckoutOpen(true)
-            }}
+            onCheckout={() => { setMobileCartOpen(false); setCheckoutOpen(true) }}
           />
         </DialogContent>
       </Dialog>
@@ -245,6 +306,7 @@ export function PosPage() {
         open={checkoutOpen}
         setup={setup}
         branchId={selectedBranchId}
+        sessionId={session.id}
         warehouseId={warehouseId}
         customerId={customer?.id ?? null}
         cart={cart}
@@ -252,9 +314,14 @@ export function PosPage() {
         onCompleted={completeSale}
       />
 
+      <XReportDialog sessionId={session.id} open={xReportOpen} onOpenChange={setXReportOpen} />
       <SaleCompleteDialog sale={completedSale} onNewSale={() => setCompletedSale(null)} />
     </div>
   )
+}
+
+function FullState({ children }: { children: React.ReactNode }) {
+  return <div className="grid h-screen place-items-center bg-background text-sm text-muted-foreground">{children}</div>
 }
 
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
