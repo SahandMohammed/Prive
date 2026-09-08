@@ -21,14 +21,14 @@ public sealed class PosSessionService
     _finance = finance;
   }
 
-  public async Task<List<PosRegisterResponse>> GetRegistersAsync(bool includeInactive, CancellationToken ct)
+  public async Task<PagedResult<PosRegisterResponse>> GetRegistersAsync(PosRegisterListQuery request, CancellationToken ct)
   {
     var branchId = RequireBranch();
     var query = _db.PosRegisters.AsNoTracking().Where(register => register.BranchId == branchId);
-    if (!includeInactive) query = query.Where(register => register.IsActive);
-    return await query.OrderBy(register => register.Code)
+    if (!request.IncludeInactive) query = query.Where(register => register.IsActive);
+    return await query.OrderBy(register => register.Code).ThenBy(register => register.Id)
       .Select(register => new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive))
-      .ToListAsync(ct);
+      .ToPagedResultAsync(request, ct);
   }
 
   public async Task<PosRegisterResponse> CreateRegisterAsync(CreatePosRegisterRequest request, CancellationToken ct)
@@ -36,7 +36,7 @@ public sealed class PosSessionService
     var branchId = RequireBranch();
     var code = NormalizeCode(request.Code);
     if (await _db.PosRegisters.IgnoreQueryFilters().AnyAsync(register => register.Code == code, ct))
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
+      throw new ConflictException(ErrorCodes.Pos.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
 
     var register = new PosRegisterEntity
     {
@@ -46,7 +46,7 @@ public sealed class PosSessionService
       IsActive = true
     };
     _db.PosRegisters.Add(register);
-    await SaveConflictAsync(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken,
+    await SaveConflictAsync(ErrorCodes.Pos.RegisterCodeTaken,
       "Another POS Register used this code first. Choose a different code.", ct);
     return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
   }
@@ -58,15 +58,15 @@ public sealed class PosSessionService
       ?? throw RegisterNotFound();
     var code = NormalizeCode(request.Code);
     if (code != register.Code && await _db.PosRegisters.IgnoreQueryFilters().AnyAsync(item => item.Code == code && item.Id != id, ct))
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
+      throw new ConflictException(ErrorCodes.Pos.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
     if (!request.IsActive && await _db.PosSessions.AnyAsync(session => session.RegisterId == id && session.Status == PosSessionStatus.Open, ct))
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen,
+      throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen,
         "Close the active POS Session before deactivating this Register.");
 
     register.Code = code;
     register.Name = request.Name.Trim();
     register.IsActive = request.IsActive;
-    await SaveConflictAsync(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken,
+    await SaveConflictAsync(ErrorCodes.Pos.RegisterCodeTaken,
       "Another POS Register used this code first. Choose a different code.", ct);
     return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
   }
@@ -85,15 +85,15 @@ public sealed class PosSessionService
     var register = await _db.PosRegisters.SingleOrDefaultAsync(item => item.Id == request.RegisterId && item.BranchId == branchId, ct)
       ?? throw RegisterNotFound();
     if (!register.IsActive)
-      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.RegisterInactive, "Select an active POS Register.");
+      throw new BadRequestException(ErrorCodes.Pos.RegisterInactive, "Select an active POS Register.");
     if (await _db.PosSessions.AnyAsync(item => item.RegisterId == register.Id && item.Status == PosSessionStatus.Open, ct))
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen, "This POS Register already has an open session.");
+      throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen, "This POS Register already has an open session.");
     if (await _db.PosSessions.AnyAsync(item => item.BranchId == branchId && item.CashierUserId == userId && item.Status == PosSessionStatus.Open, ct))
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen, "You already have an open POS Session in this branch.");
+      throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen, "You already have an open POS Session in this branch.");
 
     var business = await GetBusinessAsync(ct);
     var expectedCurrencies = await GetOperableCashboxCurrenciesAsync(userId, ct);
-    ValidateOpeningCounts(request.OpeningCounts, expectedCurrencies.Keys);
+    ValidateOpeningCounts(request.OpeningCounts, expectedCurrencies);
     var openedAt = DateTimeOffset.UtcNow;
 
     var session = new PosSessionEntity
@@ -128,7 +128,7 @@ public sealed class PosSessionService
     }
     catch (DbUpdateException exception) when (IsUniqueViolation(exception))
     {
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen,
+      throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen,
         "The Register or cashier already has an open POS Session. Refresh and try again.");
     }
     return await GetSessionAsync(userId, session.Id, ct);
@@ -163,45 +163,44 @@ public sealed class PosSessionService
       query = query.Where(session => session.OpenedAtUtc < to);
     }
 
-    var total = await query.CountAsync(ct);
-    var rows = await query.OrderByDescending(session => session.OpenedAtUtc)
-      .ThenByDescending(session => session.SessionNumber)
-      .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
-      .Select(session => new
-      {
-        session.Id,
-        session.SessionNumber,
-        session.RegisterId,
-        RegisterCode = session.Register.Code,
-        RegisterName = session.Register.Name,
-        session.CashierUserId,
-        CashierUsername = session.CashierUser.Username,
-        session.Status,
-        session.OpenedAtUtc,
-        session.ClosedAtUtc,
-        SaleCount = session.Sales.Count,
-        GrossSalesBase = session.Sales.Sum(sale => (decimal?)sale.SalesInvoice.BaseTotal) ?? 0m,
-        VarianceBase = session.ClosingCounts.Sum(count => (decimal?)count.VarianceBaseAmount) ?? 0m,
-        BaseCurrencyCode = session.ZReport != null ? session.ZReport.BaseCurrencyCode : string.Empty
-      })
-      .ToListAsync(ct);
     var business = await GetBusinessAsync(ct);
-    var items = rows.Select(row => new PosSessionListResponse(
-      row.Id, row.SessionNumber, row.RegisterId, row.RegisterCode, row.RegisterName,
-      row.CashierUserId, row.CashierUsername, row.Status, row.OpenedAtUtc, row.ClosedAtUtc,
-      row.SaleCount, row.GrossSalesBase, row.VarianceBase,
-      string.IsNullOrWhiteSpace(row.BaseCurrencyCode) ? business.BaseCurrency.Code : row.BaseCurrencyCode)).ToList();
-    return new PagedResult<PosSessionListResponse>(items, total, request.Page, request.PageSize);
+    return await query.OrderByDescending(session => session.OpenedAtUtc)
+      .ThenByDescending(session => session.SessionNumber)
+      .Select(session => new PosSessionListResponse(
+        session.Id, session.SessionNumber, session.RegisterId, session.Register.Code, session.Register.Name,
+        session.CashierUserId, session.CashierUser.Username, session.Status, session.OpenedAtUtc, session.ClosedAtUtc,
+        session.Sales.Count,
+        session.Sales.Sum(sale => (decimal?)sale.SalesInvoice.BaseTotal) ?? 0m,
+        session.ClosingCounts.Sum(count => (decimal?)count.VarianceBaseAmount) ?? 0m,
+        session.ZReport != null ? session.ZReport.BaseCurrencyCode : business.BaseCurrency.Code))
+      .ToPagedResultAsync(request, ct);
   }
 
   public async Task<PosXReportResponse> GetXReportAsync(Guid userId, Guid sessionId, CancellationToken ct)
   {
-    var session = await GetReportSessionAsync(userId, sessionId, requireOpen: true, ct);
+    var session = await GetReportSessionAsync(userId, sessionId, trackChanges: false, ct);
     var business = await GetBusinessAsync(ct);
     return BuildXReport(session, business.BaseCurrencyId, business.BaseCurrency.Code);
   }
 
   public async Task<PosZReportResponse> CloseSessionAsync(
+    Guid userId,
+    Guid sessionId,
+    ClosePosSessionRequest request,
+    CancellationToken ct)
+  {
+    try
+    {
+      return await CloseSessionCoreAsync(userId, sessionId, request, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      throw new ConflictException(ErrorCodes.Pos.SessionCloseConflict,
+        "Another request changed this session or report numbering. Refresh and try again.");
+    }
+  }
+
+  private async Task<PosZReportResponse> CloseSessionCoreAsync(
     Guid userId,
     Guid sessionId,
     ClosePosSessionRequest request,
@@ -213,13 +212,14 @@ public sealed class PosSessionService
       : null;
 
     if (_db.Database.IsRelational())
-      await _db.Database.ExecuteSqlRawAsync("SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {0} FOR UPDATE", sessionId);
+      await _db.Database.ExecuteSqlInterpolatedAsync(
+        $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
 
-    var session = await GetReportSessionAsync(userId, sessionId, requireOpen: true, ct);
+    var session = await GetReportSessionAsync(userId, sessionId, trackChanges: true, ct);
     if (session.BranchId != branchId)
       throw SessionNotFound();
     if (await _db.PosZReports.IgnoreQueryFilters().AnyAsync(report => report.PosSessionId == session.Id, ct))
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionCloseConflict, "This POS Session already has a Z Report.");
+      throw new ConflictException(ErrorCodes.Pos.SessionCloseConflict, "This POS Session already has a Z Report.");
 
     var business = await GetBusinessAsync(ct);
     var x = BuildXReport(session, business.BaseCurrencyId, business.BaseCurrency.Code);
@@ -233,8 +233,9 @@ public sealed class PosSessionService
       var rate = await _finance.ResolveCurrentRateAsync(drawer.CurrencyId, business.BaseCurrencyId, closedAt.UtcDateTime, ct);
       var counted = Money(requestCount.CountedAmount);
       var countedBase = Money(counted * rate);
-      session.ClosingCounts.Add(new PosSessionClosingCountEntity
+      _db.PosSessionClosingCounts.Add(new PosSessionClosingCountEntity
       {
+        PosSession = session,
         CurrencyId = drawer.CurrencyId,
         ExpectedAmount = drawer.ExpectedAmount,
         CountedAmount = counted,
@@ -321,16 +322,8 @@ public sealed class PosSessionService
     }
 
     _db.PosZReports.Add(z);
-    try
-    {
-      await _db.SaveChangesAsync(ct);
-      if (transaction is not null) await transaction.CommitAsync(ct);
-    }
-    catch (DbUpdateException exception) when (IsUniqueViolation(exception))
-    {
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionCloseConflict,
-        "This POS Session was already closed by another request. Refresh the session.");
-    }
+    await _db.SaveChangesAsync(ct);
+    if (transaction is not null) await transaction.CommitAsync(ct);
 
     return await GetZReportAsync(userId, z.Id, ct);
   }
@@ -357,10 +350,8 @@ public sealed class PosSessionService
       query = query.Where(report => report.ClosedAtUtc < to);
     }
 
-    var total = await query.CountAsync(ct);
-    var items = await query.OrderByDescending(report => report.ClosedAtUtc)
+    return await query.OrderByDescending(report => report.ClosedAtUtc)
       .ThenByDescending(report => report.ReportNumber)
-      .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
       .Select(report => new PosZReportListResponse(
         report.Id, report.ReportNumber, report.PosSessionId, report.PosSession.SessionNumber,
         report.RegisterId, report.RegisterCode, report.RegisterName,
@@ -368,8 +359,7 @@ public sealed class PosSessionService
         report.SaleCount, report.GrossSalesBase,
         report.DrawerSummaries.Sum(drawer => (decimal?)drawer.VarianceBaseAmount) ?? 0m,
         report.BaseCurrencyCode))
-      .ToListAsync(ct);
-    return new PagedResult<PosZReportListResponse>(items, total, request.Page, request.PageSize);
+      .ToPagedResultAsync(request, ct);
   }
 
   public async Task<PosZReportResponse> GetZReportAsync(Guid userId, Guid id, CancellationToken ct)
@@ -380,7 +370,7 @@ public sealed class PosSessionService
       .Include(item => item.PaymentSummaries)
       .Include(item => item.DrawerSummaries)
       .SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
-      ?? throw new NotFoundException(ErrorCodes.PosSessionErrorCodes.ZReportNotFound, "POS Z Report was not found.");
+      ?? throw new NotFoundException(ErrorCodes.Pos.ZReportNotFound, "POS Z Report was not found.");
     await EnsureSessionAccessAsync(userId, report.CashierUserId, ct);
     return ToZReportResponse(report);
   }
@@ -393,26 +383,31 @@ public sealed class PosSessionService
   {
     var selectedBranchId = RequireBranch();
     if (branchId != selectedBranchId)
-      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.SessionAccessDenied,
+      throw new BadRequestException(ErrorCodes.Pos.SessionAccessDenied,
         "The checkout branch must match the active branch workspace.");
+    // Lock before reading status so checkout and closing serialize on the same row.
+    if (_db.Database.IsRelational())
+      await _db.Database.ExecuteSqlInterpolatedAsync(
+        $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
     var session = await _db.PosSessions.SingleOrDefaultAsync(item => item.Id == sessionId && item.BranchId == branchId, ct)
-      ?? throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
+      ?? throw new BadRequestException(ErrorCodes.Pos.SessionRequired, "Open a POS Session before completing a checkout.");
     if (session.Status != PosSessionStatus.Open)
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
+      throw new ConflictException(ErrorCodes.Pos.SessionClosed, "This POS Session is already closed. Open a new session.");
     if (session.CashierUserId != userId)
-      throw new ForbiddenException(ErrorCodes.PosSessionErrorCodes.SessionAccessDenied,
+      throw new ForbiddenException(ErrorCodes.Pos.SessionAccessDenied,
         "A cashier can only complete sales in their own open POS Session.");
     return session;
   }
 
-  private async Task<PosSessionEntity> GetReportSessionAsync(Guid userId, Guid id, bool requireOpen, CancellationToken ct)
+  private async Task<PosSessionEntity> GetReportSessionAsync(Guid userId, Guid id, bool trackChanges, CancellationToken ct)
   {
     var branchId = RequireBranch();
-    var session = await SessionReportQuery().SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
+    var query = trackChanges ? SessionReportQuery() : SessionReportQuery().AsNoTracking();
+    var session = await query.SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
       ?? throw SessionNotFound();
     await EnsureSessionAccessAsync(userId, session.CashierUserId, ct);
-    if (requireOpen && session.Status != PosSessionStatus.Open)
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionClosed, "This POS Session is closed.");
+    if (session.Status != PosSessionStatus.Open)
+      throw new ConflictException(ErrorCodes.Pos.SessionClosed, "This POS Session is closed.");
     return session;
   }
 
@@ -514,15 +509,14 @@ public sealed class PosSessionService
         summary.OpeningBaseAmount, summary.TenderedBaseAmount, summary.ChangeBaseAmount,
         summary.ExpectedBaseAmount, summary.CountedBaseAmount, summary.VarianceBaseAmount)).ToList());
 
-  private async Task<Dictionary<Guid, string>> GetOperableCashboxCurrenciesAsync(Guid userId, CancellationToken ct)
+  private async Task<List<Guid>> GetOperableCashboxCurrenciesAsync(Guid userId, CancellationToken ct)
   {
     var branchId = RequireBranch();
     return await _db.MoneyAccounts.AsNoTracking()
       .Where(account => account.BranchId == branchId && account.IsActive && account.Type == MoneyAccountType.Cashbox
         && account.Currency.IsActive && account.AccessAssignments.Any(access => access.UserId == userId
           && access.AccessLevel == MoneyAccountAccessLevel.Operate))
-      .GroupBy(account => new { account.CurrencyId, account.Currency.Code })
-      .ToDictionaryAsync(group => group.Key.CurrencyId, group => group.Key.Code, ct);
+      .Select(account => account.CurrencyId).Distinct().ToListAsync(ct);
   }
 
   private static void ValidateOpeningCounts(List<PosOpeningCountRequest> counts, IEnumerable<Guid> requiredCurrencies)
@@ -530,7 +524,7 @@ public sealed class PosSessionService
     var required = requiredCurrencies.Order().ToList();
     var supplied = counts.Select(count => count.CurrencyId).Order().ToList();
     if (counts.Select(count => count.CurrencyId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
-      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.OpeningCountInvalid,
+      throw new BadRequestException(ErrorCodes.Pos.OpeningCountInvalid,
         "Enter one opening count for every operable Cashbox currency in this branch.");
   }
 
@@ -539,7 +533,7 @@ public sealed class PosSessionService
     var required = requiredCurrencies.Order().ToList();
     var supplied = counts.Select(count => count.CurrencyId).Order().ToList();
     if (counts.Select(count => count.CurrencyId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
-      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.ClosingCountInvalid,
+      throw new BadRequestException(ErrorCodes.Pos.ClosingCountInvalid,
         "Enter one physical closing count for every drawer currency in this POS Session.");
   }
 
@@ -547,7 +541,7 @@ public sealed class PosSessionService
   {
     if (userId == cashierUserId) return;
     if (!await CanManageOthersAsync(userId, ct))
-      throw new ForbiddenException(ErrorCodes.PosSessionErrorCodes.SessionAccessDenied,
+      throw new ForbiddenException(ErrorCodes.Pos.SessionAccessDenied,
         "You are not allowed to access another cashier's POS Session.");
   }
 
@@ -600,7 +594,7 @@ public sealed class PosSessionService
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
   private static decimal Money(decimal value) => Math.Round(value, 4, MidpointRounding.AwayFromZero);
   private static NotFoundException RegisterNotFound() =>
-    new(ErrorCodes.PosSessionErrorCodes.RegisterNotFound, "POS Register was not found.");
+    new(ErrorCodes.Pos.RegisterNotFound, "POS Register was not found.");
   private static NotFoundException SessionNotFound() =>
-    new(ErrorCodes.PosSessionErrorCodes.SessionNotFound, "POS Session was not found.");
+    new(ErrorCodes.Pos.SessionNotFound, "POS Session was not found.");
 }

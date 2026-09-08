@@ -8,7 +8,6 @@ using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Api.Modules.Pos;
 
@@ -272,6 +271,22 @@ public sealed class PosService
     Guid userId,
     CancellationToken ct)
   {
+    try
+    {
+      return await CompleteSaleCoreAsync(request, userId, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
+        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
+    }
+  }
+
+  private async Task<PosSaleResponse> CompleteSaleCoreAsync(
+    CompletePosSaleRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
     ValidateRequestShape(request);
     await using var transaction = _db.Database.IsRelational()
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
@@ -279,11 +294,6 @@ public sealed class PosService
 
     var session = await _sessions.RequireOpenSessionForCheckoutAsync(
       userId, request.PosSessionId, request.BranchId, ct);
-    if (_db.Database.IsRelational())
-      await _db.Database.ExecuteSqlRawAsync("SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {0} FOR UPDATE", session.Id);
-    if (session.Status != PosSessionStatus.Open)
-      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
-
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
@@ -488,16 +498,8 @@ public sealed class PosService
     }
     _db.PosSales.Add(sale);
 
-    try
-    {
-      await _db.SaveChangesAsync(ct);
-      if (transaction is not null) await transaction.CommitAsync(ct);
-    }
-    catch (Exception exception) when (IsConcurrentWrite(exception))
-    {
-      throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
-        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
-    }
+    await _db.SaveChangesAsync(ct);
+    if (transaction is not null) await transaction.CommitAsync(ct);
 
     return await GetSaleAsync(sale.Id, ct);
   }
@@ -595,7 +597,7 @@ public sealed class PosService
   private static void ValidateRequestShape(CompletePosSaleRequest request)
   {
     if (request.PosSessionId == Guid.Empty)
-      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
+      throw new BadRequestException(ErrorCodes.Pos.SessionRequired, "Open a POS Session before completing a checkout.");
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.LinesRequired, "Add at least one Service or Product.");
     if (request.Tenders.Count == 0)
@@ -636,18 +638,6 @@ public sealed class PosService
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("POS-") && int.TryParse(last[4..], out var value) ? value + 1 : 1;
     return $"POS-{next:000000}";
-  }
-
-  private static bool IsConcurrentWrite(Exception exception)
-  {
-    for (Exception? current = exception; current is not null; current = current.InnerException)
-    {
-      if (current is DbUpdateConcurrencyException) return true;
-      if (current is PostgresException postgres
-        && (postgres.SqlState == PostgresErrorCodes.SerializationFailure
-          || postgres.SqlState == PostgresErrorCodes.UniqueViolation)) return true;
-    }
-    return false;
   }
 
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);

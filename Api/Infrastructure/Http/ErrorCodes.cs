@@ -229,12 +229,6 @@ public static class ErrorCodes
     public const string ChangeBalanceInsufficient = "POS_CHANGE_BALANCE_INSUFFICIENT";
     public const string ConcurrentCheckout = "POS_CONCURRENT_CHECKOUT";
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
-
-
-  }
-
-  public static class PosSessionErrorCodes
-  {
     public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
     public const string RegisterInactive = "POS_REGISTER_INACTIVE";
     public const string RegisterCodeTaken = "POS_REGISTER_CODE_TAKEN";

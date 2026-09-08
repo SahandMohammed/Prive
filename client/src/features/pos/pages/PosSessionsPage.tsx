@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { useCurrentUser } from '@/features/auth'
 import {
   useCreatePosRegister,
@@ -20,10 +21,14 @@ import { PosSessionStatus } from '../types/pos.types'
 export function PosSessionsPage() {
   const navigate = useNavigate()
   const { data: user } = useCurrentUser()
-  const [status, setStatus] = useState<'' | number>('')
+  const [status, setStatus] = useState<'' | PosSessionStatus>('')
+  const [sessionPage, setSessionPage] = useState(1)
+  const [sessionPageSize, setSessionPageSize] = useState(20)
+  const [reportPage, setReportPage] = useState(1)
+  const [reportPageSize, setReportPageSize] = useState(20)
   const registers = usePosRegisters(true)
-  const sessions = usePosSessions({ page: 1, pageSize: 50, status: status === '' ? undefined : status })
-  const reports = usePosZReports({ page: 1, pageSize: 50 })
+  const sessions = usePosSessions({ page: sessionPage, pageSize: sessionPageSize, status: status === '' ? undefined : status })
+  const reports = usePosZReports({ page: reportPage, pageSize: reportPageSize })
   const createRegister = useCreatePosRegister()
   const updateRegister = useUpdatePosRegister()
   const canManageRegisters = user?.role === 'SuperAdmin' || user?.role === 'Owner' || user?.role === 'Manager'
@@ -87,17 +92,25 @@ export function PosSessionsPage() {
                   </Button>
                 </div>
               ))}
+              {registers.isPending && <p className="text-sm text-muted-foreground">Loading registers…</p>}
+              {registers.isError && <p role="alert" className="text-sm text-destructive">{registers.error.message}</p>}
               {registers.data?.length === 0 && <p className="text-sm text-muted-foreground">No registers configured.</p>}
             </div>
           </section>
         )}
 
-        <section className="rounded-2xl border bg-card p-5">
+        <section aria-label="Session history" className="rounded-2xl border bg-card p-5">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 className="font-semibold">Session History</h2><p className="text-sm text-muted-foreground">Cashiers see their own sessions; management can see the selected branch.</p></div>
             <select
               value={status}
-              onChange={(event) => setStatus(event.target.value === '' ? '' : Number(event.target.value))}
+              aria-label="Session status"
+              onChange={(event) => {
+                const value = event.target.value
+                setStatus(value === String(PosSessionStatus.Open) ? PosSessionStatus.Open
+                  : value === String(PosSessionStatus.Closed) ? PosSessionStatus.Closed : '')
+                setSessionPage(1)
+              }}
               className="h-9 rounded-md border bg-background px-3 text-sm"
             >
               <option value="">All statuses</option>
@@ -120,10 +133,18 @@ export function PosSessionsPage() {
             </table>
           </div>
           {sessions.isPending && <p className="py-4 text-sm text-muted-foreground">Loading sessions…</p>}
-          {sessions.isError && <p className="py-4 text-sm text-destructive">{sessions.error.message}</p>}
+          {sessions.isError && <p role="alert" className="py-4 text-sm text-destructive">{sessions.error.message}</p>}
+          {sessions.data?.data.length === 0 && <p className="py-4 text-sm text-muted-foreground">No sessions found.</p>}
+          {sessions.data && (
+            <DataTablePagination
+              page={sessionPage} pageSize={sessionPageSize} totalItems={sessions.data.meta.totalCount}
+              onPageChange={setSessionPage}
+              onPageSizeChange={(size) => { setSessionPageSize(size); setSessionPage(1) }}
+            />
+          )}
         </section>
 
-        <section className="rounded-2xl border bg-card p-5">
+        <section aria-label="Z reports" className="rounded-2xl border bg-card p-5">
           <h2 className="font-semibold">Z Reports</h2>
           <p className="mt-1 text-sm text-muted-foreground">Closed-session snapshots are view-only and printable.</p>
           <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -134,8 +155,17 @@ export function PosSessionsPage() {
                 <p className="mt-2 text-xs text-muted-foreground">{report.saleCount} sales · {money(report.grossSalesBase)} {report.baseCurrencyCode} · variance {signed(report.varianceBase)} {report.baseCurrencyCode}</p>
               </button>
             ))}
+            {reports.isPending && <p className="text-sm text-muted-foreground">Loading Z Reports…</p>}
+            {reports.isError && <p role="alert" className="text-sm text-destructive">{reports.error.message}</p>}
             {reports.data?.data.length === 0 && <p className="text-sm text-muted-foreground">No Z Reports yet.</p>}
           </div>
+          {reports.data && (
+            <DataTablePagination
+              page={reportPage} pageSize={reportPageSize} totalItems={reports.data.meta.totalCount}
+              onPageChange={setReportPage}
+              onPageSizeChange={(size) => { setReportPageSize(size); setReportPage(1) }}
+            />
+          )}
         </section>
       </div>
     </div>

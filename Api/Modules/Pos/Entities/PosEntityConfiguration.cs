@@ -93,7 +93,7 @@ public sealed class PosZReportEntityConfiguration : IEntityTypeConfiguration<Pos
     builder.HasKey(report => report.Id);
     builder.Property(report => report.ReportNumber).HasMaxLength(20).IsRequired();
     builder.Property(report => report.BranchCode).HasMaxLength(32).IsRequired();
-    builder.Property(report => report.BranchName).HasMaxLength(120).IsRequired();
+    builder.Property(report => report.BranchName).HasMaxLength(200).IsRequired();
     builder.Property(report => report.RegisterCode).HasMaxLength(32).IsRequired();
     builder.Property(report => report.RegisterName).HasMaxLength(120).IsRequired();
     builder.Property(report => report.CashierUsername).HasMaxLength(100).IsRequired();
@@ -117,7 +117,7 @@ public sealed class PosZPaymentSummaryEntityConfiguration : IEntityTypeConfigura
     builder.ToTable("pos_z_payment_summaries");
     builder.HasKey(summary => summary.Id);
     builder.Property(summary => summary.MoneyAccountCode).HasMaxLength(32).IsRequired();
-    builder.Property(summary => summary.MoneyAccountName).HasMaxLength(120).IsRequired();
+    builder.Property(summary => summary.MoneyAccountName).HasMaxLength(200).IsRequired();
     builder.Property(summary => summary.MoneyAccountType).HasConversion<string>().HasMaxLength(16).IsRequired();
     builder.Property(summary => summary.CurrencyCode).HasMaxLength(8).IsRequired();
     builder.Property(summary => summary.TenderedAmount).HasPrecision(19, 4).IsRequired();

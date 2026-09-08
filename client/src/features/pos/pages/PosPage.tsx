@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { ShoppingCart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -80,6 +80,7 @@ export function PosPage() {
 
   return (
     <PosWorkspace
+      key={`${selectedBranchId}:${sessionQuery.data.id}`}
       setup={setup}
       session={sessionQuery.data}
       selectedBranchId={selectedBranchId}
@@ -108,7 +109,7 @@ function PosWorkspace({
   onExit: () => void
   onHistory: () => void
 }) {
-  const [warehouseId, setWarehouseId] = useState('')
+  const [selectedWarehouseId, setWarehouseId] = useState('')
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [itemType, setItemType] = useState<'' | PosCatalogItemType>('')
@@ -128,21 +129,9 @@ function PosWorkspace({
   )
   const selectedBranch = setup.branches.find((branch) => branch.id === selectedBranchId) ?? setup.branches[0]
 
-  useEffect(() => {
-    setWarehouseId((current) =>
-      branchWarehouses.some((warehouse) => warehouse.id === current)
-        ? current
-        : branchWarehouses[0]?.id ?? ''
-    )
-  }, [branchWarehouses])
-
-  useEffect(() => {
-    setCart([])
-    setCustomer(null)
-    setPage(1)
-    setCheckoutOpen(false)
-    setMobileCartOpen(false)
-  }, [selectedBranchId, session.id])
+  const warehouseId = branchWarehouses.some((warehouse) => warehouse.id === selectedWarehouseId)
+    ? selectedWarehouseId
+    : branchWarehouses[0]?.id ?? ''
 
   const catalogQuery = usePosCatalog({
     page,

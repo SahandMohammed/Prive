@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, LockKeyhole } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useClosePosSession, usePosXReport } from '../hooks/usePos'
@@ -66,7 +66,7 @@ function CloseSessionForm({
       notes: '',
     },
   })
-  const counts = form.watch('closingCounts')
+  const counts = useWatch({ control: form.control, name: 'closingCounts' })
   const rows = report.drawers.map((drawer, index) => {
     const counted = Number(counts[index]?.countedAmount) || 0
     return { ...drawer, counted, variance: round4(counted - drawer.expectedAmount) }

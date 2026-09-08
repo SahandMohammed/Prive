@@ -36,8 +36,17 @@ export const posApi = {
   sale: (id: string) => apiClient.get<PosSale>(`/pos/sales/${id}`),
   complete: (body: CompletePosSaleInput) => apiClient.post<PosSale>('/pos/sales', body),
 
-  registers: (includeInactive = false) =>
-    apiClient.get<PosRegister[]>(`/pos/registers?includeInactive=${includeInactive}`),
+  registers: async (includeInactive = false): Promise<PosRegister[]> => {
+    const registers: PosRegister[] = []
+    // The opening selector needs every register; the API keeps each response bounded.
+    for (let page = 1; ; page += 1) {
+      const result = await apiClient.getPaginated<PosRegister>(
+        `/pos/registers?includeInactive=${includeInactive}&page=${page}&pageSize=100`
+      )
+      registers.push(...result.data)
+      if (!result.meta.hasNextPage) return registers
+    }
+  },
   createRegister: (body: { code: string; name: string }) =>
     apiClient.post<PosRegister>('/pos/registers', body),
   updateRegister: (id: string, body: { code: string; name: string; isActive: boolean }) =>

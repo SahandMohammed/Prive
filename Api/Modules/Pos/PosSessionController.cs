@@ -18,8 +18,11 @@ public sealed class PosSessionController : ControllerBase
 
   [HttpGet("registers")]
   [ProducesResponseType(typeof(ApiResponse<List<PosRegisterResponse>>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> GetRegisters([FromQuery] bool includeInactive, CancellationToken ct) =>
-    Ok(ApiResponse<List<PosRegisterResponse>>.Ok(await _service.GetRegistersAsync(includeInactive, ct)));
+  public async Task<IActionResult> GetRegisters([FromQuery] PosRegisterListQuery query, CancellationToken ct)
+  {
+    var result = await _service.GetRegistersAsync(query, ct);
+    return Ok(ApiResponse<List<PosRegisterResponse>>.Ok(result.Items, result.ToMetadata()));
+  }
 
   [HttpPost("registers")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]

@@ -58,6 +58,7 @@ export function useClosePosSession() {
       client.setQueryData([...POS_KEY, 'session', 'active'], null)
       client.setQueryData([...POS_KEY, 'z-report', report.id], report)
       client.removeQueries({ queryKey: [...POS_KEY, 'x-report', report.posSessionId] })
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'session', report.posSessionId] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] })
     },

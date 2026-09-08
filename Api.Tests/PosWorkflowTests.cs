@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace Api.Tests;
 
-public sealed class PosWorkflowTests
+public sealed partial class PosWorkflowTests
 {
   [Fact]
   public async Task Service_only_walk_in_posts_money_and_revenue_without_inventory_or_receivable()
@@ -214,10 +214,10 @@ public sealed class PosWorkflowTests
     Assert.Equal(ErrorCodes.Sales.InsufficientStock, stock.Code);
 
     var viewOnly = await Assert.ThrowsAsync<ForbiddenException>(() => service.CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]), data.ViewerId, default));
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]) with { PosSessionId = data.ViewerSessionId }, data.ViewerId, default));
     Assert.Equal(ErrorCodes.Finance.MoneyAccountAccessDenied, viewOnly.Code);
     var noAccess = await Assert.ThrowsAsync<ForbiddenException>(() => service.CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]), data.OutsideUserId, default));
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]) with { PosSessionId = data.OutsideSessionId }, data.OutsideUserId, default));
     Assert.Equal(ErrorCodes.Finance.MoneyAccountAccessDenied, noAccess.Code);
 
     var balance = await Assert.ThrowsAsync<BadRequestException>(() => service.CompleteSaleAsync(
@@ -308,7 +308,7 @@ public sealed class PosWorkflowTests
     var options = new DbContextOptionsBuilder<AppDbContext>()
       .UseInMemoryDatabase(Guid.NewGuid().ToString())
       .Options;
-    return new AppDbContext(options);
+    return new AppDbContext(options, new BranchContext { BranchId = Guid.NewGuid() });
   }
 
   private static PosService CreateService(AppDbContext db)
@@ -320,8 +320,11 @@ public sealed class PosWorkflowTests
       AccountsReceivableAccountCode = "13214",
       OpeningBalanceEquityAccountCode = "261"
     }));
-    return new PosService(db, sales, finance);
+    return new PosService(db, sales, finance, new PosSessionService(db, finance));
   }
+
+  private static PosSessionService CreateSessionService(AppDbContext db) =>
+    new(db, new FinanceService(db, Options.Create(new FinanceOptions())));
 
   private static IOptions<SalesOptions> SalesOptions() => Options.Create(new SalesOptions
   {
@@ -338,6 +341,7 @@ public sealed class PosWorkflowTests
     Guid? customerId = null,
     PosChangeRequest? change = null) => new(
       data.BranchId,
+      data.SessionId,
       data.WarehouseId,
       customerId,
       lines,
@@ -376,6 +380,7 @@ public sealed class PosWorkflowTests
     };
     var branch = new BranchEntity
     {
+      Id = db.SelectedBranchId!.Value,
       Code = "MAIN", Name = "Main", Address = "A", City = "C", Region = "R", Country = "IQ", IsMainBranch = true
     };
     var customer = new ContactEntity { Name = "Customer", IsCustomer = true, IsActive = true };
@@ -452,13 +457,25 @@ public sealed class PosWorkflowTests
         CurrencyId = iqd.Id,
         BaseCurrencyId = iqd.Id,
         ExchangeRate = 1,
-        JournalEntryId = Guid.NewGuid(),
+        JournalEntry = new JournalEntryEntity { BranchId = branch.Id },
         PerformedByUserId = cashier.Id
       });
     }
     await db.SaveChangesAsync();
 
+    var sessions = CreateSessionService(db);
+    var register = await sessions.CreateRegisterAsync(new("MAIN", "Main POS"), default);
+    var session = await sessions.OpenSessionAsync(cashier.Id,
+      new(register.Id, [new(iqd.Id, 0), new(usd.Id, 0)], null), default);
+    var viewerRegister = await sessions.CreateRegisterAsync(new("VIEWER", "Viewer POS"), default);
+    var viewerSession = await sessions.OpenSessionAsync(viewer.Id, new(viewerRegister.Id, [], null), default);
+    var outsideRegister = await sessions.CreateRegisterAsync(new("OUTSIDE", "Outside POS"), default);
+    var outsideSession = await sessions.OpenSessionAsync(outsider.Id, new(outsideRegister.Id, [], null), default);
+
     return new TestData(
+      session.Id,
+      viewerSession.Id,
+      outsideSession.Id,
       cashier.Id,
       viewer.Id,
       outsider.Id,
@@ -484,6 +501,9 @@ public sealed class PosWorkflowTests
   private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
 
   private sealed record TestData(
+    Guid SessionId,
+    Guid ViewerSessionId,
+    Guid OutsideSessionId,
     Guid CashierId,
     Guid ViewerId,
     Guid OutsideUserId,
