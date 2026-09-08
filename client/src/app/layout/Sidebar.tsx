@@ -267,7 +267,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
           <PopoverTrigger
             className={cn(
               'w-full flex items-center rounded-xl p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer group text-start outline-none',
-              isCollapsed ? 'justify-center' : 'justify-between gap-3'
+              isCollapsed ? 'justify-center' : 'gap-3'
             )}
             aria-label="User profile and settings"
           >
@@ -288,20 +288,6 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
                 </div>
               )}
             </div>
-
-            {!isCollapsed && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  logout.mutate()
-                }}
-                className="size-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 cursor-pointer"
-                title={t('common.logout')}
-              >
-                <LogOut className="size-4" />
-              </button>
-            )}
           </PopoverTrigger>
 
           <PopoverContent
