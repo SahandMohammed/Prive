@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, Plus } from 'lucide-react'
+import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +13,8 @@ import {
   usePosZReports,
   useUpdatePosRegister,
 } from '../hooks/usePos'
+import { posRegisterSchema } from '../schemas/pos.schema'
+import type { PosRegisterValues } from '../schemas/pos.schema'
 import { PosSessionStatus } from '../types/pos.types'
 
 export function PosSessionsPage() {
@@ -22,16 +26,17 @@ export function PosSessionsPage() {
   const reports = usePosZReports({ page: 1, pageSize: 50 })
   const createRegister = useCreatePosRegister()
   const updateRegister = useUpdatePosRegister()
-  const [code, setCode] = useState('')
-  const [name, setName] = useState('')
   const canManageRegisters = user?.role === 'SuperAdmin' || user?.role === 'Owner' || user?.role === 'Manager'
+  const registerForm = useForm<PosRegisterValues>({
+    resolver: zodResolver(posRegisterSchema),
+    defaultValues: { code: '', name: '' },
+  })
 
-  const create = () => {
-    if (!code.trim() || !name.trim()) return
-    createRegister.mutate({ code: code.trim(), name: name.trim() }, {
-      onSuccess: () => { setCode(''); setName('') },
+  const create = registerForm.handleSubmit((values) => {
+    createRegister.mutate(values, {
+      onSuccess: () => registerForm.reset(),
     })
-  }
+  })
 
   return (
     <div className="min-h-screen bg-muted/20 p-4 sm:p-6">
@@ -48,13 +53,23 @@ export function PosSessionsPage() {
           <section className="rounded-2xl border bg-card p-5">
             <h2 className="font-semibold">Registers</h2>
             <p className="mt-1 text-sm text-muted-foreground">One register may have only one open session at a time.</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-[180px_1fr_auto]">
-              <Input value={code} onChange={(event) => setCode(event.target.value)} placeholder="Code · RECEPTION" maxLength={32} />
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Register name · Reception POS" maxLength={120} />
-              <Button disabled={!code.trim() || !name.trim() || createRegister.isPending} onClick={create}>
+            <form className="mt-4 grid gap-2 sm:grid-cols-[180px_1fr_auto]" onSubmit={create}>
+              <div>
+                <Input {...registerForm.register('code')} placeholder="Code · RECEPTION" maxLength={32} />
+                {registerForm.formState.errors.code?.message && (
+                  <p className="mt-1 text-xs text-destructive">{registerForm.formState.errors.code.message}</p>
+                )}
+              </div>
+              <div>
+                <Input {...registerForm.register('name')} placeholder="Register name · Reception POS" maxLength={120} />
+                {registerForm.formState.errors.name?.message && (
+                  <p className="mt-1 text-xs text-destructive">{registerForm.formState.errors.name.message}</p>
+                )}
+              </div>
+              <Button type="submit" disabled={createRegister.isPending}>
                 <Plus className="size-4" /> Add Register
               </Button>
-            </div>
+            </form>
             {(createRegister.error || updateRegister.error) && (
               <p className="mt-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{createRegister.error?.message ?? updateRegister.error?.message}</p>
             )}
