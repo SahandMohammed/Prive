@@ -14,15 +14,15 @@ public static class ErrorCodes
   {
     public const string InvalidCredentials = "AUTH_INVALID_CREDENTIALS";
     public const string AccountDeactivated = "AUTH_ACCOUNT_DEACTIVATED";
-    public const string AccountLocked      = "AUTH_ACCOUNT_LOCKED";
-    public const string SessionExpired     = "AUTH_SESSION_EXPIRED";
-    public const string NoRefreshToken     = "AUTH_NO_REFRESH_TOKEN";
-    public const string WrongPassword      = "AUTH_WRONG_CURRENT_PASSWORD";
+    public const string AccountLocked = "AUTH_ACCOUNT_LOCKED";
+    public const string SessionExpired = "AUTH_SESSION_EXPIRED";
+    public const string NoRefreshToken = "AUTH_NO_REFRESH_TOKEN";
+    public const string WrongPassword = "AUTH_WRONG_CURRENT_PASSWORD";
   }
 
   public static class User
   {
-    public const string NotFound      = "USER_NOT_FOUND";
+    public const string NotFound = "USER_NOT_FOUND";
     public const string UsernameTaken = "USER_USERNAME_TAKEN";
   }
 
@@ -229,6 +229,12 @@ public static class ErrorCodes
     public const string ChangeBalanceInsufficient = "POS_CHANGE_BALANCE_INSUFFICIENT";
     public const string ConcurrentCheckout = "POS_CONCURRENT_CHECKOUT";
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+
+
+  }
+
+  public static class PosSessionErrorCodes
+  {
     public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
     public const string RegisterInactive = "POS_REGISTER_INACTIVE";
     public const string RegisterCodeTaken = "POS_REGISTER_CODE_TAKEN";
@@ -279,10 +285,10 @@ public static class ErrorCodes
   public static class Common
   {
     public const string ValidationFailed = "VALIDATION_FAILED";
-    public const string Unauthorized     = "UNAUTHORIZED";
-    public const string Forbidden        = "FORBIDDEN";
-    public const string ServerError      = "SERVER_ERROR";
-    public const string TooManyRequests  = "TOO_MANY_REQUESTS";
+    public const string Unauthorized = "UNAUTHORIZED";
+    public const string Forbidden = "FORBIDDEN";
+    public const string ServerError = "SERVER_ERROR";
+    public const string TooManyRequests = "TOO_MANY_REQUESTS";
     public const string ConcurrentOperation = "CONCURRENT_OPERATION";
   }
 }

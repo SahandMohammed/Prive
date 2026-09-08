@@ -282,7 +282,7 @@ public sealed class PosService
     if (_db.Database.IsRelational())
       await _db.Database.ExecuteSqlRawAsync("SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {0} FOR UPDATE", session.Id);
     if (session.Status != PosSessionStatus.Open)
-      throw new ConflictException(PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
 
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
@@ -595,7 +595,7 @@ public sealed class PosService
   private static void ValidateRequestShape(CompletePosSaleRequest request)
   {
     if (request.PosSessionId == Guid.Empty)
-      throw new BadRequestException(PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
+      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.LinesRequired, "Add at least one Service or Product.");
     if (request.Tenders.Count == 0)

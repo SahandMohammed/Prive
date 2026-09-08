@@ -36,7 +36,7 @@ public sealed class PosSessionService
     var branchId = RequireBranch();
     var code = NormalizeCode(request.Code);
     if (await _db.PosRegisters.IgnoreQueryFilters().AnyAsync(register => register.Code == code, ct))
-      throw new ConflictException(PosSessionErrorCodes.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
 
     var register = new PosRegisterEntity
     {
@@ -46,7 +46,7 @@ public sealed class PosSessionService
       IsActive = true
     };
     _db.PosRegisters.Add(register);
-    await SaveConflictAsync(PosSessionErrorCodes.RegisterCodeTaken,
+    await SaveConflictAsync(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken,
       "Another POS Register used this code first. Choose a different code.", ct);
     return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
   }
@@ -58,15 +58,15 @@ public sealed class PosSessionService
       ?? throw RegisterNotFound();
     var code = NormalizeCode(request.Code);
     if (code != register.Code && await _db.PosRegisters.IgnoreQueryFilters().AnyAsync(item => item.Code == code && item.Id != id, ct))
-      throw new ConflictException(PosSessionErrorCodes.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
     if (!request.IsActive && await _db.PosSessions.AnyAsync(session => session.RegisterId == id && session.Status == PosSessionStatus.Open, ct))
-      throw new ConflictException(PosSessionErrorCodes.SessionAlreadyOpen,
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen,
         "Close the active POS Session before deactivating this Register.");
 
     register.Code = code;
     register.Name = request.Name.Trim();
     register.IsActive = request.IsActive;
-    await SaveConflictAsync(PosSessionErrorCodes.RegisterCodeTaken,
+    await SaveConflictAsync(ErrorCodes.PosSessionErrorCodes.RegisterCodeTaken,
       "Another POS Register used this code first. Choose a different code.", ct);
     return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
   }
@@ -85,11 +85,11 @@ public sealed class PosSessionService
     var register = await _db.PosRegisters.SingleOrDefaultAsync(item => item.Id == request.RegisterId && item.BranchId == branchId, ct)
       ?? throw RegisterNotFound();
     if (!register.IsActive)
-      throw new BadRequestException(PosSessionErrorCodes.RegisterInactive, "Select an active POS Register.");
+      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.RegisterInactive, "Select an active POS Register.");
     if (await _db.PosSessions.AnyAsync(item => item.RegisterId == register.Id && item.Status == PosSessionStatus.Open, ct))
-      throw new ConflictException(PosSessionErrorCodes.SessionAlreadyOpen, "This POS Register already has an open session.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen, "This POS Register already has an open session.");
     if (await _db.PosSessions.AnyAsync(item => item.BranchId == branchId && item.CashierUserId == userId && item.Status == PosSessionStatus.Open, ct))
-      throw new ConflictException(PosSessionErrorCodes.SessionAlreadyOpen, "You already have an open POS Session in this branch.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen, "You already have an open POS Session in this branch.");
 
     var business = await GetBusinessAsync(ct);
     var expectedCurrencies = await GetOperableCashboxCurrenciesAsync(userId, ct);
@@ -128,7 +128,7 @@ public sealed class PosSessionService
     }
     catch (DbUpdateException exception) when (IsUniqueViolation(exception))
     {
-      throw new ConflictException(PosSessionErrorCodes.SessionAlreadyOpen,
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionAlreadyOpen,
         "The Register or cashier already has an open POS Session. Refresh and try again.");
     }
     return await GetSessionAsync(userId, session.Id, ct);
@@ -219,7 +219,7 @@ public sealed class PosSessionService
     if (session.BranchId != branchId)
       throw SessionNotFound();
     if (await _db.PosZReports.IgnoreQueryFilters().AnyAsync(report => report.PosSessionId == session.Id, ct))
-      throw new ConflictException(PosSessionErrorCodes.SessionCloseConflict, "This POS Session already has a Z Report.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionCloseConflict, "This POS Session already has a Z Report.");
 
     var business = await GetBusinessAsync(ct);
     var x = BuildXReport(session, business.BaseCurrencyId, business.BaseCurrency.Code);
@@ -328,7 +328,7 @@ public sealed class PosSessionService
     }
     catch (DbUpdateException exception) when (IsUniqueViolation(exception))
     {
-      throw new ConflictException(PosSessionErrorCodes.SessionCloseConflict,
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionCloseConflict,
         "This POS Session was already closed by another request. Refresh the session.");
     }
 
@@ -380,7 +380,7 @@ public sealed class PosSessionService
       .Include(item => item.PaymentSummaries)
       .Include(item => item.DrawerSummaries)
       .SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
-      ?? throw new NotFoundException(PosSessionErrorCodes.ZReportNotFound, "POS Z Report was not found.");
+      ?? throw new NotFoundException(ErrorCodes.PosSessionErrorCodes.ZReportNotFound, "POS Z Report was not found.");
     await EnsureSessionAccessAsync(userId, report.CashierUserId, ct);
     return ToZReportResponse(report);
   }
@@ -393,14 +393,14 @@ public sealed class PosSessionService
   {
     var selectedBranchId = RequireBranch();
     if (branchId != selectedBranchId)
-      throw new BadRequestException(PosSessionErrorCodes.SessionAccessDenied,
+      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.SessionAccessDenied,
         "The checkout branch must match the active branch workspace.");
     var session = await _db.PosSessions.SingleOrDefaultAsync(item => item.Id == sessionId && item.BranchId == branchId, ct)
-      ?? throw new BadRequestException(PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
+      ?? throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.SessionRequired, "Open a POS Session before completing a checkout.");
     if (session.Status != PosSessionStatus.Open)
-      throw new ConflictException(PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionClosed, "This POS Session is already closed. Open a new session.");
     if (session.CashierUserId != userId)
-      throw new ForbiddenException(PosSessionErrorCodes.SessionAccessDenied,
+      throw new ForbiddenException(ErrorCodes.PosSessionErrorCodes.SessionAccessDenied,
         "A cashier can only complete sales in their own open POS Session.");
     return session;
   }
@@ -412,7 +412,7 @@ public sealed class PosSessionService
       ?? throw SessionNotFound();
     await EnsureSessionAccessAsync(userId, session.CashierUserId, ct);
     if (requireOpen && session.Status != PosSessionStatus.Open)
-      throw new ConflictException(PosSessionErrorCodes.SessionClosed, "This POS Session is closed.");
+      throw new ConflictException(ErrorCodes.PosSessionErrorCodes.SessionClosed, "This POS Session is closed.");
     return session;
   }
 
@@ -530,7 +530,7 @@ public sealed class PosSessionService
     var required = requiredCurrencies.Order().ToList();
     var supplied = counts.Select(count => count.CurrencyId).Order().ToList();
     if (counts.Select(count => count.CurrencyId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
-      throw new BadRequestException(PosSessionErrorCodes.OpeningCountInvalid,
+      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.OpeningCountInvalid,
         "Enter one opening count for every operable Cashbox currency in this branch.");
   }
 
@@ -539,7 +539,7 @@ public sealed class PosSessionService
     var required = requiredCurrencies.Order().ToList();
     var supplied = counts.Select(count => count.CurrencyId).Order().ToList();
     if (counts.Select(count => count.CurrencyId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
-      throw new BadRequestException(PosSessionErrorCodes.ClosingCountInvalid,
+      throw new BadRequestException(ErrorCodes.PosSessionErrorCodes.ClosingCountInvalid,
         "Enter one physical closing count for every drawer currency in this POS Session.");
   }
 
@@ -547,7 +547,7 @@ public sealed class PosSessionService
   {
     if (userId == cashierUserId) return;
     if (!await CanManageOthersAsync(userId, ct))
-      throw new ForbiddenException(PosSessionErrorCodes.SessionAccessDenied,
+      throw new ForbiddenException(ErrorCodes.PosSessionErrorCodes.SessionAccessDenied,
         "You are not allowed to access another cashier's POS Session.");
   }
 
@@ -600,7 +600,7 @@ public sealed class PosSessionService
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
   private static decimal Money(decimal value) => Math.Round(value, 4, MidpointRounding.AwayFromZero);
   private static NotFoundException RegisterNotFound() =>
-    new(PosSessionErrorCodes.RegisterNotFound, "POS Register was not found.");
+    new(ErrorCodes.PosSessionErrorCodes.RegisterNotFound, "POS Register was not found.");
   private static NotFoundException SessionNotFound() =>
-    new(PosSessionErrorCodes.SessionNotFound, "POS Session was not found.");
+    new(ErrorCodes.PosSessionErrorCodes.SessionNotFound, "POS Session was not found.");
 }
