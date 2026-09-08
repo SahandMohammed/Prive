@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, LockKeyhole } from 'lucide-react'
+import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useClosePosSession, usePosXReport } from '../hooks/usePos'
-import type { PosSession, PosZReport } from '../types/pos.types'
+import { posCloseSessionSchema } from '../schemas/pos.schema'
+import type { PosCloseSessionValues } from '../schemas/pos.schema'
+import type { PosSession, PosXReport, PosZReport } from '../types/pos.types'
 
 export function CloseSessionScreen({
   session,
@@ -15,45 +18,11 @@ export function CloseSessionScreen({
   onClosed: (report: PosZReport) => void
 }) {
   const reportQuery = usePosXReport(session.id)
-  const closeSession = useClosePosSession()
-  const report = reportQuery.data
-  const [counts, setCounts] = useState<Record<string, number>>({})
-  const [notes, setNotes] = useState('')
-
-  useEffect(() => {
-    if (!report) return
-    setCounts((current) => {
-      const next = { ...current }
-      for (const drawer of report.drawers) {
-        if (next[drawer.currencyId] === undefined) next[drawer.currencyId] = drawer.expectedAmount
-      }
-      return next
-    })
-  }, [report])
-
-  const rows = useMemo(() => report?.drawers.map((drawer) => {
-    const counted = Number(counts[drawer.currencyId]) || 0
-    return { ...drawer, counted, variance: round4(counted - drawer.expectedAmount) }
-  }) ?? [], [counts, report])
-
-  const close = () => {
-    if (!report) return
-    closeSession.mutate(
-      {
-        id: session.id,
-        body: {
-          closingCounts: rows.map((row) => ({ currencyId: row.currencyId, countedAmount: row.counted })),
-          notes: notes.trim() || null,
-        },
-      },
-      { onSuccess: onClosed }
-    )
-  }
 
   if (reportQuery.isPending) {
     return <State text="Preparing session reconciliation…" />
   }
-  if (reportQuery.isError || !report) {
+  if (reportQuery.isError || !reportQuery.data) {
     return (
       <div className="grid min-h-screen place-items-center bg-muted/20 p-6">
         <div className="max-w-md text-center">
@@ -66,7 +35,58 @@ export function CloseSessionScreen({
   }
 
   return (
-    <div className="min-h-screen bg-muted/20 p-4 sm:p-6">
+    <CloseSessionForm
+      session={session}
+      report={reportQuery.data}
+      onCancel={onCancel}
+      onClosed={onClosed}
+    />
+  )
+}
+
+function CloseSessionForm({
+  session,
+  report,
+  onCancel,
+  onClosed,
+}: {
+  session: PosSession
+  report: PosXReport
+  onCancel: () => void
+  onClosed: (report: PosZReport) => void
+}) {
+  const closeSession = useClosePosSession()
+  const form = useForm<PosCloseSessionValues>({
+    resolver: zodResolver(posCloseSessionSchema),
+    defaultValues: {
+      closingCounts: report.drawers.map((drawer) => ({
+        currencyId: drawer.currencyId,
+        countedAmount: drawer.expectedAmount,
+      })),
+      notes: '',
+    },
+  })
+  const counts = form.watch('closingCounts')
+  const rows = report.drawers.map((drawer, index) => {
+    const counted = Number(counts[index]?.countedAmount) || 0
+    return { ...drawer, counted, variance: round4(counted - drawer.expectedAmount) }
+  })
+
+  const submit = form.handleSubmit((values) => {
+    closeSession.mutate(
+      {
+        id: session.id,
+        body: {
+          closingCounts: values.closingCounts,
+          notes: values.notes.trim() || null,
+        },
+      },
+      { onSuccess: onClosed }
+    )
+  })
+
+  return (
+    <form className="min-h-screen bg-muted/20 p-4 sm:p-6" onSubmit={submit}>
       <div className="mx-auto max-w-5xl space-y-5">
         <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -78,7 +98,7 @@ export function CloseSessionScreen({
               {session.sessionNumber} · {session.registerCode} — {session.registerName} · {session.cashierUsername}
             </p>
           </div>
-          <Button variant="outline" onClick={onCancel} disabled={closeSession.isPending}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={closeSession.isPending}>
             <ArrowLeft className="size-4" /> Back to POS
           </Button>
         </div>
@@ -103,24 +123,26 @@ export function CloseSessionScreen({
             </p>
           ) : (
             <div className="space-y-3">
-              {rows.map((row) => (
+              {rows.map((row, index) => (
                 <div key={row.currencyId} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[100px_repeat(3,minmax(0,1fr))] md:items-center">
                   <div className="font-mono text-base font-bold">{row.currencyCode}</div>
                   <Value label="Expected" value={money(row.expectedAmount)} />
                   <label className="grid gap-1 text-xs uppercase tracking-wide text-muted-foreground">
                     Counted
+                    <input type="hidden" {...form.register(`closingCounts.${index}.currencyId`)} />
                     <Input
                       aria-label={`${row.currencyCode} counted amount`}
                       className="font-mono text-sm text-foreground"
                       type="number"
                       min="0"
                       step="0.0001"
-                      value={counts[row.currencyId] ?? 0}
-                      onChange={(event) => setCounts((current) => ({
-                        ...current,
-                        [row.currencyId]: Math.max(0, Number(event.target.value) || 0),
-                      }))}
+                      {...form.register(`closingCounts.${index}.countedAmount`, { valueAsNumber: true })}
                     />
+                    {form.formState.errors.closingCounts?.[index]?.countedAmount?.message && (
+                      <span className="normal-case tracking-normal text-destructive">
+                        {form.formState.errors.closingCounts[index]?.countedAmount?.message}
+                      </span>
+                    )}
                   </label>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Variance</p>
@@ -137,13 +159,15 @@ export function CloseSessionScreen({
         <section className="rounded-2xl border bg-card p-5">
           <h2 className="font-semibold">Session notes</h2>
           <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
+            {...form.register('notes')}
             rows={3}
             maxLength={500}
             placeholder="Optional closing note"
             className="mt-3 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
+          {form.formState.errors.notes?.message && (
+            <p className="mt-1 text-xs text-destructive">{form.formState.errors.notes.message}</p>
+          )}
         </section>
 
         {closeSession.error && (
@@ -154,12 +178,12 @@ export function CloseSessionScreen({
           <p className="text-xs text-muted-foreground">
             Closing is final. The session and generated Z Report become historical records.
           </p>
-          <Button className="sm:min-w-52" disabled={closeSession.isPending} onClick={close}>
+          <Button type="submit" className="sm:min-w-52" disabled={closeSession.isPending}>
             {closeSession.isPending ? 'Closing session…' : 'Close & Generate Z Report'}
           </Button>
         </div>
       </div>
-    </div>
+    </form>
   )
 }
 
