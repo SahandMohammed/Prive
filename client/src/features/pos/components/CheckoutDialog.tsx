@@ -23,6 +23,7 @@ export function CheckoutDialog({
   open,
   setup,
   branchId,
+  sessionId,
   warehouseId,
   customerId,
   cart,
@@ -32,6 +33,7 @@ export function CheckoutDialog({
   open: boolean
   setup: PosSetup
   branchId: string
+  sessionId: string
   warehouseId: string
   customerId: string | null
   cart: PosCartLine[]
@@ -120,6 +122,7 @@ export function CheckoutDialog({
     complete.mutate(
       {
         branchId,
+        posSessionId: sessionId,
         warehouseId: warehouseId || null,
         customerId,
         lines: cart.map((line) => ({
@@ -158,7 +161,7 @@ export function CheckoutDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Checkout · {amount(total)} {setup.baseCurrencyCode}</DialogTitle>
           <DialogDescription>
-            Record exactly what the customer hands over. The backend revalidates rates, account access, balances and stock before committing.
+            Record exactly what the customer hands over. The backend revalidates the active session, rates, account access, balances and stock before committing.
           </DialogDescription>
         </DialogHeader>
 
