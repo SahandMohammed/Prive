@@ -29,6 +29,24 @@ public sealed class PosSaleListQuery : PaginationRequest
   public DateOnly? ToDate { get; init; }
 }
 
+public sealed class PosSessionListQuery : PaginationRequest
+{
+  [EnumDataType(typeof(PosSessionStatus))]
+  public PosSessionStatus? Status { get; init; }
+  public Guid? RegisterId { get; init; }
+  public Guid? CashierUserId { get; init; }
+  public DateOnly? FromDate { get; init; }
+  public DateOnly? ToDate { get; init; }
+}
+
+public sealed class PosZReportListQuery : PaginationRequest
+{
+  public Guid? RegisterId { get; init; }
+  public Guid? CashierUserId { get; init; }
+  public DateOnly? FromDate { get; init; }
+  public DateOnly? ToDate { get; init; }
+}
+
 public sealed record PosSaleLineRequest(
   [Required] SalesLineType LineType,
   Guid? ServiceId,
@@ -47,11 +65,38 @@ public sealed record PosChangeRequest(
 
 public sealed record CompletePosSaleRequest(
   [Required] Guid BranchId,
+  [Required] Guid PosSessionId,
   Guid? WarehouseId,
   Guid? CustomerId,
   [Required, MinLength(1)] List<PosSaleLineRequest> Lines,
   [Required, MinLength(1)] List<PosTenderRequest> Tenders,
   PosChangeRequest? Change);
+
+public sealed record CreatePosRegisterRequest(
+  [Required, MaxLength(32)] string Code,
+  [Required, MaxLength(120)] string Name);
+
+public sealed record UpdatePosRegisterRequest(
+  [Required, MaxLength(32)] string Code,
+  [Required, MaxLength(120)] string Name,
+  bool IsActive);
+
+public sealed record PosOpeningCountRequest(
+  [Required] Guid CurrencyId,
+  [Range(typeof(decimal), "0", "9999999999999")] decimal Amount);
+
+public sealed record OpenPosSessionRequest(
+  [Required] Guid RegisterId,
+  [Required] List<PosOpeningCountRequest> OpeningCounts,
+  [MaxLength(500)] string? Notes);
+
+public sealed record PosClosingCountRequest(
+  [Required] Guid CurrencyId,
+  [Range(typeof(decimal), "0", "9999999999999")] decimal CountedAmount);
+
+public sealed record ClosePosSessionRequest(
+  [Required] List<PosClosingCountRequest> ClosingCounts,
+  [MaxLength(500)] string? Notes);
 
 public sealed record PosBranchResponse(Guid Id, string Code, string Name, bool IsMainBranch);
 
@@ -98,6 +143,142 @@ public sealed record PosCatalogItemResponse(
   IReadOnlyList<ProductUnitConversionResponse> UnitConversions);
 
 public sealed record PosCustomerResponse(Guid Id, string Name, string? PrimaryPhoneNumber);
+
+public sealed record PosRegisterResponse(
+  Guid Id,
+  string Code,
+  string Name,
+  Guid BranchId,
+  bool IsActive);
+
+public sealed record PosSessionCountResponse(
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Amount,
+  decimal ExchangeRate,
+  decimal BaseAmount);
+
+public sealed record PosSessionResponse(
+  Guid Id,
+  string SessionNumber,
+  Guid BranchId,
+  string BranchCode,
+  string BranchName,
+  Guid RegisterId,
+  string RegisterCode,
+  string RegisterName,
+  Guid CashierUserId,
+  string CashierUsername,
+  PosSessionStatus Status,
+  DateTimeOffset OpenedAtUtc,
+  DateTimeOffset? ClosedAtUtc,
+  Guid? ClosedByUserId,
+  string? ClosedByUsername,
+  string? OpeningNotes,
+  string? ClosingNotes,
+  List<PosSessionCountResponse> OpeningCounts);
+
+public sealed record PosSessionListResponse(
+  Guid Id,
+  string SessionNumber,
+  Guid RegisterId,
+  string RegisterCode,
+  string RegisterName,
+  Guid CashierUserId,
+  string CashierUsername,
+  PosSessionStatus Status,
+  DateTimeOffset OpenedAtUtc,
+  DateTimeOffset? ClosedAtUtc,
+  int SaleCount,
+  decimal GrossSalesBase,
+  decimal VarianceBase,
+  string BaseCurrencyCode);
+
+public sealed record PosPaymentSummaryResponse(
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  MoneyAccountType MoneyAccountType,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal TenderedAmount,
+  decimal ChangeAmount,
+  decimal NetAmount,
+  decimal TenderedBaseAmount,
+  decimal ChangeBaseAmount,
+  decimal NetBaseAmount);
+
+public sealed record PosDrawerSummaryResponse(
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal OpeningAmount,
+  decimal TenderedAmount,
+  decimal ChangeAmount,
+  decimal ExpectedAmount,
+  decimal? CountedAmount,
+  decimal? VarianceAmount,
+  decimal OpeningBaseAmount,
+  decimal TenderedBaseAmount,
+  decimal ChangeBaseAmount,
+  decimal ExpectedBaseAmount,
+  decimal? CountedBaseAmount,
+  decimal? VarianceBaseAmount);
+
+public sealed record PosXReportResponse(
+  PosSessionResponse Session,
+  DateTimeOffset GeneratedAtUtc,
+  int SaleCount,
+  decimal ServiceSalesBase,
+  decimal ProductSalesBase,
+  decimal GrossSalesBase,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  List<PosPaymentSummaryResponse> Payments,
+  List<PosDrawerSummaryResponse> Drawers);
+
+public sealed record PosZReportListResponse(
+  Guid Id,
+  string ReportNumber,
+  Guid PosSessionId,
+  string SessionNumber,
+  Guid RegisterId,
+  string RegisterCode,
+  string RegisterName,
+  Guid CashierUserId,
+  string CashierUsername,
+  DateTimeOffset OpenedAtUtc,
+  DateTimeOffset ClosedAtUtc,
+  int SaleCount,
+  decimal GrossSalesBase,
+  decimal VarianceBase,
+  string BaseCurrencyCode);
+
+public sealed record PosZReportResponse(
+  Guid Id,
+  string ReportNumber,
+  Guid PosSessionId,
+  string SessionNumber,
+  Guid BranchId,
+  string BranchCode,
+  string BranchName,
+  Guid RegisterId,
+  string RegisterCode,
+  string RegisterName,
+  Guid CashierUserId,
+  string CashierUsername,
+  Guid ClosedByUserId,
+  string ClosedByUsername,
+  DateTimeOffset OpenedAtUtc,
+  DateTimeOffset ClosedAtUtc,
+  DateTimeOffset GeneratedAtUtc,
+  int SaleCount,
+  decimal ServiceSalesBase,
+  decimal ProductSalesBase,
+  decimal GrossSalesBase,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  List<PosPaymentSummaryResponse> Payments,
+  List<PosDrawerSummaryResponse> Drawers);
 
 public sealed record PosSaleListResponse(
   Guid Id,
@@ -160,6 +341,7 @@ public sealed record PosSaleResponse(
   Guid Id,
   string DocumentNumber,
   PosSaleStatus Status,
+  Guid? PosSessionId,
   Guid SalesInvoiceId,
   Guid? CustomerId,
   string? CustomerName,
