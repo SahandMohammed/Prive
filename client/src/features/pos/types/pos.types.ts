@@ -8,6 +8,8 @@ export const PosSaleStatus = { Completed: 0 } as const
 export type PosSaleStatus = (typeof PosSaleStatus)[keyof typeof PosSaleStatus]
 export const PosSessionStatus = { Open: 0, Closed: 1 } as const
 export type PosSessionStatus = (typeof PosSessionStatus)[keyof typeof PosSessionStatus]
+export const PosPaymentMode = { Paid: 0, Partial: 1, Credit: 2 } as const
+export type PosPaymentMode = (typeof PosPaymentMode)[keyof typeof PosPaymentMode]
 
 export interface PosBranch { id: string; code: string; name: string; isMainBranch: boolean }
 export interface PosWarehouse { id: string; code: string; name: string; branchId: string }
@@ -102,6 +104,7 @@ export interface CompletePosSaleInput {
   }[]
   tenders: { moneyAccountId: string; amount: number }[]
   change: { moneyAccountId: string; amount: number } | null
+  paymentMode: PosPaymentMode
 }
 
 export interface PosRegister { id: string; code: string; name: string; branchId: string; isActive: boolean }
@@ -310,6 +313,8 @@ export interface PosSale {
   tenderedBaseAmount: number
   changeBaseAmount: number
   settledBaseAmount: number
+  outstandingBaseAmount: number
+  paymentMode: PosPaymentMode
   cashierUserId: string
   cashierUsername: string
   completedAtUtc: string
