@@ -88,22 +88,26 @@ public sealed class DashboardService
     var todayCashPaidBase = ledgerEntriesToday.Where(a => a < 0).Sum(a => -a);
     var todayNetCashMovementBase = todayCashReceivedBase - todayCashPaidBase;
 
-    // 3. Customer Receivables (Posted regular sales invoices minus posted customer receipt allocations)
+    // 3. Customer Receivables (all posted invoices minus initial POS settlement and posted customer receipts)
     var unpaidCustomerInvoices = await _db.SalesInvoices.AsNoTracking()
-      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.PosSale == null)
+      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted)
       .Select(s => new
       {
         s.Id,
         s.CustomerId,
         s.BaseTotal,
+        PosSettledBase = s.PosSale == null
+          ? 0m
+          : (s.PosSale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
+            - (s.PosSale.Change == null ? 0m : s.PosSale.Change.BaseAmount),
         AllocatedBase = _db.CustomerReceiptAllocations
           .Where(a => a.SalesInvoiceId == s.Id && a.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
           .Sum(a => (decimal?)a.BaseAmount) ?? 0m
       })
-      .Where(s => s.BaseTotal - s.AllocatedBase > 0.001m)
+      .Where(s => s.BaseTotal - s.PosSettledBase - s.AllocatedBase > 0.001m)
       .ToListAsync(ct);
 
-    var customerReceivablesBase = unpaidCustomerInvoices.Sum(s => s.BaseTotal - s.AllocatedBase);
+    var customerReceivablesBase = unpaidCustomerInvoices.Sum(s => s.BaseTotal - s.PosSettledBase - s.AllocatedBase);
     var customerOutstandingInvoiceCount = unpaidCustomerInvoices.Count;
     var customerOutstandingCustomerCount = unpaidCustomerInvoices.Select(s => s.CustomerId).Where(c => c != null).Distinct().Count();
 
