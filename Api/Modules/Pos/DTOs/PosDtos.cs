@@ -73,10 +73,10 @@ public sealed record CompletePosSaleRequest(
   [Required] Guid PosSessionId,
   Guid? WarehouseId,
   Guid? CustomerId,
-  [Required, EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode,
   [Required, MinLength(1)] List<PosSaleLineRequest> Lines,
   [Required] List<PosTenderRequest> Tenders,
-  PosChangeRequest? Change);
+  PosChangeRequest? Change,
+  [EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode = PosPaymentMode.Paid);
 
 public sealed record CreatePosRegisterRequest(
   [Required, MaxLength(32)] string Code,
