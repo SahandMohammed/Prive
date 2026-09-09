@@ -306,8 +306,19 @@ public sealed class SalesService
     CancellationToken ct)
   {
     var productLines = invoice.Lines.Where(line => line.LineType == SalesLineType.Product).ToList();
+    var settlementBase = settlementLines is null
+      ? 0m
+      : Money(settlementLines.Sum(line => line.DebitBaseAmount - line.CreditBaseAmount));
+    if (settlementBase < 0 || settlementBase > invoice.BaseTotal)
+      throw new BadRequestException(ErrorCodes.Sales.AccountMappingInvalid,
+        "Immediate settlement must be between zero and the Sales Invoice total.");
+    var receivableBase = Money(invoice.BaseTotal - settlementBase);
+    if (receivableBase > 0 && invoice.CustomerId is null)
+      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired,
+        "Select an active customer when any part of the Sale remains receivable.");
+
     var accountCodes = new List<string>();
-    if (settlementLines is null) accountCodes.Add(_options.AccountsReceivableAccountCode);
+    if (receivableBase > 0) accountCodes.Add(_options.AccountsReceivableAccountCode);
     if (productLines.Count > 0)
     {
       accountCodes.Add(_options.ProductRevenueAccountCode);
@@ -318,7 +329,7 @@ public sealed class SalesService
       .ToDictionaryAsync(account => account.Code, ct);
 
     AccountEntity? receivableAccount = null;
-    if (settlementLines is null)
+    if (receivableBase > 0)
       receivableAccount = GetPostingAccount(accounts, _options.AccountsReceivableAccountCode,
         AccountClassification.Asset, "accounts receivable");
 
@@ -341,18 +352,22 @@ public sealed class SalesService
     }
 
     var postedAt = DateTime.UtcNow;
-    var journalLines = settlementLines?.ToList() ??
-    [
-      new JournalLineEntity
+    var journalLines = settlementLines?.ToList() ?? [];
+    if (receivableBase > 0)
+    {
+      var receivableAmount = settlementLines is null
+        ? invoice.Total
+        : Money(receivableBase / invoice.ExchangeRate);
+      journalLines.Add(new JournalLineEntity
       {
         AccountId = receivableAccount!.Id,
         Description = $"Receivable from customer on {invoice.DocumentNumber}",
         CurrencyId = invoice.CurrencyId,
         ExchangeRate = invoice.ExchangeRate,
-        OriginalDebitAmount = invoice.Total,
-        DebitBaseAmount = invoice.BaseTotal
-      }
-    ];
+        OriginalDebitAmount = receivableAmount,
+        DebitBaseAmount = receivableBase
+      });
+    }
 
     foreach (var group in invoice.Lines.Where(line => line.LineType == SalesLineType.Service)
       .GroupBy(line => validation.Services[line.ServiceId!.Value].RevenueAccountId))
@@ -797,7 +812,8 @@ public sealed class SalesService
     .Include(invoice => invoice.Currency)
     .Include(invoice => invoice.BaseCurrency)
     .Include(invoice => invoice.CreatedByUser)
-    .Include(invoice => invoice.PosSale)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change)
     .Include(invoice => invoice.Movements)
     .Include(invoice => invoice.ReceiptAllocations).ThenInclude(allocation => allocation.CustomerReceipt)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Service)
@@ -819,15 +835,17 @@ public sealed class SalesService
         allocation.BaseAmount,
         allocation.CustomerReceipt.JournalEntryId))
       .ToList();
-    var receivedAmount = invoice.PosSale is null ? receipts.Sum(receipt => receipt.Amount) : invoice.Total;
-    var outstandingAmount = invoice.PosSale is null ? Math.Max(invoice.Total - receivedAmount, 0) : 0;
-    var paymentStatus = invoice.PosSale is not null
-      ? SalesInvoicePaymentStatus.Paid
-      : receivedAmount <= 0
-        ? SalesInvoicePaymentStatus.Unpaid
-        : outstandingAmount <= 0
-          ? SalesInvoicePaymentStatus.Paid
-          : SalesInvoicePaymentStatus.PartiallyPaid;
+    var posSettledBase = invoice.PosSale is null
+      ? 0m
+      : Money(invoice.PosSale.Tenders.Sum(tender => tender.BaseAmount) - (invoice.PosSale.Change?.BaseAmount ?? 0));
+    var posSettledAmount = invoice.ExchangeRate > 0 ? Money(posSettledBase / invoice.ExchangeRate) : 0m;
+    var receivedAmount = Money(posSettledAmount + receipts.Sum(receipt => receipt.Amount));
+    var outstandingAmount = Math.Max(Money(invoice.Total - receivedAmount), 0);
+    var paymentStatus = receivedAmount <= 0
+      ? SalesInvoicePaymentStatus.Unpaid
+      : outstandingAmount <= 0
+        ? SalesInvoicePaymentStatus.Paid
+        : SalesInvoicePaymentStatus.PartiallyPaid;
 
     return new SalesInvoiceResponse(
     invoice.Id,
