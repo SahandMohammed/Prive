@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { receiptPrintService } from '../services/receiptPrint.service'
+import { PosPaymentMode } from '../types/pos.types'
 import type { PosSale } from '../types/pos.types'
 
 export function SaleCompleteDialog({
@@ -40,17 +41,36 @@ export function SaleCompleteDialog({
           </div>
           <DialogTitle className="text-center">Sale completed</DialogTitle>
           <DialogDescription className="text-center">
-            The sale, accounting, stock and money effects were committed successfully.
+            {sale?.outstandingBaseAmount
+              ? 'The sale was posted and the unpaid balance is recorded in Accounts Receivable.'
+              : 'The sale, accounting, stock and payment effects were committed successfully.'}
           </DialogDescription>
         </DialogHeader>
 
         {sale && (
-          <div className="rounded-xl border bg-muted/30 p-4 text-center">
-            <p className="font-mono text-lg font-bold">{sale.documentNumber}</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-primary">
-              {amount(sale.total)} {sale.baseCurrencyCode}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">{sale.customerName ?? 'Walk-in customer'}</p>
+          <div className="space-y-3 rounded-xl border bg-muted/30 p-4 text-center">
+            <div>
+              <p className="font-mono text-lg font-bold">{sale.documentNumber}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-primary">
+                {amount(sale.total)} {sale.baseCurrencyCode}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{sale.customerName ?? 'Walk-in customer'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 border-t pt-3 text-left text-xs">
+              <Metric label="Received now" value={`${amount(sale.settledBaseAmount)} ${sale.baseCurrencyCode}`} />
+              <Metric
+                label={sale.outstandingBaseAmount > 0 ? 'Customer owes' : 'Status'}
+                value={sale.outstandingBaseAmount > 0
+                  ? `${amount(sale.outstandingBaseAmount)} ${sale.baseCurrencyCode}`
+                  : 'Paid'}
+                accent={sale.outstandingBaseAmount > 0}
+              />
+            </div>
+            {sale.paymentMode !== PosPaymentMode.Paid && (
+              <p className="text-left text-xs text-muted-foreground">
+                {sale.paymentMode === PosPaymentMode.Credit ? 'Credit sale' : 'Partial payment'} · collect the remaining balance later through Customer Receipts.
+              </p>
+            )}
           </div>
         )}
 
@@ -72,6 +92,15 @@ export function SaleCompleteDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div>
+      <p className="uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-1 font-mono font-semibold ${accent ? 'text-amber-600' : ''}`}>{value}</p>
+    </div>
   )
 }
 
