@@ -24,7 +24,7 @@ export function BranchWorkspace({ children }: { children: ReactNode }) {
   }, [refetch])
 
   useEffect(() => {
-    if (!user || !branches.data || switching || pendingMutations > 0) return
+    if (!user || !branches.data || branches.isError || switching || pendingMutations > 0) return
 
     const remembered = userId === user.id ? branchId : rememberedBranch(user.id)
     const accessibleRemembered = branches.data.find(branch => branch.id === remembered)
@@ -32,7 +32,7 @@ export function BranchWorkspace({ children }: { children: ReactNode }) {
     const next = accessibleRemembered ?? mainBranch ?? branches.data[0]
 
     void selectBranch(user.id, next?.id ?? null)
-  }, [user, branches.data, userId, branchId, switching, pendingMutations])
+  }, [user, branches.data, branches.isError, userId, branchId, switching, pendingMutations])
 
   // Setup and access management must remain reachable before the first branch exists.
   const isSetup = ['/settings/branches', '/settings/business', '/settings/currencies', '/users'].includes(pathname)
