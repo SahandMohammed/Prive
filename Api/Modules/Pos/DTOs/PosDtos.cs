@@ -73,8 +73,9 @@ public sealed record CompletePosSaleRequest(
   [Required] Guid PosSessionId,
   Guid? WarehouseId,
   Guid? CustomerId,
+  [Required, EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode,
   [Required, MinLength(1)] List<PosSaleLineRequest> Lines,
-  [Required, MinLength(1)] List<PosTenderRequest> Tenders,
+  [Required] List<PosTenderRequest> Tenders,
   PosChangeRequest? Change);
 
 public sealed record CreatePosRegisterRequest(
@@ -363,6 +364,8 @@ public sealed record PosSaleResponse(
   decimal TenderedBaseAmount,
   decimal ChangeBaseAmount,
   decimal SettledBaseAmount,
+  decimal OutstandingBaseAmount,
+  PosPaymentMode PaymentMode,
   Guid CashierUserId,
   string CashierUsername,
   DateTime CompletedAtUtc,
@@ -376,4 +379,11 @@ public enum PosCatalogItemType
 {
   Service,
   Product
+}
+
+public enum PosPaymentMode
+{
+  Paid,
+  Partial,
+  Credit
 }
