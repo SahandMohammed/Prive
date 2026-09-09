@@ -71,6 +71,12 @@ export interface PosCatalogFilters {
   warehouseId?: string
 }
 export interface PosCustomerFilters { page: number; pageSize: number; search?: string }
+export interface PosRegisterFilters {
+  page?: number
+  pageSize?: number
+  search?: string
+  includeInactive?: boolean
+}
 export interface PosSessionFilters {
   page: number
   pageSize: number

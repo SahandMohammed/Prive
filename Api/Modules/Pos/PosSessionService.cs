@@ -26,9 +26,23 @@ public sealed class PosSessionService
     var branchId = RequireBranch();
     var query = _db.PosRegisters.AsNoTracking().Where(register => register.BranchId == branchId);
     if (!request.IncludeInactive) query = query.Where(register => register.IsActive);
+    if (!string.IsNullOrWhiteSpace(request.Search))
+    {
+      var search = request.Search.Trim().ToLower();
+      query = query.Where(register => register.Code.ToLower().Contains(search) || register.Name.ToLower().Contains(search));
+    }
     return await query.OrderBy(register => register.Code).ThenBy(register => register.Id)
       .Select(register => new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive))
       .ToPagedResultAsync(request, ct);
+  }
+
+  public async Task<PosRegisterResponse> GetRegisterAsync(Guid id, CancellationToken ct)
+  {
+    var branchId = RequireBranch();
+    var register = await _db.PosRegisters.AsNoTracking()
+      .SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
+      ?? throw RegisterNotFound();
+    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
   }
 
   public async Task<PosRegisterResponse> CreateRegisterAsync(CreatePosRegisterRequest request, CancellationToken ct)
@@ -126,7 +140,7 @@ public sealed class PosSessionService
     {
       await _db.SaveChangesAsync(ct);
     }
-    catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
       throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen,
         "The Register or cashier already has an open POS Session. Refresh and try again.");
@@ -581,14 +595,11 @@ public sealed class PosSessionService
   private async Task SaveConflictAsync(string code, string message, CancellationToken ct)
   {
     try { await _db.SaveChangesAsync(ct); }
-    catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
       throw new ConflictException(code, message);
     }
   }
-
-  private static bool IsUniqueViolation(DbUpdateException exception) =>
-    exception.InnerException is PostgresException postgres && postgres.SqlState == PostgresErrorCodes.UniqueViolation;
 
   private static string NormalizeCode(string value) => value.Trim().ToUpperInvariant();
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

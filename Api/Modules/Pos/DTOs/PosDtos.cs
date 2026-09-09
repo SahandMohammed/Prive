@@ -31,6 +31,7 @@ public sealed class PosSaleListQuery : PaginationRequest
 
 public sealed class PosRegisterListQuery : PaginationRequest
 {
+  public string? Search { get; init; }
   public bool IncludeInactive { get; init; }
 }
 

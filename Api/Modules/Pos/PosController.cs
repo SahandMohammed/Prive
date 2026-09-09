@@ -57,7 +57,7 @@ public sealed class PosController : ControllerBase
   {
     var sale = await _service.CompleteSaleAsync(request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
-    return CreatedAtAction(nameof(GetSale), new { sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
+    return CreatedAtAction(nameof(GetSale), new { id = sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
   }
 
   private Guid GetUserId()
