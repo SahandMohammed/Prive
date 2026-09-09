@@ -7,7 +7,6 @@ import {
   Moon,
   Sun,
   Bell,
-  Palette,
   MessageSquare,
   ChevronLeft,
   ChevronRight,
@@ -16,7 +15,6 @@ import {
 import { BranchWorkspace, resetBranchSelection, BranchSelector } from '@/features/business'
 import { useCurrentUser } from '@/features/auth'
 import { useThemeStore } from '@/lib/theme'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslation } from 'react-i18next'
 import { changeAppLanguage } from '@/lib/i18n'
 import { Sidebar } from './Sidebar'
@@ -124,6 +122,9 @@ export function AppLayout() {
 
           {/* Right Header Actions matching reference */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Branch Selector */}
+            <BranchSelector compact align={isRtl ? 'start' : 'end'} />
+
             {/* Language Switcher Button (English / کوردی سۆرانی) */}
             <button
               type="button"
@@ -154,20 +155,6 @@ export function AppLayout() {
             >
               {theme === 'light' ? <Moon className="size-4" /> : <Sun className="size-4" />}
             </button>
-
-            {/* Branch / Palette popover */}
-            <Popover>
-              <PopoverTrigger
-                className="size-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-                title="Branch switcher & theme"
-              >
-                <Palette className="size-4" />
-              </PopoverTrigger>
-              <PopoverContent align={isRtl ? 'start' : 'end'} className="w-64 p-3 space-y-2">
-                <p className="text-xs font-semibold text-foreground">{t('common.workspaceBranch')}</p>
-                <BranchSelector />
-              </PopoverContent>
-            </Popover>
 
             {/* Notification Bell with red dot */}
             <button

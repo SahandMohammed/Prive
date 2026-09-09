@@ -18,7 +18,6 @@ import {
   X,
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '@/features/auth'
-import { BranchSelector } from '@/features/business'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useThemeStore } from '@/lib/theme'
 import { useTranslation } from 'react-i18next'
@@ -306,13 +305,6 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
                   {role ? (role.toLowerCase() === 'admin' ? t('common.admin') : t('common.staff')) : t('common.staff')}
                 </p>
               </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                {t('common.activeBranch')}
-              </p>
-              <BranchSelector />
             </div>
 
             <div className="pt-2 border-t border-border/50 flex items-center justify-between">

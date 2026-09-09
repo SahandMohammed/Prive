@@ -138,3 +138,16 @@ it('offers a retry when branch access fails', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(state.refetch).toHaveBeenCalled()
 })
+
+it('renders compact mode with accessible branch combobox', () => {
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <BranchSelector compact />
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+
+  expect(screen.getByRole('combobox', { name: 'Current branch' })).toBeInTheDocument()
+})
+

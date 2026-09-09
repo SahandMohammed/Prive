@@ -10,23 +10,31 @@ interface SourceItem {
   name: string
   percent: number
   color: string
-  amount?: string
+  amount: string
 }
 
 export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
-  const hasEmptyData = data !== undefined && data.totalRevenueBase === 0
+  const hasEmptyData = !data || data.totalRevenueBase === 0
+  const currency = data?.baseCurrencyCode ?? 'IQD'
 
-  // 4 Source segments or Services/Products if data is passed
   const sources: SourceItem[] = data && data.totalRevenueBase > 0
     ? [
-        { name: 'Services', percent: data.serviceRevenuePercent, color: '#EA580C', amount: formatDashboardAmount(data.serviceRevenueBase, data.baseCurrencyCode) },
-        { name: 'Products', percent: data.productRevenuePercent, color: '#0D9488', amount: formatDashboardAmount(data.productRevenueBase, data.baseCurrencyCode) },
+        {
+          name: 'Services',
+          percent: data.serviceRevenuePercent,
+          color: '#EA580C',
+          amount: formatDashboardAmount(data.serviceRevenueBase, currency),
+        },
+        {
+          name: 'Products',
+          percent: data.productRevenuePercent,
+          color: '#0D9488',
+          amount: formatDashboardAmount(data.productRevenueBase, currency),
+        },
       ]
     : [
-        { name: 'Direct', percent: 35, color: '#EA580C' },
-        { name: 'Organic', percent: 28, color: '#0D9488' },
-        { name: 'Referral', percent: 22, color: '#0284C7' },
-        { name: 'Social', percent: 15, color: '#F59E0B' },
+        { name: 'Services', percent: 0, color: '#EA580C', amount: formatDashboardAmount(0, currency) },
+        { name: 'Products', percent: 0, color: '#0D9488', amount: formatDashboardAmount(0, currency) },
       ]
 
   // Donut SVG parameters
@@ -83,10 +91,10 @@ export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
             {/* Inner Center Metric */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-2">
               <span className="text-lg font-bold font-heading text-foreground tracking-tight">
-                {data?.totalRevenueBase ? formatDashboardAmount(data.totalRevenueBase, '') : '284K'}
+                {formatDashboardAmount(data.totalRevenueBase, '')}
               </span>
               <span className="text-[10px] font-medium text-muted-foreground">
-                {data?.baseCurrencyCode ?? 'Visits'}
+                {currency}
               </span>
             </div>
           </div>
@@ -101,10 +109,10 @@ export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
                     style={{ backgroundColor: src.color }}
                   />
                   <span className="text-muted-foreground font-medium truncate">{src.name}</span>
-                  {data && <span className="text-muted-foreground text-[11px]">({src.percent}%)</span>}
+                  <span className="text-muted-foreground text-[11px]">({src.percent}%)</span>
                 </div>
                 <span className="font-bold text-foreground">
-                  {src.amount ? src.amount : `${src.percent}%`}
+                  {src.amount}
                 </span>
               </div>
             ))}

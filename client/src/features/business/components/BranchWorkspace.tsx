@@ -25,6 +25,12 @@ export function BranchWorkspace({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user || !branches.data || branches.isError || switching || pendingMutations > 0) return
+    if (userId === user.id && branchId && branches.data.some(branch => branch.id === branchId)) return
+
+    if (!branches.data.length) {
+      if (branchId) void selectBranch(user.id, null)
+      return
+    }
 
     const remembered = userId === user.id ? branchId : rememberedBranch(user.id)
     const accessibleRemembered = branches.data.find(branch => branch.id === remembered)
