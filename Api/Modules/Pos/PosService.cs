@@ -368,16 +368,38 @@ public sealed class PosService
       var rate = rates[account.CurrencyId];
       return new TenderPosting(index + 1, tender, account, rate, Money(tender.Amount * rate));
     }).ToList();
-    var tenderedBase = tenders.Sum(tender => tender.BaseAmount);
-    if (tenderedBase < saleTotal)
-      throw new BadRequestException(ErrorCodes.Pos.Underpayment,
-        $"POS Sale is underpaid by {Money(saleTotal - tenderedBase)} {business.BaseCurrency.Code}.");
+    var tenderedBase = Money(tenders.Sum(tender => tender.BaseAmount));
 
-    var changeDueBase = Money(tenderedBase - saleTotal);
+    var changeDueBase = 0m;
     ChangePosting? change = null;
-    if (changeDueBase == 0 && request.Change is not null)
+    switch (request.PaymentMode)
+    {
+      case PosPaymentMode.Paid:
+        if (tenderedBase < saleTotal)
+          throw new BadRequestException(ErrorCodes.Pos.Underpayment,
+            $"POS Sale is underpaid by {Money(saleTotal - tenderedBase)} {business.BaseCurrency.Code}.");
+        changeDueBase = Money(tenderedBase - saleTotal);
+        break;
+      case PosPaymentMode.Partial:
+        if (tenderedBase <= 0 || tenderedBase >= saleTotal)
+          throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
+            "A partial POS Sale must receive more than zero and less than the Sale total.");
+        break;
+      case PosPaymentMode.Credit:
+        if (tenderedBase != 0)
+          throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
+            "A credit POS Sale cannot include payment. Choose Partial when money is received now.");
+        break;
+      default:
+        throw new BadRequestException(ErrorCodes.Pos.TenderInvalid, "Select a valid POS payment mode.");
+    }
+
+    if (request.PaymentMode != PosPaymentMode.Paid && request.Change is not null)
+      throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue,
+        "Change can only be recorded for a fully paid POS Sale.");
+    if (request.PaymentMode == PosPaymentMode.Paid && changeDueBase == 0 && request.Change is not null)
       throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue, "Do not record change when tender exactly settles the Sale.");
-    if (changeDueBase > 0 && request.Change is null)
+    if (request.PaymentMode == PosPaymentMode.Paid && changeDueBase > 0 && request.Change is null)
       throw new BadRequestException(ErrorCodes.Pos.ChangeRequired,
         $"Record {changeDueBase} {business.BaseCurrency.Code} of change before completing the Sale.");
     if (request.Change is not null)
@@ -511,6 +533,7 @@ public sealed class PosService
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Warehouse)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Movements)
+    .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.ReceiptAllocations).ThenInclude(allocation => allocation.CustomerReceipt)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Product)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
@@ -544,6 +567,18 @@ public sealed class PosService
       sale.Change.ExchangeRate,
       sale.Change.BaseAmount,
       sale.Change.MoneyLedgerEntryId);
+    var tenderedBase = Money(tenders.Sum(tender => tender.BaseAmount));
+    var changeBase = change?.BaseAmount ?? 0;
+    var settledBase = Money(tenderedBase - changeBase);
+    var receiptBase = Money(invoice.ReceiptAllocations
+      .Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
+      .Sum(allocation => allocation.BaseAmount));
+    var outstandingBase = Math.Max(Money(invoice.BaseTotal - settledBase - receiptBase), 0);
+    var paymentMode = settledBase <= 0
+      ? PosPaymentMode.Credit
+      : settledBase < invoice.BaseTotal
+        ? PosPaymentMode.Partial
+        : PosPaymentMode.Paid;
 
     return new PosSaleResponse(
       sale.Id,
@@ -563,9 +598,11 @@ public sealed class PosService
       invoice.BaseCurrency.Code,
       invoice.Subtotal,
       invoice.Total,
-      tenders.Sum(tender => tender.BaseAmount),
-      change?.BaseAmount ?? 0,
-      tenders.Sum(tender => tender.BaseAmount) - (change?.BaseAmount ?? 0),
+      tenderedBase,
+      changeBase,
+      settledBase,
+      outstandingBase,
+      paymentMode,
       sale.CashierUserId,
       sale.CashierUser.Username,
       sale.CompletedAtUtc,
@@ -600,8 +637,20 @@ public sealed class PosService
       throw new BadRequestException(ErrorCodes.Pos.SessionRequired, "Open a POS Session before completing a checkout.");
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.LinesRequired, "Add at least one Service or Product.");
-    if (request.Tenders.Count == 0)
+    if (!Enum.IsDefined(request.PaymentMode))
+      throw new BadRequestException(ErrorCodes.Pos.TenderInvalid, "Select a valid POS payment mode.");
+    if (request.PaymentMode is PosPaymentMode.Paid or PosPaymentMode.Partial && request.Tenders.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.TenderRequired, "Add at least one tender line.");
+    if (request.PaymentMode == PosPaymentMode.Credit && request.Tenders.Count > 0)
+      throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
+        "Credit POS Sales cannot include a tender. Choose Partial when money is received now.");
+    if (request.PaymentMode is PosPaymentMode.Partial or PosPaymentMode.Credit
+      && (request.CustomerId is null || request.CustomerId == Guid.Empty))
+      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired,
+        "Select a customer before creating a Partial or Credit POS Sale.");
+    if (request.PaymentMode != PosPaymentMode.Paid && request.Change is not null)
+      throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue,
+        "Change can only be recorded for a fully paid POS Sale.");
     if (request.Lines.Any(line => line.Quantity <= 0))
       throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "POS quantities must be greater than zero.");
     if (request.Tenders.Any(tender => tender.MoneyAccountId == Guid.Empty || tender.Amount <= 0))
