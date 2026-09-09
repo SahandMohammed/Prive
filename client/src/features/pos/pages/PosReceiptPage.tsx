@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/table'
 import { SalesLineType } from '@/features/sales'
 import { usePosSale } from '../hooks/usePos'
+import { PosPaymentMode } from '../types/pos.types'
 
 export function PosReceiptPage() {
   const { id } = useParams()
@@ -43,6 +44,8 @@ export function PosReceiptPage() {
       <p className="text-destructive">{query.error?.message ?? 'POS receipt was not found.'}</p>
     )
 
+  const hasMoneyMovement = sale.tenders.length > 0 || sale.change !== null
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
       <header className="flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-center">
@@ -58,7 +61,7 @@ export function PosReceiptPage() {
               <span className="font-mono text-primary">{sale.documentNumber}</span>
             </h1>
             <p className="text-sm text-muted-foreground">
-              All Sales, Inventory, Money Ledger, and Accounting effects were committed together.
+              Sales, accounting and stock effects were committed together. Money Ledger reflects only money actually received or returned.
             </p>
           </div>
         </div>
@@ -93,7 +96,7 @@ export function PosReceiptPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
-          <div className="grid gap-3 text-sm sm:grid-cols-3">
+          <div className="grid gap-3 text-sm sm:grid-cols-4">
             <Info label="Customer" value={sale.customerName ?? 'Walk-in'} />
             <Info label="Branch" value={`${sale.branchCode} — ${sale.branchName}`} />
             <Info
@@ -103,6 +106,14 @@ export function PosReceiptPage() {
                   ? `${sale.warehouseCode} — ${sale.warehouseName}`
                   : 'No product fulfilment'
               }
+            />
+            <Info
+              label="Payment"
+              value={sale.paymentMode === PosPaymentMode.Paid
+                ? 'Paid'
+                : sale.paymentMode === PosPaymentMode.Partial
+                  ? 'Partial'
+                  : 'Credit'}
             />
           </div>
           <div className="overflow-x-auto rounded-lg border">
@@ -153,6 +164,11 @@ export function PosReceiptPage() {
             <div>
               <h3 className="mb-2 font-semibold">Payment received</h3>
               <div className="space-y-2">
+                {sale.tenders.length === 0 && (
+                  <div className="rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
+                    No payment was received at checkout. The sale remains collectible through Customer Receipts.
+                  </div>
+                )}
                 {sale.tenders.map((tender) => (
                   <div
                     key={tender.id}
@@ -208,10 +224,15 @@ export function PosReceiptPage() {
                 value={sale.changeBaseAmount}
                 currency={sale.baseCurrencyCode}
               />
+              <Total
+                label="Received now"
+                value={sale.settledBaseAmount}
+                currency={sale.baseCurrencyCode}
+              />
               <div className="border-t pt-2">
                 <Total
-                  label="Total settled"
-                  value={sale.settledBaseAmount}
+                  label={sale.outstandingBaseAmount > 0 ? 'Customer owes' : 'Outstanding'}
+                  value={sale.outstandingBaseAmount}
                   currency={sale.baseCurrencyCode}
                   strong
                 />
@@ -242,14 +263,16 @@ export function PosReceiptPage() {
               </Button>
             </Link>
           )}
-          <Link
-            to={`/finance/money-ledger?documentNumber=${encodeURIComponent(sale.documentNumber)}`}
-          >
-            <Button variant="outline">
-              <Landmark />
-              Money Ledger
-            </Button>
-          </Link>
+          {hasMoneyMovement && (
+            <Link
+              to={`/finance/money-ledger?documentNumber=${encodeURIComponent(sale.documentNumber)}`}
+            >
+              <Button variant="outline">
+                <Landmark />
+                Money Ledger
+              </Button>
+            </Link>
+          )}
           <Link to={`/accounting/journal?search=${encodeURIComponent(sale.documentNumber)}`}>
             <Button variant="outline">
               <BookOpen />
