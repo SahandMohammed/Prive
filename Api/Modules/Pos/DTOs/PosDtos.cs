@@ -29,11 +29,6 @@ public sealed class PosSaleListQuery : PaginationRequest
   public DateOnly? ToDate { get; init; }
 }
 
-public sealed class PosRegisterListQuery : PaginationRequest
-{
-  public bool IncludeInactive { get; init; }
-}
-
 public sealed class PosSessionListQuery : PaginationRequest
 {
   [EnumDataType(typeof(PosSessionStatus))]
