@@ -1,31 +1,17 @@
-import { useEffect } from 'react'
 import { useIsMutating } from '@tanstack/react-query'
 import { Building2 } from 'lucide-react'
 import { useCurrentUser } from '@/features/auth'
-import { registerBranchAccessHandler } from '@/lib/apiClient'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useBranchAccess } from '../hooks/useBranchAccess'
-import { rememberedBranch, selectBranch, useBranchSelectionStore } from '../stores/branch-selection.store'
+import { selectBranch, useBranchSelectionStore } from '../stores/branch-selection.store'
 
 export function BranchSelector() {
   const { data: user } = useCurrentUser()
   const branches = useBranchAccess()
   const { userId, branchId, switching } = useBranchSelectionStore()
   const pendingMutations = useIsMutating()
-  const { refetch } = branches
-  useEffect(() => {
-    registerBranchAccessHandler(() => { void refetch() })
-    return () => registerBranchAccessHandler(null)
-  }, [refetch])
   const selected = userId === user?.id ? branches.data?.find(branch => branch.id === branchId) : undefined
-
-  useEffect(() => {
-    if (!user || !branches.data || switching || pendingMutations) return
-    const preferred = userId === user.id ? branchId : rememberedBranch(user.id)
-    const next = branches.data.find(branch => branch.id === preferred) ?? branches.data[0]
-    void selectBranch(user.id, next?.id ?? null)
-  }, [user, branches.data, userId, branchId, switching, pendingMutations])
 
   return <div className="space-y-2">
     <label id="branch-selector-label" className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Building2 className="size-4" />Current branch</label>
