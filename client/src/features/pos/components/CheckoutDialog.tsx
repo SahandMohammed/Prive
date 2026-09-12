@@ -14,6 +14,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { SalesLineType } from '@/features/sales'
 import { useCompletePosSale } from '../hooks/usePos'
+import { posCartTotal } from '../lib/posCart'
+import {
+  posTenderBaseAmount,
+  posTenderedBaseTotal,
+  roundPosMoney,
+} from '../lib/posMoney'
 import { posCheckoutSchema } from '../schemas/pos.schema'
 import type { PosCheckoutValues } from '../schemas/pos.schema'
 import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
@@ -40,7 +46,7 @@ export function CheckoutDialog({
   onOpenChange: (open: boolean) => void
   onCompleted: (sale: PosSale) => void
 }) {
-  const total = cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
+  const total = posCartTotal(cart)
   const complete = useCompletePosSale()
   const resetComplete = complete.reset
   const accounts = useMemo(
@@ -72,7 +78,7 @@ export function CheckoutDialog({
         {
           moneyAccountId: defaultAccount?.id ?? '',
           amount: defaultAccount?.currentExchangeRate
-            ? round4(total / defaultAccount.currentExchangeRate)
+            ? roundPosMoney(total / defaultAccount.currentExchangeRate)
             : 0,
         },
       ],
@@ -82,17 +88,23 @@ export function CheckoutDialog({
     resetComplete()
   }, [defaultAccount, form, open, resetComplete, total])
 
-  const tenderedBase = (values.tenders ?? []).reduce((sum, tender) => {
-    const account = accounts.find((item) => item.id === tender?.moneyAccountId)
-    return sum + (Number(tender?.amount) || 0) * (account?.currentExchangeRate ?? 0)
-  }, 0)
-  const remaining = round4(Math.max(total - tenderedBase, 0))
+  const tenderedBase = posTenderedBaseTotal(
+    (values.tenders ?? []).map((tender) => {
+      const account = accounts.find((item) => item.id === tender?.moneyAccountId)
+      return {
+        amount: Number(tender?.amount) || 0,
+        exchangeRate: account?.currentExchangeRate ?? 0,
+      }
+    })
+  )
+  const remaining = roundPosMoney(Math.max(total - tenderedBase, 0))
   const changeDue = paymentMode === PosPaymentMode.Paid
-    ? round4(Math.max(tenderedBase - total, 0))
+    ? roundPosMoney(Math.max(tenderedBase - total, 0))
     : 0
   const changeAccount = accounts.find((account) => account.id === values.changeMoneyAccountId)
-  const changeBase = round4(
-    (Number(values.changeAmount) || 0) * (changeAccount?.currentExchangeRate ?? 0)
+  const changeBase = posTenderBaseAmount(
+    Number(values.changeAmount) || 0,
+    changeAccount?.currentExchangeRate ?? 0
   )
   const requiresCustomer = paymentMode !== PosPaymentMode.Paid
   const hasCustomer = Boolean(customerId)
@@ -111,7 +123,7 @@ export function CheckoutDialog({
       return
     }
     if (!changeAccount?.currentExchangeRate) return
-    form.setValue('changeAmount', round4(changeDue / changeAccount.currentExchangeRate), {
+    form.setValue('changeAmount', roundPosMoney(changeDue / changeAccount.currentExchangeRate), {
       shouldValidate: true,
     })
   }, [changeAccount, changeDue, form])
@@ -136,7 +148,7 @@ export function CheckoutDialog({
       {
         moneyAccountId: defaultAccount?.id ?? '',
         amount: defaultAccount?.currentExchangeRate
-          ? round4(total / defaultAccount.currentExchangeRate)
+          ? roundPosMoney(total / defaultAccount.currentExchangeRate)
           : 0,
       },
     ])
@@ -264,8 +276,9 @@ export function CheckoutDialog({
 
               {tenderFields.fields.map((field, index) => {
                 const account = accounts.find((item) => item.id === values.tenders?.[index]?.moneyAccountId)
-                const baseEquivalent = round4(
-                  (Number(values.tenders?.[index]?.amount) || 0) * (account?.currentExchangeRate ?? 0)
+                const baseEquivalent = posTenderBaseAmount(
+                  Number(values.tenders?.[index]?.amount) || 0,
+                  account?.currentExchangeRate ?? 0
                 )
                 return (
                   <div key={field.id} className="grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_170px_auto]">
@@ -437,4 +450,3 @@ function Summary({ label, value, accent = false }: { label: string; value: strin
 }
 
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
-const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10_000) / 10_000
