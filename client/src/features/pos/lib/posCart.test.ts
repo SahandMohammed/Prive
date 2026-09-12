@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCatalogItemToCart, posCartTotal } from './posCart'
+import { addCatalogItemToCart, posCartLineTotal, posCartTotal } from './posCart'
 import { PosCatalogItemType } from '../types/pos.types'
 import type { PosCatalogItem } from '../types/pos.types'
 
@@ -63,5 +63,15 @@ describe('POS cart behavior', () => {
     expect(twice).toHaveLength(1)
     expect(twice[0].quantity).toBe(2)
     expect(posCartTotal(twice)).toBe(50_000)
+  })
+
+  it('rounds every cart line before summing the sale total like the backend', () => {
+    const first = addCatalogItemToCart([], { ...service, id: '55555555-5555-4555-8555-555555555555', unitPriceBase: 0.33335 })
+    const second = addCatalogItemToCart([], { ...service, id: '66666666-6666-4666-8666-666666666666', unitPriceBase: 0.33335 })
+    const cart = [...first, ...second]
+
+    expect(posCartLineTotal(cart[0])).toBe(0.3334)
+    expect(posCartLineTotal(cart[1])).toBe(0.3334)
+    expect(posCartTotal(cart)).toBe(0.6668)
   })
 })
