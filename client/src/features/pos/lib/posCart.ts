@@ -1,5 +1,6 @@
 import { convertToBaseQuantity } from '@/features/inventory'
 import type { UnitConvertibleProduct } from '@/features/inventory'
+import { posLineAmount, roundPosMoney } from './posMoney'
 import { PosCatalogItemType } from '../types/pos.types'
 import type { PosCartLine, PosCatalogItem } from '../types/pos.types'
 
@@ -39,8 +40,14 @@ export function addCatalogItemToCart(cart: PosCartLine[], item: PosCatalogItem):
   ]
 }
 
-export function posCartTotal(cart: PosCartLine[]) {
-  return cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
+export function posCartLineTotal(line: PosCartLine): number {
+  return posLineAmount(line.unitPriceBase, line.quantity)
+}
+
+export function posCartTotal(cart: PosCartLine[]): number {
+  return roundPosMoney(
+    cart.reduce((sum, line) => sum + posCartLineTotal(line), 0)
+  )
 }
 
 function asUnitProduct(item: PosCatalogItem): UnitConvertibleProduct {
