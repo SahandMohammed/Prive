@@ -105,10 +105,17 @@ public sealed class PosSessionService
     if (await _db.PosSessions.AnyAsync(item => item.BranchId == branchId && item.CashierUserId == userId && item.Status == PosSessionStatus.Open, ct))
       throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen, "You already have an open POS Session in this branch.");
 
-    var business = await GetBusinessAsync(ct);
-    var expectedCurrencies = await GetOperableCashboxCurrenciesAsync(userId, ct);
-    ValidateOpeningCounts(request.OpeningCounts, expectedCurrencies);
     var openedAt = DateTimeOffset.UtcNow;
+    var business = await GetBusinessAsync(ct);
+    var operableCurrencies = await GetOperableCashboxCurrenciesAsync(userId, ct);
+    var ratesByCurrency = new Dictionary<Guid, decimal>();
+    foreach (var currencyId in operableCurrencies)
+    {
+      var rate = await ExchangeRateResolver.FindAsync(
+        _db, currencyId, business.BaseCurrencyId, openedAt.UtcDateTime, ct);
+      if (rate is not null) ratesByCurrency[currencyId] = rate.Value;
+    }
+    ValidateOpeningCounts(request.OpeningCounts, ratesByCurrency.Keys);
 
     var session = new PosSessionEntity
     {
@@ -125,7 +132,7 @@ public sealed class PosSessionService
 
     foreach (var requestCount in request.OpeningCounts)
     {
-      var rate = await _finance.ResolveCurrentRateAsync(requestCount.CurrencyId, business.BaseCurrencyId, openedAt.UtcDateTime, ct);
+      var rate = ratesByCurrency[requestCount.CurrencyId];
       session.OpeningCounts.Add(new PosSessionOpeningCountEntity
       {
         CurrencyId = requestCount.CurrencyId,

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Branch;
@@ -11,11 +12,31 @@ using Api.Modules.User;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Api.Tests;
 
 public sealed class FinanceWorkflowTests
 {
+  [Fact]
+  public void Exchange_rate_mutations_require_management_roles()
+  {
+    foreach (var methodName in new[]
+      { nameof(FinanceController.CreateExchangeRate), nameof(FinanceController.DeactivateExchangeRate) })
+    {
+      var method = typeof(FinanceController).GetMethod(methodName)!;
+      var roles = method.GetCustomAttributes<AuthorizeAttribute>()
+        .SelectMany(attribute => (attribute.Roles ?? string.Empty).Split(','))
+        .ToHashSet(StringComparer.Ordinal);
+
+      Assert.Contains("SuperAdmin", roles);
+      Assert.Contains("Owner", roles);
+      Assert.Contains("Manager", roles);
+      Assert.DoesNotContain("Cashier", roles);
+      Assert.DoesNotContain("Professional", roles);
+    }
+  }
+
   [Fact]
   public async Task Money_account_access_is_default_deny_and_operate_includes_view()
   {

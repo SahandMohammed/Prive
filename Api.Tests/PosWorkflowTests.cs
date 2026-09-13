@@ -126,6 +126,14 @@ public sealed partial class PosWorkflowTests
     {
       FromCurrencyId = data.UsdCurrencyId,
       ToCurrencyId = data.IqdCurrencyId,
+      Rate = 1_290,
+      EffectiveAtUtc = DateTime.UtcNow.AddHours(-2),
+      CreatedByUserId = data.CashierId
+    });
+    db.ExchangeRates.Add(new ExchangeRateEntity
+    {
+      FromCurrencyId = data.UsdCurrencyId,
+      ToCurrencyId = data.IqdCurrencyId,
       Rate = 1_400,
       EffectiveAtUtc = DateTime.UtcNow.AddHours(1),
       CreatedByUserId = data.CashierId
@@ -145,11 +153,88 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(13_000, usd.BaseAmount);
     Assert.Equal(10, await PosBalanceAsync(db, data.UsdMoneyAccountId));
     Assert.Equal(12_000, await PosBalanceAsync(db, data.IqdMoneyAccountId));
+    var usdLedger = await db.MoneyLedgerEntries.SingleAsync(entry =>
+      entry.SourceDocumentId == sale.Id && entry.MoneyAccountId == data.UsdMoneyAccountId);
+    Assert.Equal(data.UsdCurrencyId, usdLedger.CurrencyId);
+    Assert.Equal(data.IqdCurrencyId, usdLedger.BaseCurrencyId);
+    Assert.Equal(10, usdLedger.Amount);
+    Assert.Equal(1_300, usdLedger.ExchangeRate);
+    Assert.Equal(13_000, usdLedger.BaseAmount);
+    var usdGlId = (await db.MoneyAccounts.SingleAsync(account => account.Id == data.UsdMoneyAccountId)).AccountingAccountId;
+    var journal = await db.JournalEntries.Include(entry => entry.Lines)
+      .SingleAsync(entry => entry.Id == sale.JournalEntryId);
+    var usdSettlement = journal.Lines.Single(line => line.AccountId == usdGlId);
+    Assert.Equal(10, usdSettlement.OriginalDebitAmount);
+    Assert.Equal(13_000, usdSettlement.DebitBaseAmount);
 
-    (await db.ExchangeRates.OrderBy(rate => rate.EffectiveAtUtc).FirstAsync()).Rate = 1_500;
+    (await db.ExchangeRates.SingleAsync(rate => rate.Rate == 1_300)).Rate = 1_500;
     await db.SaveChangesAsync();
     var historical = await service.GetSaleAsync(sale.Id, default);
     Assert.Equal(1_300, historical.Tenders.Single(tender => tender.MoneyAccountId == data.UsdMoneyAccountId).ExchangeRate);
+  }
+
+  [Fact]
+  public async Task Usd_only_sale_keeps_the_invoice_in_iqd_and_posts_physical_usd()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var pricedService = await db.Services.SingleAsync(item => item.Id == data.ServiceId);
+    pricedService.SellingPriceBase = 26_000;
+    await db.SaveChangesAsync();
+    var service = CreateService(db);
+
+    var sale = await service.CompleteSaleAsync(
+      Request(data, [ServiceLine(data)], [new(data.UsdMoneyAccountId, 20)]),
+      data.CashierId,
+      default);
+
+    Assert.Equal(26_000, sale.Total);
+    Assert.Equal(26_000, sale.SettledBaseAmount);
+    var tender = Assert.Single(sale.Tenders);
+    Assert.Equal(20, tender.TenderedAmount);
+    Assert.Equal(1_300, tender.ExchangeRate);
+    Assert.Equal(26_000, tender.BaseAmount);
+
+    var invoice = await db.SalesInvoices.SingleAsync(item => item.Id == sale.SalesInvoiceId);
+    Assert.Equal(data.IqdCurrencyId, invoice.CurrencyId);
+    Assert.Equal(data.IqdCurrencyId, invoice.BaseCurrencyId);
+    Assert.Equal(1, invoice.ExchangeRate);
+    Assert.Equal(26_000, invoice.BaseTotal);
+
+    var ledger = await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceDocumentId == sale.Id);
+    Assert.Equal(data.UsdMoneyAccountId, ledger.MoneyAccountId);
+    Assert.Equal(data.UsdCurrencyId, ledger.CurrencyId);
+    Assert.Equal(data.IqdCurrencyId, ledger.BaseCurrencyId);
+    Assert.Equal(20, ledger.Amount);
+    Assert.Equal(1_300, ledger.ExchangeRate);
+    Assert.Equal(26_000, ledger.BaseAmount);
+  }
+
+  [Fact]
+  public async Task Missing_usd_rate_disables_usd_without_blocking_session_or_iqd_sale()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db, includeUsdRate: false);
+    var service = CreateService(db);
+
+    var setup = await service.GetSetupAsync(data.CashierId, default);
+    Assert.Equal(1, setup.MoneyAccounts.Single(account =>
+      account.CurrencyId == data.IqdCurrencyId).CurrentExchangeRate);
+    Assert.Null(setup.MoneyAccounts.Single(account =>
+      account.CurrencyId == data.UsdCurrencyId).CurrentExchangeRate);
+
+    var missingRate = await Assert.ThrowsAsync<BadRequestException>(() => service.CompleteSaleAsync(
+      Request(data, [ServiceLine(data)], [new(data.UsdMoneyAccountId, 20)]),
+      data.CashierId,
+      default));
+    Assert.Equal(ErrorCodes.Finance.ExchangeRateRequired, missingRate.Code);
+    Assert.Empty(await db.PosSales.ToListAsync());
+
+    var iqdSale = await service.CompleteSaleAsync(
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      data.CashierId,
+      default);
+    Assert.Equal(25_000, iqdSale.SettledBaseAmount);
   }
 
   [Fact]
@@ -365,7 +450,8 @@ public sealed partial class PosWorkflowTests
   private static async Task<TestData> SeedAsync(
     AppDbContext db,
     decimal stockQuantity = 10,
-    decimal iqdOpeningBalance = 0)
+    decimal iqdOpeningBalance = 0,
+    bool includeUsdRate = true)
   {
     var cashier = new UserEntity { Username = "cashier", PasswordHash = "x", Role = UserRole.Cashier };
     var viewer = new UserEntity { Username = "viewer", PasswordHash = "x", Role = UserRole.Cashier };
@@ -425,7 +511,7 @@ public sealed partial class PosWorkflowTests
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = cashier.Id, AccessLevel = MoneyAccountAccessLevel.Operate },
       new MoneyAccountAccessEntity { MoneyAccountId = iqdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View },
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View });
-    db.ExchangeRates.Add(new ExchangeRateEntity
+    if (includeUsdRate) db.ExchangeRates.Add(new ExchangeRateEntity
     {
       FromCurrencyId = usd.Id,
       ToCurrencyId = iqd.Id,
@@ -466,7 +552,7 @@ public sealed partial class PosWorkflowTests
     var sessions = CreateSessionService(db);
     var register = await sessions.CreateRegisterAsync(new("MAIN", "Main POS"), default);
     var session = await sessions.OpenSessionAsync(cashier.Id,
-      new(register.Id, [new(iqd.Id, 0), new(usd.Id, 0)], null), default);
+      new(register.Id, includeUsdRate ? [new(iqd.Id, 0), new(usd.Id, 0)] : [new(iqd.Id, 0)], null), default);
     var viewerRegister = await sessions.CreateRegisterAsync(new("VIEWER", "Viewer POS"), default);
     var viewerSession = await sessions.OpenSessionAsync(viewer.Id, new(viewerRegister.Id, [], null), default);
     var outsideRegister = await sessions.CreateRegisterAsync(new("OUTSIDE", "Outside POS"), default);

@@ -66,7 +66,7 @@ export function ExchangeRatesPage() {
 
   const query = useExchangeRates({ page: 1, pageSize: 200 })
   const actions = useExchangeRateActions()
-  const allRates = query.data?.data ?? []
+  const allRates = useMemo(() => query.data?.data ?? [], [query.data?.data])
 
   // Filter rates
   const filteredRates = useMemo(() => {
@@ -99,7 +99,10 @@ export function ExchangeRatesPage() {
     const foreignCurrencies = currencies.filter((c) => c.id !== baseCurrencyId)
     return foreignCurrencies.map((fc) => {
       const activeRate = allRates.find(
-        (r) => r.isActive && r.fromCurrencyId === fc.id && r.toCurrencyId === baseCurrencyId
+        (r) => r.isActive
+          && r.fromCurrencyId === fc.id
+          && r.toCurrencyId === baseCurrencyId
+          && new Date(r.effectiveAtUtc).getTime() <= Date.now()
       )
       return {
         currency: fc,
@@ -166,7 +169,7 @@ export function ExchangeRatesPage() {
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Effective-dated currency conversion rates. Posted Finance & Accounting documents preserve
+            Effective-dated currency conversion rates. Posted Finance &amp; Accounting documents preserve
             their historical transaction rates.
           </p>
         </div>
@@ -223,7 +226,7 @@ export function ExchangeRatesPage() {
                   {rate ? (
                     <div>
                       <p className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">
-                        {rate.rate.toLocaleString(undefined, {
+                        1 {currency.code} = {rate.rate.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 6,
                         })}{' '}
@@ -331,7 +334,6 @@ export function ExchangeRatesPage() {
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                 <TableHead className="w-48 px-4 py-3">Currency Pair</TableHead>
                 <TableHead className="px-4 py-3 text-right">Exchange Rate</TableHead>
-                <TableHead className="px-4 py-3 text-right">Inverse Rate</TableHead>
                 <TableHead className="w-48 px-4 py-3">Effective Date & Time</TableHead>
                 <TableHead className="w-36 px-4 py-3">Created By</TableHead>
                 <TableHead className="w-28 px-4 py-3">Status</TableHead>
@@ -341,20 +343,20 @@ export function ExchangeRatesPage() {
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {query.isPending ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center text-sm text-slate-500">
+                  <TableCell colSpan={admin ? 6 : 5} className="h-48 text-center text-sm text-slate-500">
                     <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
                     Loading exchange rates...
                   </TableCell>
                 </TableRow>
               ) : query.isError ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center text-sm text-rose-500">
+                  <TableCell colSpan={admin ? 6 : 5} className="h-48 text-center text-sm text-rose-500">
                     {query.error.message}
                   </TableCell>
                 </TableRow>
               ) : paginatedRates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center text-sm text-slate-500">
+                  <TableCell colSpan={admin ? 6 : 5} className="h-48 text-center text-sm text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <History className="size-8 text-slate-300 dark:text-slate-600" />
                       <p className="font-medium text-slate-700 dark:text-slate-300">
@@ -368,7 +370,6 @@ export function ExchangeRatesPage() {
                 </TableRow>
               ) : (
                 paginatedRates.map((rate) => {
-                  const inverseRate = rate.rate > 0 ? 1 / rate.rate : 0
                   return (
                     <TableRow
                       key={rate.id}
@@ -393,15 +394,6 @@ export function ExchangeRatesPage() {
                           maximumFractionDigits: 6,
                         })}{' '}
                         {rate.toCurrencyCode}
-                      </TableCell>
-
-                      <TableCell className="px-4 py-3.5 text-right font-mono text-xs text-slate-500 dark:text-slate-400">
-                        1 {rate.toCurrencyCode} ={' '}
-                        {inverseRate.toLocaleString(undefined, {
-                          minimumFractionDigits: 4,
-                          maximumFractionDigits: 6,
-                        })}{' '}
-                        {rate.fromCurrencyCode}
                       </TableCell>
 
                       <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
@@ -502,7 +494,8 @@ function AddRateDialog({
   const actions = useExchangeRateActions()
 
   const defaultFromCurrencyId = useMemo(() => {
-    const foreign = currencies.find((c) => c.id !== baseCurrencyId)
+    const foreign = currencies.find((c) => c.code === 'USD' && c.id !== baseCurrencyId)
+      ?? currencies.find((c) => c.id !== baseCurrencyId)
     return foreign?.id ?? ''
   }, [currencies, baseCurrencyId])
 
@@ -511,7 +504,7 @@ function AddRateDialog({
     defaultValues: {
       fromCurrencyId: defaultFromCurrencyId,
       toCurrencyId: baseCurrencyId,
-      rate: 1,
+      rate: 0,
       effectiveAtUtc: localNow(),
     },
   })
@@ -528,7 +521,7 @@ function AddRateDialog({
       form.reset({
         fromCurrencyId: defaultFromCurrencyId,
         toCurrencyId: baseCurrencyId,
-        rate: 1,
+        rate: 0,
         effectiveAtUtc: localNow(),
       })
     }
@@ -552,7 +545,6 @@ function AddRateDialog({
   })
 
   const numericRate = Number(rateValue) || 0
-  const inverseRate = numericRate > 0 ? 1 / numericRate : 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -560,7 +552,7 @@ function AddRateDialog({
         <DialogHeader>
           <DialogTitle>Add Exchange Rate</DialogTitle>
           <DialogDescription>
-            Configure an effective-dated conversion rate between a currency pair.
+            Enter how much of the target currency equals exactly one unit of the source currency.
           </DialogDescription>
         </DialogHeader>
 
@@ -596,14 +588,14 @@ function AddRateDialog({
           </div>
 
           <FormField
-            label={`Exchange Rate (1 ${fromCurrObj?.code ?? 'Unit'} in ${toCurrObj?.code ?? baseCurrencyCode})`}
+            label={`Rate · 1 ${fromCurrObj?.code ?? 'source unit'} = how many ${toCurrObj?.code ?? baseCurrencyCode}?`}
             error={form.formState.errors.rate?.message}
           >
             <Input
               type="number"
               min="0.000001"
               step="0.000001"
-              placeholder="e.g. 1320.00"
+              placeholder="Enter the business-approved rate"
               className="h-9 font-mono text-sm"
               {...form.register('rate', { valueAsNumber: true })}
             />
@@ -617,11 +609,14 @@ function AddRateDialog({
                 <p>
                   1 {fromCurrObj.code} = <strong>{numericRate.toLocaleString()}</strong> {toCurrObj.code}
                 </p>
-                <p className="text-[11px] text-slate-500">
-                  1 {toCurrObj.code} = {inverseRate.toFixed(6)} {fromCurrObj.code} (inverse)
-                </p>
               </div>
             </div>
+          )}
+
+          {fromCurrObj && toCurrObj && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
+              Enter {toCurrObj.code} per 1 {fromCurrObj.code}. For POS USD tender, use USD as From and {baseCurrencyCode} as To. Do not enter the inverse rate.
+            </p>
           )}
 
           <FormField
@@ -642,7 +637,7 @@ function AddRateDialog({
             <Button
               type="submit"
               disabled={actions.create.isPending}
-              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {actions.create.isPending && <Loader2 className="size-4 animate-spin" />}
               Save Exchange Rate

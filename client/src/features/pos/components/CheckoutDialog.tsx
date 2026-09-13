@@ -53,10 +53,14 @@ export function CheckoutDialog({
     () => setup.moneyAccounts.filter((account) => account.branchId === branchId),
     [branchId, setup.moneyAccounts]
   )
-  const baseAccount = accounts.find(
+  const availableAccounts = useMemo(
+    () => accounts.filter((account) => account.currentExchangeRate !== null),
+    [accounts]
+  )
+  const baseAccount = availableAccounts.find(
     (account) => account.currencyId === setup.baseCurrencyId && account.currentExchangeRate === 1
   )
-  const defaultAccount = baseAccount ?? accounts[0]
+  const defaultAccount = baseAccount ?? availableAccounts[0]
   const form = useForm<PosCheckoutValues>({
     resolver: zodResolver(posCheckoutSchema),
     defaultValues: {
@@ -108,12 +112,17 @@ export function CheckoutDialog({
   )
   const requiresCustomer = paymentMode !== PosPaymentMode.Paid
   const hasCustomer = Boolean(customerId)
+  const tendersHaveRates = (values.tenders ?? []).every((tender) =>
+    availableAccounts.some((account) => account.id === tender?.moneyAccountId)
+  )
   const ready = paymentMode === PosPaymentMode.Paid
-    ? accounts.length > 0
+    ? availableAccounts.length > 0
+      && tendersHaveRates
       && tenderedBase >= total
       && (changeDue === 0 || (Boolean(changeAccount) && changeBase === changeDue))
     : paymentMode === PosPaymentMode.Partial
-      ? hasCustomer && accounts.length > 0 && tenderedBase > 0 && tenderedBase < total
+      ? hasCustomer && availableAccounts.length > 0 && tendersHaveRates
+        && tenderedBase > 0 && tenderedBase < total
       : hasCustomer && tenderedBase === 0
 
   useEffect(() => {
@@ -164,8 +173,10 @@ export function CheckoutDialog({
       form.setError('root', {
         message: paymentMode === PosPaymentMode.Credit
           ? 'Credit checkout requires a selected customer and no payment now.'
-          : accounts.length === 0
-            ? 'No operable Money Account is available for this branch.'
+          : availableAccounts.length === 0
+            ? 'No operable Money Account with a valid exchange rate is available for this branch.'
+            : !tendersHaveRates
+              ? 'A selected Money Account is unavailable because its exchange rate is missing.'
             : paymentMode === PosPaymentMode.Partial
               ? tenderedBase <= 0
                 ? 'Enter how much the customer is paying now.'
@@ -266,8 +277,11 @@ export function CheckoutDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={accounts.length === 0}
-                  onClick={() => tenderFields.append({ moneyAccountId: baseAccount?.id ?? accounts[0]?.id ?? '', amount: 0 })}
+                  disabled={availableAccounts.length === 0}
+                  onClick={() => tenderFields.append({
+                    moneyAccountId: baseAccount?.id ?? availableAccounts[0]?.id ?? '',
+                    amount: 0,
+                  })}
                 >
                   <Plus className="size-4" />
                   Add tender
@@ -287,7 +301,7 @@ export function CheckoutDialog({
                         <option value="">Select account</option>
                         {accounts.map((item) => (
                           <option key={item.id} value={item.id} disabled={item.currentExchangeRate === null}>
-                            {item.code} — {item.name} · {item.currencyCode}{item.currentExchangeRate === null ? ' · rate missing' : ''}
+                            {item.code} — {item.name} · {item.currencyCode}{item.currentExchangeRate === null ? ' · Rate missing' : ''}
                           </option>
                         ))}
                       </Select>

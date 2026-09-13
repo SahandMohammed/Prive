@@ -162,7 +162,7 @@ export function PosReceiptPage() {
           </div>
           <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
             <div>
-              <h3 className="mb-2 font-semibold">Payment received</h3>
+              <h3 className="mb-2 font-semibold">Payments</h3>
               <div className="space-y-2">
                 {sale.tenders.length === 0 && (
                   <div className="rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
@@ -178,16 +178,20 @@ export function PosReceiptPage() {
                       <p className="font-medium">
                         {tender.moneyAccountCode} — {tender.moneyAccountName}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Rate snapshot: {tender.exchangeRate}
-                      </p>
+                      {tender.currencyId !== sale.baseCurrencyId && (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            Rate: 1 {tender.currencyCode} = {amount(tender.exchangeRate)} {sale.baseCurrencyCode}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Equivalent: {amount(tender.baseAmount)} {sale.baseCurrencyCode}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-mono font-semibold">
                         {amount(tender.tenderedAmount)} {tender.currencyCode}
-                      </p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {amount(tender.baseAmount)} {sale.baseCurrencyCode}
                       </p>
                     </div>
                   </div>
@@ -196,16 +200,20 @@ export function PosReceiptPage() {
                   <div className="flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50/50 px-3 py-2 text-sm dark:bg-amber-950/10">
                     <div>
                       <p className="font-medium">Change · {sale.change.moneyAccountCode}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Rate snapshot: {sale.change.exchangeRate}
-                      </p>
+                      {sale.change.currencyId !== sale.baseCurrencyId && (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            Rate: 1 {sale.change.currencyCode} = {amount(sale.change.exchangeRate)} {sale.baseCurrencyCode}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Equivalent: {amount(sale.change.baseAmount)} {sale.baseCurrencyCode}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-mono font-semibold">
                         −{amount(sale.change.amount)} {sale.change.currencyCode}
-                      </p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        −{amount(sale.change.baseAmount)} {sale.baseCurrencyCode}
                       </p>
                     </div>
                   </div>
@@ -225,7 +233,7 @@ export function PosReceiptPage() {
                 currency={sale.baseCurrencyCode}
               />
               <Total
-                label="Received now"
+                label="Total received"
                 value={sale.settledBaseAmount}
                 currency={sale.baseCurrencyCode}
               />
