@@ -169,14 +169,14 @@ export function JournalEntriesPage() {
               )}
               {!journalsQuery.isPending && !journalsQuery.isError && journals.map((journal) => {
                 const statusBadge = getStatusBadge(journal.status)
-                const sourceOwned = Boolean(journal.sourcePurchaseInvoiceId || journal.sourceSalesInvoiceId || journal.sourceMoneyTransferId || journal.sourceSupplierPaymentId || journal.sourceCustomerReceiptId || journal.sourcePosSaleId)
+                const sourceOwned = Boolean(journal.sourcePurchaseInvoiceId || journal.sourceSalesInvoiceId || journal.sourceMoneyTransferId || journal.sourceSupplierPaymentId || journal.sourceCustomerReceiptId || journal.sourcePosSaleId || journal.sourcePosRefundId)
                 return (
                   <TableRow key={journal.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
                     <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
                       {journal.entryDate}
                     </TableCell>
                     <TableCell className="px-4 py-3.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {journal.sourcePurchaseInvoiceId ? <Link className="text-primary" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.sourcePosSaleId ? <Link className="text-primary" to={`/pos/sales/${journal.sourcePosSaleId}`}>{journal.reference || 'POS Sale'}</Link> : journal.sourceSalesInvoiceId ? <Link className="text-primary" to={`/sales/invoices/${journal.sourceSalesInvoiceId}`}>{journal.reference || 'Sale'}</Link> : journal.sourceCustomerReceiptId ? <Link className="text-primary" to={`/finance/customer-receipts/${journal.sourceCustomerReceiptId}`}>{journal.reference || 'Receipt'}</Link> : journal.reference || '—'}
+                      {journal.sourcePurchaseInvoiceId ? <Link className="text-primary" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.sourcePosRefundId ? <Link className="text-primary" to={`/pos/refunds/${journal.sourcePosRefundId}`}>{journal.reference || 'POS Refund'}</Link> : journal.sourcePosSaleId ? <Link className="text-primary" to={`/pos/sales/${journal.sourcePosSaleId}`}>{journal.reference || 'POS Sale'}</Link> : journal.sourceSalesInvoiceId ? <Link className="text-primary" to={`/sales/invoices/${journal.sourceSalesInvoiceId}`}>{journal.reference || 'Sale'}</Link> : journal.sourceCustomerReceiptId ? <Link className="text-primary" to={`/finance/customer-receipts/${journal.sourceCustomerReceiptId}`}>{journal.reference || 'Receipt'}</Link> : journal.reference || '—'}
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
                       <div className="max-w-md truncate font-medium text-slate-800 dark:text-slate-200">

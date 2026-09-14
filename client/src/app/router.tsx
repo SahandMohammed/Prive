@@ -49,7 +49,7 @@ import {
   CurrenciesPage as BaseCurrenciesPage,
 } from '@/features/business'
 import { ContactsPage } from '@/features/contacts'
-import { PosPage, PosReceiptPage, PosSessionsPage, PosZReportPage } from '@/features/pos'
+import { PosPage, PosReceiptPage, PosRefundReceiptPage, PosSessionsPage, PosZReportPage } from '@/features/pos'
 import { ExpensesPage, ExpenseDetailPage, ExpenseCategoriesPage } from '@/features/expenses'
 
 export const router = createBrowserRouter([
@@ -75,6 +75,7 @@ export const router = createBrowserRouter([
           { path: '/pos/sessions', element: <PosSessionsPage /> },
           { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
           { path: '/pos/sales/:id', element: <PosReceiptPage /> },
+          { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
 
           // Finance
           { path: '/finance', element: <Navigate to="/finance/money-accounts" replace /> },

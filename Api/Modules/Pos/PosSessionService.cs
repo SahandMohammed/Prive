@@ -297,7 +297,12 @@ public sealed class PosSessionService
       SaleCount = x.SaleCount,
       ServiceSalesBase = x.ServiceSalesBase,
       ProductSalesBase = x.ProductSalesBase,
-      GrossSalesBase = x.GrossSalesBase
+      GrossSalesBase = x.GrossSalesBase,
+      RefundCount = x.RefundCount,
+      ServiceRefundsBase = x.ServiceRefundsBase,
+      ProductRefundsBase = x.ProductRefundsBase,
+      RefundTotalBase = x.RefundTotalBase,
+      NetSalesBase = x.NetSalesBase
     };
 
     foreach (var payment in x.Payments)
@@ -312,9 +317,11 @@ public sealed class PosSessionService
         CurrencyCode = payment.CurrencyCode,
         TenderedAmount = payment.TenderedAmount,
         ChangeAmount = payment.ChangeAmount,
+        RefundAmount = payment.RefundAmount,
         NetAmount = payment.NetAmount,
         TenderedBaseAmount = payment.TenderedBaseAmount,
         ChangeBaseAmount = payment.ChangeBaseAmount,
+        RefundBaseAmount = payment.RefundBaseAmount,
         NetBaseAmount = payment.NetBaseAmount
       });
     }
@@ -329,6 +336,7 @@ public sealed class PosSessionService
         OpeningAmount = drawer.OpeningAmount,
         TenderedAmount = drawer.TenderedAmount,
         ChangeAmount = drawer.ChangeAmount,
+        RefundAmount = drawer.RefundAmount,
         ExpectedAmount = drawer.ExpectedAmount,
         CountedAmount = close.CountedAmount,
         VarianceAmount = close.VarianceAmount,
@@ -336,6 +344,7 @@ public sealed class PosSessionService
         OpeningBaseAmount = drawer.OpeningBaseAmount,
         TenderedBaseAmount = drawer.TenderedBaseAmount,
         ChangeBaseAmount = drawer.ChangeBaseAmount,
+        RefundBaseAmount = drawer.RefundBaseAmount,
         ExpectedBaseAmount = drawer.ExpectedBaseAmount,
         CountedBaseAmount = close.CountedBaseAmount,
         VarianceBaseAmount = close.VarianceBaseAmount
@@ -378,6 +387,7 @@ public sealed class PosSessionService
         report.RegisterId, report.RegisterCode, report.RegisterName,
         report.CashierUserId, report.CashierUsername, report.OpenedAtUtc, report.ClosedAtUtc,
         report.SaleCount, report.GrossSalesBase,
+        report.RefundCount, report.RefundTotalBase, report.NetSalesBase ?? report.GrossSalesBase,
         report.DrawerSummaries.Sum(drawer => (decimal?)drawer.VarianceBaseAmount) ?? 0m,
         report.BaseCurrencyCode))
       .ToPagedResultAsync(request, ct);
@@ -396,7 +406,7 @@ public sealed class PosSessionService
     return ToZReportResponse(report);
   }
 
-  internal async Task<PosSessionEntity> RequireOpenSessionForCheckoutAsync(
+  internal async Task<PosSessionEntity> RequireOpenSessionAsync(
     Guid userId,
     Guid sessionId,
     Guid branchId,
@@ -435,29 +445,41 @@ public sealed class PosSessionService
   private PosXReportResponse BuildXReport(PosSessionEntity session, Guid baseCurrencyId, string baseCurrencyCode)
   {
     var sales = session.Sales.Where(sale => sale.Status == PosSaleStatus.Completed).ToList();
+    var refunds = session.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).ToList();
     var serviceSales = Money(sales.SelectMany(sale => sale.SalesInvoice.Lines)
       .Where(line => line.LineType == SalesLineType.Service).Sum(line => line.BaseLineAmount));
     var productSales = Money(sales.SelectMany(sale => sale.SalesInvoice.Lines)
       .Where(line => line.LineType == SalesLineType.Product).Sum(line => line.BaseLineAmount));
     var gross = Money(sales.Sum(sale => sale.SalesInvoice.BaseTotal));
+    var serviceRefunds = Money(refunds.SelectMany(refund => refund.Lines)
+      .Where(line => line.LineType == SalesLineType.Service).Sum(line => line.RefundAmountBase));
+    var productRefunds = Money(refunds.SelectMany(refund => refund.Lines)
+      .Where(line => line.LineType == SalesLineType.Product).Sum(line => line.RefundAmountBase));
+    var refundTotal = Money(refunds.Sum(refund => refund.TotalRefundBase));
 
     var paymentKeys = sales.SelectMany(sale => sale.Tenders).Select(tender => tender.MoneyAccountId)
       .Concat(sales.Where(sale => sale.Change is not null).Select(sale => sale.Change!.MoneyAccountId))
+      .Concat(refunds.SelectMany(refund => refund.Tenders).Select(tender => tender.MoneyAccountId))
       .Distinct().ToList();
     var payments = new List<PosPaymentSummaryResponse>();
     foreach (var accountId in paymentKeys)
     {
       var tenderRows = sales.SelectMany(sale => sale.Tenders).Where(tender => tender.MoneyAccountId == accountId).ToList();
       var changeRows = sales.Where(sale => sale.Change?.MoneyAccountId == accountId).Select(sale => sale.Change!).ToList();
+      var refundRows = refunds.SelectMany(refund => refund.Tenders).Where(tender => tender.MoneyAccountId == accountId).ToList();
       var account = tenderRows.Select(tender => tender.MoneyAccount).FirstOrDefault()
-        ?? changeRows.Select(change => change.MoneyAccount).First();
+        ?? changeRows.Select(change => change.MoneyAccount).FirstOrDefault()
+        ?? refundRows.Select(tender => tender.MoneyAccount).First();
       var tendered = Money(tenderRows.Sum(tender => tender.TenderedAmount));
       var changed = Money(changeRows.Sum(change => change.Amount));
+      var refunded = Money(refundRows.Sum(tender => tender.Amount));
       var tenderedBase = Money(tenderRows.Sum(tender => tender.BaseAmount));
       var changedBase = Money(changeRows.Sum(change => change.BaseAmount));
+      var refundedBase = Money(refundRows.Sum(tender => tender.BaseAmount));
       payments.Add(new PosPaymentSummaryResponse(
         account.Id, account.Code, account.Name, account.Type, account.CurrencyId, account.Currency.Code,
-        tendered, changed, Money(tendered - changed), tenderedBase, changedBase, Money(tenderedBase - changedBase)));
+        tendered, changed, refunded, Money(tendered - changed - refunded),
+        tenderedBase, changedBase, refundedBase, Money(tenderedBase - changedBase - refundedBase)));
     }
     payments = payments.OrderBy(payment => payment.CurrencyCode).ThenBy(payment => payment.MoneyAccountCode).ToList();
 
@@ -474,17 +496,21 @@ public sealed class PosSessionService
       var openingAmount = opening?.Amount ?? 0m;
       var tenderedAmount = Money(cashPayments.Sum(payment => payment.TenderedAmount));
       var changeAmount = Money(cashPayments.Sum(payment => payment.ChangeAmount));
+      var refundAmount = Money(cashPayments.Sum(payment => payment.RefundAmount));
       var openingBase = opening?.BaseAmount ?? 0m;
       var tenderedBase = Money(cashPayments.Sum(payment => payment.TenderedBaseAmount));
       var changeBase = Money(cashPayments.Sum(payment => payment.ChangeBaseAmount));
+      var refundBase = Money(cashPayments.Sum(payment => payment.RefundBaseAmount));
       drawers.Add(new PosDrawerSummaryResponse(
         currency.CurrencyId, currency.Code, openingAmount, tenderedAmount, changeAmount,
-        Money(openingAmount + tenderedAmount - changeAmount), null, null,
-        openingBase, tenderedBase, changeBase, Money(openingBase + tenderedBase - changeBase), null, null));
+        refundAmount, Money(openingAmount + tenderedAmount - changeAmount - refundAmount), null, null,
+        openingBase, tenderedBase, changeBase, refundBase,
+        Money(openingBase + tenderedBase - changeBase - refundBase), null, null));
     }
 
     return new PosXReportResponse(
       ToSessionResponse(session), DateTimeOffset.UtcNow, sales.Count, serviceSales, productSales, gross,
+      refunds.Count, serviceRefunds, productRefunds, refundTotal, Money(gross - refundTotal),
       baseCurrencyId, baseCurrencyCode, payments, drawers);
   }
 
@@ -499,6 +525,8 @@ public sealed class PosSessionService
     .Include(session => session.Sales).ThenInclude(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
     .Include(session => session.Sales).ThenInclude(sale => sale.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(session => session.Sales).ThenInclude(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(session => session.Refunds).ThenInclude(refund => refund.Lines)
+    .Include(session => session.Refunds).ThenInclude(refund => refund.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(session => session.ClosingCounts).ThenInclude(count => count.Currency);
 
   private static PosSessionResponse ToSessionResponse(PosSessionEntity session) => new(
@@ -517,17 +545,21 @@ public sealed class PosSessionService
     report.CashierUserId, report.CashierUsername, report.ClosedByUserId, report.ClosedByUsername,
     report.OpenedAtUtc, report.ClosedAtUtc, report.GeneratedAtUtc,
     report.SaleCount, report.ServiceSalesBase, report.ProductSalesBase, report.GrossSalesBase,
+    report.RefundCount, report.ServiceRefundsBase, report.ProductRefundsBase,
+    report.RefundTotalBase, report.NetSalesBase ?? report.GrossSalesBase,
     report.BaseCurrencyId, report.BaseCurrencyCode,
     report.PaymentSummaries.OrderBy(summary => summary.CurrencyCode).ThenBy(summary => summary.MoneyAccountCode)
       .Select(summary => new PosPaymentSummaryResponse(
         summary.MoneyAccountId, summary.MoneyAccountCode, summary.MoneyAccountName, summary.MoneyAccountType,
-        summary.CurrencyId, summary.CurrencyCode, summary.TenderedAmount, summary.ChangeAmount, summary.NetAmount,
-        summary.TenderedBaseAmount, summary.ChangeBaseAmount, summary.NetBaseAmount)).ToList(),
+        summary.CurrencyId, summary.CurrencyCode, summary.TenderedAmount, summary.ChangeAmount,
+        summary.RefundAmount, summary.NetAmount,
+        summary.TenderedBaseAmount, summary.ChangeBaseAmount, summary.RefundBaseAmount,
+        summary.NetBaseAmount)).ToList(),
     report.DrawerSummaries.OrderBy(summary => summary.CurrencyCode)
       .Select(summary => new PosDrawerSummaryResponse(
         summary.CurrencyId, summary.CurrencyCode, summary.OpeningAmount, summary.TenderedAmount,
-        summary.ChangeAmount, summary.ExpectedAmount, summary.CountedAmount, summary.VarianceAmount,
-        summary.OpeningBaseAmount, summary.TenderedBaseAmount, summary.ChangeBaseAmount,
+        summary.ChangeAmount, summary.RefundAmount, summary.ExpectedAmount, summary.CountedAmount, summary.VarianceAmount,
+        summary.OpeningBaseAmount, summary.TenderedBaseAmount, summary.ChangeBaseAmount, summary.RefundBaseAmount,
         summary.ExpectedBaseAmount, summary.CountedBaseAmount, summary.VarianceBaseAmount)).ToList());
 
   private async Task<List<Guid>> GetOperableCashboxCurrenciesAsync(Guid userId, CancellationToken ct)

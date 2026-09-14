@@ -6,19 +6,26 @@ import { CheckoutDialog } from './CheckoutDialog'
 import { OpenSessionScreen } from './OpenSessionScreen'
 import { PosReceiptPage } from '../pages/PosReceiptPage'
 import { PosCatalogItemType, PosPaymentMode, PosSaleStatus } from '../types/pos.types'
-import type { PosCartLine, PosSale, PosSetup } from '../types/pos.types'
+import type { PosCartLine, PosSale, PosSession, PosSetup } from '../types/pos.types'
 
 const hooks = vi.hoisted(() => ({
   complete: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null },
   open: { mutate: vi.fn(), isPending: false, error: null },
   saleQuery: { data: undefined as PosSale | undefined, isPending: false, isError: false, error: null },
+  activeSession: undefined as PosSession | null | undefined,
+  setup: undefined as PosSetup | undefined,
+  role: 'Cashier',
 }))
 
 vi.mock('../hooks/usePos', () => ({
   useCompletePosSale: () => hooks.complete,
   useOpenPosSession: () => hooks.open,
   usePosSale: () => hooks.saleQuery,
+  useActivePosSession: () => ({ data: hooks.activeSession }),
+  usePosSetup: () => ({ data: hooks.setup }),
 }))
+
+vi.mock('@/features/auth', () => ({ useCurrentUser: () => ({ data: { role: hooks.role } }) }))
 
 const ids = {
   branch: '11111111-1111-4111-8111-111111111111',
@@ -88,6 +95,9 @@ const cart: PosCartLine[] = [{
 beforeEach(() => {
   vi.clearAllMocks()
   hooks.saleQuery.data = undefined
+  hooks.activeSession = null
+  hooks.setup = setup
+  hooks.role = 'Cashier'
 })
 afterEach(cleanup)
 
@@ -157,7 +167,50 @@ describe('POS receipt currency snapshots', () => {
     expect(screen.getByText('Equivalent: 13,000 IQD')).toBeInTheDocument()
     expect(screen.getByText('Total received')).toBeInTheDocument()
   })
+
+  it('lets cashiers view refund status without showing posting actions', () => {
+    hooks.saleQuery.data = receiptSale()
+    render(<MemoryRouter initialEntries={['/pos/sales/sale-1']}><Routes><Route path="/pos/sales/:id" element={<PosReceiptPage />} /></Routes></MemoryRouter>)
+    expect(screen.getByText('Not refunded')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Refund' })).not.toBeInTheDocument()
+    expect(screen.getByText(/requires a Manager, Owner, or SuperAdmin/)).toBeInTheDocument()
+  })
+
+  it('requires an open session before management refund buttons are enabled', () => {
+    hooks.role = 'Manager'
+    hooks.saleQuery.data = receiptSale()
+    const { rerender } = render(<MemoryRouter initialEntries={['/pos/sales/sale-1']}><Routes><Route path="/pos/sales/:id" element={<PosReceiptPage />} /></Routes></MemoryRouter>)
+    expect(screen.queryByRole('button', { name: 'Refund' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Open a POS session/)).toBeInTheDocument()
+
+    hooks.activeSession = activeSession()
+    rerender(<MemoryRouter initialEntries={['/pos/sales/sale-1']}><Routes><Route path="/pos/sales/:id" element={<PosReceiptPage />} /></Routes></MemoryRouter>)
+    expect(screen.getByRole('button', { name: 'Refund' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Void remaining' })).toBeInTheDocument()
+  })
+
+  it('does not offer another refund after the sale is fully reversed', () => {
+    hooks.role = 'Owner'
+    hooks.activeSession = activeSession()
+    hooks.saleQuery.data = {
+      ...receiptSale(), refundedBaseAmount: 25_000, remainingRefundableBaseAmount: 0,
+      netSaleBaseAmount: 0, refundStatus: 2,
+    }
+    render(<MemoryRouter initialEntries={['/pos/sales/sale-1']}><Routes><Route path="/pos/sales/:id" element={<PosReceiptPage />} /></Routes></MemoryRouter>)
+    expect(screen.getByText('Fully refunded')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Refund' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Void remaining' })).not.toBeInTheDocument()
+  })
 })
+
+function activeSession(): PosSession {
+  return {
+    id: 'session-1', sessionNumber: 'SES-1', branchId: ids.branch, branchCode: 'MAIN', branchName: 'Main',
+    registerId: ids.register, registerCode: 'MAIN', registerName: 'Main POS', cashierUserId: 'manager-1',
+    cashierUsername: 'manager', status: 0, openedAtUtc: '2026-09-13T12:00:00Z', closedAtUtc: null,
+    closedByUserId: null, closedByUsername: null, openingNotes: null, closingNotes: null, openingCounts: [],
+  }
+}
 
 function receiptSale(): PosSale {
   return {
@@ -182,6 +235,10 @@ function receiptSale(): PosSale {
     changeBaseAmount: 0,
     settledBaseAmount: 25_000,
     outstandingBaseAmount: 0,
+    refundedBaseAmount: 0,
+    remainingRefundableBaseAmount: 25_000,
+    netSaleBaseAmount: 25_000,
+    refundStatus: 0,
     paymentMode: PosPaymentMode.Paid,
     cashierUserId: 'cashier-1',
     cashierUsername: 'cashier',
@@ -218,5 +275,6 @@ function receiptSale(): PosSale {
       },
     ],
     change: null,
+    refunds: [],
   }
 }

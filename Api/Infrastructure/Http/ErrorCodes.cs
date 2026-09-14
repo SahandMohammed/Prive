@@ -241,6 +241,18 @@ public static class ErrorCodes
     public const string OpeningCountInvalid = "POS_OPENING_COUNT_INVALID";
     public const string ClosingCountInvalid = "POS_CLOSING_COUNT_INVALID";
     public const string ZReportNotFound = "POS_Z_REPORT_NOT_FOUND";
+    public const string RefundNotFound = "POS_REFUND_NOT_FOUND";
+    public const string RefundNothingAvailable = "POS_REFUND_NOTHING_AVAILABLE";
+    public const string RefundQuantityExceeded = "POS_REFUND_QUANTITY_EXCEEDED";
+    public const string RefundTenderMismatch = "POS_REFUND_TENDER_MISMATCH";
+    public const string RefundMoneyAccountInvalid = "POS_REFUND_MONEY_ACCOUNT_INVALID";
+    public const string RefundInsufficientBalance = "POS_REFUND_INSUFFICIENT_BALANCE";
+    public const string RefundSessionRequired = "POS_REFUND_SESSION_REQUIRED";
+    public const string RefundConcurrencyConflict = "POS_REFUND_CONCURRENCY_CONFLICT";
+    public const string RefundReasonInvalid = "POS_REFUND_REASON_INVALID";
+    public const string RefundNotesRequired = "POS_REFUND_NOTES_REQUIRED";
+    public const string RefundAccountMappingInvalid = "POS_REFUND_ACCOUNT_MAPPING_INVALID";
+    public const string RefundLinesInvalid = "POS_REFUND_LINES_INVALID";
   }
 
   public static class Expenses

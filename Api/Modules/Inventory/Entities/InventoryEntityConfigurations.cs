@@ -138,5 +138,6 @@ public sealed class StockMovementEntityConfiguration : IEntityTypeConfiguration<
     b.HasOne(x => x.PurchaseInvoiceLine).WithMany(x => x.Movements).HasForeignKey(x => x.PurchaseInvoiceLineId).OnDelete(DeleteBehavior.Restrict);
     b.HasOne(x => x.SalesInvoice).WithMany(x => x.Movements).HasForeignKey(x => x.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
     b.HasOne(x => x.SalesInvoiceLine).WithMany(x => x.Movements).HasForeignKey(x => x.SalesInvoiceLineId).OnDelete(DeleteBehavior.Restrict);
+    b.HasOne(x => x.PosRefundLine).WithMany(x => x.StockMovements).HasForeignKey(x => x.PosRefundLineId).OnDelete(DeleteBehavior.Restrict);
   }
 }

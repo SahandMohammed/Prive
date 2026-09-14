@@ -254,6 +254,16 @@ public sealed class PosService
         sale.SalesInvoice.CustomerId,
         sale.SalesInvoice.Customer == null ? null : sale.SalesInvoice.Customer.Name,
         sale.SalesInvoice.Total,
+        sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+          .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m,
+        sale.SalesInvoice.BaseTotal - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+          .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m),
+        !sale.Refunds.Any(refund => refund.Status == PosRefundStatus.Posted)
+          ? PosRefundState.NotRefunded
+          : (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+              .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) >= sale.SalesInvoice.BaseTotal
+            ? PosRefundState.FullyRefunded
+            : PosRefundState.PartiallyRefunded,
         sale.SalesInvoice.BaseCurrency.Code,
         sale.CashierUser.Username))
       .ToPagedResultAsync(request, ct);
@@ -292,7 +302,7 @@ public sealed class PosService
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
 
-    var session = await _sessions.RequireOpenSessionForCheckoutAsync(
+    var session = await _sessions.RequireOpenSessionAsync(
       userId, request.PosSessionId, request.BranchId, ct);
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
@@ -539,7 +549,8 @@ public sealed class PosService
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.ProfessionalUser)
     .Include(sale => sale.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency);
+    .Include(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(sale => sale.Refunds).ThenInclude(refund => refund.ApprovedByUser);
 
   private static PosSaleResponse ToResponse(PosSaleEntity sale)
   {
@@ -573,7 +584,17 @@ public sealed class PosService
     var receiptBase = Money(invoice.ReceiptAllocations
       .Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
       .Sum(allocation => allocation.BaseAmount));
-    var outstandingBase = Math.Max(Money(invoice.BaseTotal - settledBase - receiptBase), 0);
+    var postedRefunds = sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+      .OrderBy(refund => refund.PostedAtUtc).ToList();
+    var refundedBase = Money(postedRefunds.Sum(refund => refund.TotalRefundBase));
+    var receivableReversalBase = Money(postedRefunds.Sum(refund => refund.ReceivableReversalBase));
+    var outstandingBase = Math.Max(Money(invoice.BaseTotal - settledBase - receiptBase - receivableReversalBase), 0);
+    var remainingRefundableBase = Math.Max(Money(invoice.BaseTotal - refundedBase), 0);
+    var refundStatus = refundedBase <= 0
+      ? PosRefundState.NotRefunded
+      : remainingRefundableBase <= 0
+        ? PosRefundState.FullyRefunded
+        : PosRefundState.PartiallyRefunded;
     var paymentMode = settledBase <= 0
       ? PosPaymentMode.Credit
       : settledBase < invoice.BaseTotal
@@ -602,6 +623,10 @@ public sealed class PosService
       changeBase,
       settledBase,
       outstandingBase,
+      refundedBase,
+      remainingRefundableBase,
+      Money(invoice.BaseTotal - refundedBase),
+      refundStatus,
       paymentMode,
       sale.CashierUserId,
       sale.CashierUser.Username,
@@ -628,7 +653,11 @@ public sealed class PosService
         line.BaseUnitPrice,
         line.LineAmount)).ToList(),
       tenders,
-      change);
+      change,
+      postedRefunds.Select(refund => new PosRefundSummaryResponse(
+        refund.Id, refund.DocumentNumber, refund.IsVoid, refund.Reason,
+        refund.TotalRefundBase, refund.ReceivableReversalBase, refund.CashRefundBase,
+        refund.PostedAtUtc, refund.ApprovedByUser.Username)).ToList());
   }
 
   private static void ValidateRequestShape(CompletePosSaleRequest request)

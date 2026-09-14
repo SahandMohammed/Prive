@@ -66,6 +66,8 @@ export interface JournalEntry {
   sourceSupplierPaymentId: string | null
   sourceCustomerReceiptId: string | null
   sourcePosSaleId: string | null
+  sourceExpenseDocumentId: string | null
+  sourcePosRefundId: string | null
   totalDebitBaseAmount: number
   totalCreditBaseAmount: number
   lines: JournalLine[]

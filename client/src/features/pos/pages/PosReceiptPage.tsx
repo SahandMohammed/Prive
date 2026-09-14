@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
+  Ban,
   BookOpen,
   Landmark,
   PackageSearch,
   Printer,
   ReceiptText,
   ShoppingCart,
+  Undo2,
 } from 'lucide-react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -20,13 +22,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SalesLineType } from '@/features/sales'
-import { usePosSale } from '../hooks/usePos'
-import { PosPaymentMode } from '../types/pos.types'
+import { useCurrentUser } from '@/features/auth'
+import { RefundDialog } from '../components/RefundDialog'
+import { useActivePosSession, usePosSale, usePosSetup } from '../hooks/usePos'
+import { PosPaymentMode, PosRefundState } from '../types/pos.types'
 
 export function PosReceiptPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [refundMode, setRefundMode] = useState<'refund' | 'void' | null>(null)
   const query = usePosSale(id)
+  const currentUser = useCurrentUser().data
+  const activeSession = useActivePosSession().data
+  const setup = usePosSetup().data
   const sale = query.data
 
   useEffect(() => {
@@ -45,6 +54,11 @@ export function PosReceiptPage() {
     )
 
   const hasMoneyMovement = sale.tenders.length > 0 || sale.change !== null
+  const canRefund = Boolean(currentUser && ['SuperAdmin', 'Owner', 'Manager'].includes(currentUser.role))
+  const refundAvailable = sale.remainingRefundableBaseAmount > 0
+  const refundState = sale.refundStatus === PosRefundState.FullyRefunded
+    ? 'Fully refunded'
+    : sale.refundStatus === PosRefundState.PartiallyRefunded ? 'Partially refunded' : 'Not refunded'
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
@@ -66,6 +80,12 @@ export function PosReceiptPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canRefund && refundAvailable && activeSession && setup && (
+            <>
+              <Button variant="outline" onClick={() => setRefundMode('refund')}><Undo2 /> Refund</Button>
+              <Button variant="destructive" onClick={() => setRefundMode('void')}><Ban /> Void remaining</Button>
+            </>
+          )}
           <Button variant="outline" onClick={() => window.print()}>
             <Printer />
             Print view
@@ -96,7 +116,7 @@ export function PosReceiptPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
-          <div className="grid gap-3 text-sm sm:grid-cols-4">
+          <div className="grid gap-3 text-sm sm:grid-cols-5">
             <Info label="Customer" value={sale.customerName ?? 'Walk-in'} />
             <Info label="Branch" value={`${sale.branchCode} — ${sale.branchName}`} />
             <Info
@@ -115,6 +135,7 @@ export function PosReceiptPage() {
                   ? 'Partial'
                   : 'Credit'}
             />
+            <Info label="Refund status" value={refundState} />
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <Table>
@@ -238,6 +259,11 @@ export function PosReceiptPage() {
                 currency={sale.baseCurrencyCode}
               />
               <div className="border-t pt-2">
+                <Total label="Original sale" value={sale.total} currency={sale.baseCurrencyCode} />
+                <Total label="Refunded" value={sale.refundedBaseAmount} currency={sale.baseCurrencyCode} />
+                <Total label="Net sale" value={sale.netSaleBaseAmount} currency={sale.baseCurrencyCode} strong />
+              </div>
+              <div className="border-t pt-2">
                 <Total
                   label={sale.outstandingBaseAmount > 0 ? 'Customer owes' : 'Outstanding'}
                   value={sale.outstandingBaseAmount}
@@ -247,8 +273,41 @@ export function PosReceiptPage() {
               </div>
             </div>
           </div>
+
+          {sale.refunds.length > 0 && (
+            <section>
+              <h3 className="mb-2 font-semibold">Refunds and reversals</h3>
+              <div className="space-y-2">
+                {sale.refunds.map((refund) => (
+                  <Link key={refund.id} to={`/pos/refunds/${refund.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50">
+                    <div><p className="font-mono font-semibold text-primary">{refund.documentNumber}</p><p className="text-xs text-muted-foreground">{refund.isVoid ? 'Void reversal' : 'Refund'} · {new Date(refund.postedAtUtc).toLocaleString()} · approved by {refund.approvedByUsername}</p></div>
+                    <span className="font-mono font-semibold">−{amount(refund.totalRefundBase)} {sale.baseCurrencyCode}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </CardContent>
       </Card>
+
+      {!canRefund && refundAvailable && (
+        <p className="print:hidden text-sm text-muted-foreground">Refund details are visible to you. Posting a refund or void requires a Manager, Owner, or SuperAdmin.</p>
+      )}
+      {canRefund && refundAvailable && !activeSession && (
+        <p className="print:hidden rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">Open a POS session before posting a refund or void.</p>
+      )}
+
+      {refundMode && activeSession && setup && (
+        <RefundDialog
+          saleId={sale.id}
+          session={activeSession}
+          setup={setup}
+          mode={refundMode}
+          open
+          onOpenChange={(open) => { if (!open) setRefundMode(null) }}
+          onCompleted={(refund) => navigate(`/pos/refunds/${refund.id}`)}
+        />
+      )}
 
       <Card className="print:hidden">
         <CardHeader>

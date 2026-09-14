@@ -4,7 +4,15 @@ export const MoneyAccountAccessLevel = { View: 0, Operate: 1 } as const
 export type MoneyAccountAccessLevel = typeof MoneyAccountAccessLevel[keyof typeof MoneyAccountAccessLevel]
 export const FinanceDocumentStatus = { Draft: 0, Posted: 1 } as const
 export type FinanceDocumentStatus = typeof FinanceDocumentStatus[keyof typeof FinanceDocumentStatus]
-export const MoneyLedgerSourceType = { OpeningBalance: 0, MoneyTransfer: 1, SupplierPayment: 2, CustomerReceipt: 3, PosSale: 4 } as const
+export const MoneyLedgerSourceType = {
+  OpeningBalance: 0,
+  MoneyTransfer: 1,
+  SupplierPayment: 2,
+  CustomerReceipt: 3,
+  PosSale: 4,
+  Expense: 5,
+  PosRefund: 6,
+} as const
 export type MoneyLedgerSourceType = typeof MoneyLedgerSourceType[keyof typeof MoneyLedgerSourceType]
 
 export interface PageFilters { page: number; pageSize: number; [key: string]: string | number | boolean | undefined }

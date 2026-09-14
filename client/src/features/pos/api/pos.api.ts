@@ -2,12 +2,16 @@ import { apiClient } from '@/lib/apiClient'
 import type {
   ClosePosSessionInput,
   CompletePosSaleInput,
+  CreatePosRefundInput,
   OpenPosSessionInput,
   PosCatalogFilters,
   PosCatalogItem,
   PosCustomer,
   PosCustomerFilters,
   PosRegister,
+  PosRefund,
+  PosRefundability,
+  PosRefundSummary,
   PosSale,
   PosSession,
   PosSessionFilters,
@@ -17,6 +21,7 @@ import type {
   PosZReportFilters,
   PosZReportSummary,
   PosSetup,
+  VoidPosSaleInput,
 } from '../types/pos.types'
 
 function queryString(values: object) {
@@ -35,6 +40,15 @@ export const posApi = {
     apiClient.getPaginated<PosCustomer>(`/pos/customers?${queryString(filters)}`),
   sale: (id: string) => apiClient.get<PosSale>(`/pos/sales/${id}`),
   complete: (body: CompletePosSaleInput) => apiClient.post<PosSale>('/pos/sales', body),
+  refundability: (saleId: string) =>
+    apiClient.get<PosRefundability>(`/pos/sales/${saleId}/refundability`),
+  saleRefunds: (saleId: string) =>
+    apiClient.getPaginated<PosRefundSummary>(`/pos/sales/${saleId}/refunds?page=1&pageSize=100`),
+  refund: (id: string) => apiClient.get<PosRefund>(`/pos/refunds/${id}`),
+  postRefund: (saleId: string, body: CreatePosRefundInput) =>
+    apiClient.post<PosRefund>(`/pos/sales/${saleId}/refunds`, body),
+  voidSale: (saleId: string, body: VoidPosSaleInput) =>
+    apiClient.post<PosRefund>(`/pos/sales/${saleId}/void`, body),
 
   registers: async (includeInactive = false): Promise<PosRegister[]> => {
     const registers: PosRegister[] = []

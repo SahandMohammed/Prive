@@ -3,6 +3,7 @@ using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Business;
 using Api.Modules.Purchase;
+using Api.Modules.Pos;
 using Api.Modules.Sales;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
@@ -877,7 +878,10 @@ public sealed class FinanceService
         PosSettledBase = invoice.PosSale == null
           ? 0m
           : (invoice.PosSale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
-            - (invoice.PosSale.Change == null ? 0m : invoice.PosSale.Change.BaseAmount)
+            - (invoice.PosSale.Change == null ? 0m : invoice.PosSale.Change.BaseAmount),
+        RefundReceivableBase = _db.PosRefunds.Where(refund => refund.SalesInvoiceId == invoice.Id
+          && refund.Status == PosRefundStatus.Posted)
+          .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m
       })
       .ToListAsync(ct);
 
@@ -885,7 +889,8 @@ public sealed class FinanceService
     {
       var posReceived = row.ExchangeRate > 0 ? Money(row.PosSettledBase / row.ExchangeRate) : 0m;
       var received = Money(row.ReceiptAmount + posReceived);
-      var outstanding = Math.Max(Money(row.Total - received), 0);
+      var refundReduction = row.ExchangeRate > 0 ? Money(row.RefundReceivableBase / row.ExchangeRate) : 0m;
+      var outstanding = Math.Max(Money(row.Total - received - refundReduction), 0);
       return new OutstandingSalesInvoiceResponse(
         row.Id, row.DocumentNumber, row.InvoiceDate, row.CustomerId, row.CustomerName,
         row.CurrencyId, row.CurrencyCode, row.ExchangeRate, row.Total, received, outstanding);
@@ -1035,6 +1040,16 @@ public sealed class FinanceService
           - (sale.Change == null ? 0m : sale.Change.BaseAmount)
       })
       .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.BaseAmount, ct);
+    var refundReductions = await _db.PosRefunds.AsNoTracking()
+      .Where(refund => invoiceIds.Contains(refund.SalesInvoiceId)
+        && refund.Status == PosRefundStatus.Posted)
+      .GroupBy(refund => refund.SalesInvoiceId)
+      .Select(group => new
+      {
+        SalesInvoiceId = group.Key,
+        BaseAmount = group.Sum(refund => refund.ReceivableReversalBase)
+      })
+      .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.BaseAmount, ct);
 
     foreach (var allocation in request.Allocations)
     {
@@ -1043,7 +1058,10 @@ public sealed class FinanceService
         ? Money(posSettlements.GetValueOrDefault(allocation.SalesInvoiceId) / invoice.ExchangeRate)
         : 0m;
       var received = Money(postedAllocations.GetValueOrDefault(allocation.SalesInvoiceId) + posReceived);
-      var outstanding = Math.Max(Money(invoice.Total - received), 0);
+      var refundReduction = invoice.ExchangeRate > 0
+        ? Money(refundReductions.GetValueOrDefault(allocation.SalesInvoiceId) / invoice.ExchangeRate)
+        : 0m;
+      var outstanding = Math.Max(Money(invoice.Total - received - refundReduction), 0);
       if (allocation.Amount > outstanding)
         throw new BadRequestException(ErrorCodes.Finance.ReceiptAllocationExceedsOutstanding,
           $"Allocation for Sales Invoice '{invoice.DocumentNumber}' exceeds its outstanding amount.");

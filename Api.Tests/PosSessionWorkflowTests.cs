@@ -166,6 +166,10 @@ public sealed partial class PosWorkflowTests
     var checkout = await Assert.ThrowsAsync<ConflictException>(() => CreateService(db).CompleteSaleAsync(
       Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]), data.CashierId, default));
     Assert.Equal(ErrorCodes.Pos.ConcurrentCheckout, checkout.Code);
+    var refund = await Assert.ThrowsAsync<ConflictException>(() => CreateRefundService(db).PostRefundAsync(
+      Guid.NewGuid(), new(data.SessionId, PosRefundReason.CustomerComplaint, "Concurrent", [], []),
+      data.CashierId, default));
+    Assert.Equal(ErrorCodes.Pos.RefundConcurrencyConflict, refund.Code);
   }
 
   private sealed class FailingConnectionInterceptor(string sqlState) : DbConnectionInterceptor

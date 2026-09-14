@@ -17,6 +17,14 @@ export const usePosCustomers = (filters: PosCustomerFilters) =>
   useQuery({ queryKey: [...POS_KEY, 'customers', filters], queryFn: () => posApi.customers(filters) })
 export const usePosSale = (id?: string) =>
   useQuery({ queryKey: [...POS_KEY, 'sales', id], queryFn: () => posApi.sale(id!), enabled: Boolean(id) })
+export const usePosRefundability = (saleId?: string, enabled = true) =>
+  useQuery({
+    queryKey: [...POS_KEY, 'sales', saleId, 'refundability'],
+    queryFn: () => posApi.refundability(saleId!),
+    enabled: Boolean(saleId) && enabled,
+  })
+export const usePosRefund = (id?: string) =>
+  useQuery({ queryKey: [...POS_KEY, 'refunds', id], queryFn: () => posApi.refund(id!), enabled: Boolean(id) })
 
 export const usePosRegisters = (includeInactive = false) =>
   useQuery({ queryKey: [...POS_KEY, 'registers', includeInactive], queryFn: () => posApi.registers(includeInactive) })
@@ -102,5 +110,44 @@ export function useCompletePosSale() {
       client.invalidateQueries({ queryKey: [...POS_KEY, 'catalog'] }),
       client.invalidateQueries({ queryKey: [...POS_KEY, 'session', 'active'] }),
     ]),
+  })
+}
+
+function invalidateRefundEffects(client: ReturnType<typeof useQueryClient>, saleId: string, sessionId: string) {
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'sales', saleId] })
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'sales', saleId, 'refundability'] })
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'setup'] })
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'catalog'] })
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'x-report', sessionId] })
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] })
+  client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] })
+  client.invalidateQueries({ queryKey: ['sales'] })
+  client.invalidateQueries({ queryKey: ['inventory'] })
+  client.invalidateQueries({ queryKey: ['finance'] })
+  client.invalidateQueries({ queryKey: ['accounting'] })
+  client.invalidateQueries({ queryKey: ['dashboard'] })
+}
+
+export function usePostPosRefund() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ saleId, body }: { saleId: string; body: Parameters<typeof posApi.postRefund>[1] }) =>
+      posApi.postRefund(saleId, body),
+    onSuccess: (refund) => {
+      client.setQueryData([...POS_KEY, 'refunds', refund.id], refund)
+      invalidateRefundEffects(client, refund.posSaleId, refund.posSessionId)
+    },
+  })
+}
+
+export function useVoidPosSale() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ saleId, body }: { saleId: string; body: Parameters<typeof posApi.voidSale>[1] }) =>
+      posApi.voidSale(saleId, body),
+    onSuccess: (refund) => {
+      client.setQueryData([...POS_KEY, 'refunds', refund.id], refund)
+      invalidateRefundEffects(client, refund.posSaleId, refund.posSessionId)
+    },
   })
 }
