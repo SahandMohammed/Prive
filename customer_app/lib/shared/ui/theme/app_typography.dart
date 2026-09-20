@@ -32,5 +32,12 @@ abstract final class AppTypography {
       fontWeight: FontWeight.w600,
       letterSpacing: 0.1,
     ),
+    labelSmall: TextStyle(fontSize: 10.5, height: 1.5, letterSpacing: -0.26),
+  );
+
+  static const navLabel = TextStyle(
+    fontSize: 10.5,
+    height: 1.5,
+    letterSpacing: -0.26,
   );
 }
