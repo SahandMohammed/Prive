@@ -1,9 +1,17 @@
-# React / Vite
+# Dependencies and package managers
 node_modules/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# React, Vite, JavaScript, and TypeScript
 dist/
 dist-ssr/
-coverage/
+.vite/
 *.local
+*.tsbuildinfo
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -11,36 +19,176 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# .NET / ASP.NET Core
+# .NET and ASP.NET Core
 [Bb]in/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
 TestResults/
 *.user
-*.suo
 *.userosscache
+*.suo
 *.sln.docstates
 *.nupkg
 *.snupkg
 project.lock.json
 project.fragment.lock.json
-
-# Local tooling and editor files
 .vs/
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
-*.swp
-*.swo
+.nuget/
+packages/
+BenchmarkDotNet.Artifacts/
+ScaffoldingReadMe.txt
 
-# Local environment and secrets
+# Flutter and Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+app.*.symbols
+app.*.map.json
+.widget_preview/
+
+# Android and Gradle
+.gradle/
+**/.gradle/
+**/android/gradle/wrapper/gradle-wrapper.jar
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/captures/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.jks
+*.keystore
+key.properties
+
+# iOS, Xcode, and CocoaPods
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*sync/
+**/ios/.sconsign.dblite
+**/ios/.tags*
+**/ios/**/.vagrant/
+**/ios/**/DerivedData/
+**/ios/**/Pods/
+**/ios/**/.symlinks/
+**/ios/profile
+**/ios/**/xcuserdata/
+**/ios/**/.generated/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+!**/ios/**/default.mode1v3
+!**/ios/**/default.mode2v3
+!**/ios/**/default.pbxuser
+!**/ios/**/default.perspectivev3
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Fastlane output
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# Environment files and secrets
 .env
 .env.*
 !.env.example
+!.env.*.example
 secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.p12
+*.pfx
+*.pem
+*.key
 
+# IDEs and editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.iml
+*.ipr
+*.iws
+.ntvs
+*.njsproj
+*.swp
+*.swo
+*.sw?
+.atom/
+
+# Operating systems
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*~
+
+# Tests, coverage, and reports
+coverage/
+.nyc_output/
+lcov.info
+test-results/
+playwright-report/
+blob-report/
+
+# Temporary files and caches
+.cache/
+.tmp/
+temp/
+tmp/
+*.tmp
+*.temp
+*.bak
+*.backup
+.history/
+
+# Local tooling and generated metadata
 .codex/
 graphify-out/
+.build/
+.buildlog/
+*.class
+*.pyc
+migrate_working_dir/
+.svn/
 
+# Dependency lockfiles and .NET solution files are intentionally tracked.

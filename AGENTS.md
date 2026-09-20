@@ -16,6 +16,7 @@ Read only the material needed for the task:
 | --- | --- |
 | Backend work | `docs/architecture/backend.md` |
 | Frontend work | `docs/architecture/frontend.md` |
+| Flutter customer app work | `docs/architecture/mobile.md` |
 | Error/API contract work | `docs/architecture/error-handling.md`, `docs/decisions/001-api-envelope.md` |
 | Authentication | `docs/architecture/authentication.md`, `docs/decisions/002-authentication.md` |
 
@@ -40,6 +41,26 @@ Read only the material needed for the task:
 - Import another feature only through its public `index.ts`; do not deep-import across features.
 - Shared code (`src/lib`, shared components, shared hooks) must not import features.
 - Reuse the existing shadcn/Radix components and Tailwind theme tokens.
+
+## Customer mobile app
+
+The Privé customer-facing Flutter application lives in `customer_app/`.
+
+For customer mobile work:
+
+- read `docs/architecture/mobile.md`
+- use `.agents/skills/prive-mobile-work/SKILL.md`
+- when creating a new Flutter feature, use `.agents/skills/create-prive-mobile-feature/SKILL.md`
+
+The mobile app uses feature-first architecture and Riverpod.
+
+During the UI-first phase, features contain only UI/state code actually required.
+
+Do not introduce speculative repositories, API clients, DTOs, domain layers, persistence, or backend abstractions.
+
+Flutter features represent customer capabilities rather than mirroring backend modules.
+
+The ASP.NET Core API remains authoritative for business rules.
 
 ## Execution and verification
 

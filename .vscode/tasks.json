@@ -1,0 +1,102 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Frontend",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": {
+        "cwd": "${workspaceFolder}/client"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev"
+      }
+    },
+    {
+      "label": "Backend",
+      "type": "shell",
+      "command": "dotnet watch -lp https",
+      "options": {
+        "cwd": "${workspaceFolder}/Api"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev"
+      }
+    },
+    {
+      "label": "Customer App iOS",
+      "type": "shell",
+      "command": "xcrun simctl boot 62EF9065-23D7-4BD1-A8AA-317CCB8288F1 2>/dev/null || true; open -a Simulator; xcrun simctl bootstatus 62EF9065-23D7-4BD1-A8AA-317CCB8288F1 -b; flutter run -d 62EF9065-23D7-4BD1-A8AA-317CCB8288F1",
+      "options": {
+        "cwd": "${workspaceFolder}/customer_app"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "mobile"
+      }
+    },
+    {
+      "label": "Customer App: Analyze",
+      "type": "shell",
+      "command": "flutter analyze",
+      "options": {
+        "cwd": "${workspaceFolder}/customer_app"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Customer App: Test",
+      "type": "shell",
+      "command": "flutter test",
+      "options": {
+        "cwd": "${workspaceFolder}/customer_app"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Customer App: Pub Get",
+      "type": "shell",
+      "command": "flutter pub get",
+      "options": {
+        "cwd": "${workspaceFolder}/customer_app"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Customer App: Generate",
+      "type": "shell",
+      "command": "dart run build_runner build --delete-conflicting-outputs",
+      "options": {
+        "cwd": "${workspaceFolder}/customer_app"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev Servers",
+      "dependsOn": ["Frontend", "Backend"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev",
+      "dependsOn": ["Dev Servers"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Dev + Customer iOS",
+      "dependsOn": ["Frontend", "Backend", "Customer App iOS"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}
