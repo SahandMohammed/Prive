@@ -24,18 +24,26 @@ public sealed class PosSessionController : ControllerBase
     return Ok(ApiResponse<List<PosRegisterResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
+  [HttpGet("registers/{id:guid}", Name = nameof(GetRegister))]
+  [ProducesResponseType(typeof(ApiResponse<PosRegisterResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetRegister(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<PosRegisterResponse>.Ok(await _service.GetRegisterAsync(id, ct)));
+
   [HttpPost("registers")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]
   [ProducesResponseType(typeof(ApiResponse<PosRegisterResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> CreateRegister([FromBody] CreatePosRegisterRequest request, CancellationToken ct)
   {
     var register = await _service.CreateRegisterAsync(request, ct);
-    return StatusCode(StatusCodes.Status201Created, ApiResponse<PosRegisterResponse>.Ok(register));
+    var version = RouteData.Values["version"]?.ToString() ?? "1.0";
+    return CreatedAtAction(nameof(GetRegister), new { id = register.Id, version }, ApiResponse<PosRegisterResponse>.Ok(register));
   }
 
   [HttpPut("registers/{id:guid}")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]
   [ProducesResponseType(typeof(ApiResponse<PosRegisterResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> UpdateRegister(Guid id, [FromBody] UpdatePosRegisterRequest request, CancellationToken ct) =>
     Ok(ApiResponse<PosRegisterResponse>.Ok(await _service.UpdateRegisterAsync(id, request, ct)));
 
@@ -49,10 +57,12 @@ public sealed class PosSessionController : ControllerBase
 
   [HttpPost("sessions/open")]
   [ProducesResponseType(typeof(ApiResponse<PosSessionResponse>), StatusCodes.Status201Created)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> OpenSession([FromBody] OpenPosSessionRequest request, CancellationToken ct)
   {
     var session = await _service.OpenSessionAsync(GetUserId(), request, ct);
-    return StatusCode(StatusCodes.Status201Created, ApiResponse<PosSessionResponse>.Ok(session));
+    var version = RouteData.Values["version"]?.ToString() ?? "1.0";
+    return CreatedAtAction(nameof(GetSession), new { id = session.Id, version }, ApiResponse<PosSessionResponse>.Ok(session));
   }
 
   [HttpGet("sessions")]
@@ -63,18 +73,21 @@ public sealed class PosSessionController : ControllerBase
     return Ok(ApiResponse<List<PosSessionListResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
-  [HttpGet("sessions/{id:guid}")]
+  [HttpGet("sessions/{id:guid}", Name = nameof(GetSession))]
   [ProducesResponseType(typeof(ApiResponse<PosSessionResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetSession(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosSessionResponse>.Ok(await _service.GetSessionAsync(GetUserId(), id, ct)));
 
   [HttpGet("sessions/{id:guid}/x-report")]
   [ProducesResponseType(typeof(ApiResponse<PosXReportResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetXReport(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosXReportResponse>.Ok(await _service.GetXReportAsync(GetUserId(), id, ct)));
 
   [HttpPost("sessions/{id:guid}/close")]
   [ProducesResponseType(typeof(ApiResponse<PosZReportResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> CloseSession(Guid id, [FromBody] ClosePosSessionRequest request, CancellationToken ct) =>
     Ok(ApiResponse<PosZReportResponse>.Ok(await _service.CloseSessionAsync(GetUserId(), id, request, ct)));
 
@@ -86,8 +99,9 @@ public sealed class PosSessionController : ControllerBase
     return Ok(ApiResponse<List<PosZReportListResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
-  [HttpGet("z-reports/{id:guid}")]
+  [HttpGet("z-reports/{id:guid}", Name = nameof(GetZReport))]
   [ProducesResponseType(typeof(ApiResponse<PosZReportResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetZReport(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosZReportResponse>.Ok(await _service.GetZReportAsync(GetUserId(), id, ct)));
 

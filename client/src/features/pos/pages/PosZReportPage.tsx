@@ -61,17 +61,21 @@ export function PosZReportPage() {
           <SummaryLine label="Product Sales" value={`${money(report.productSalesBase)} ${report.baseCurrencyCode}`} />
           <SummaryLine label="Gross Sales" value={`${money(report.grossSalesBase)} ${report.baseCurrencyCode}`} strong />
           <SummaryLine label="Completed POS Sales" value={String(report.saleCount)} />
+          <SummaryLine label="Service Refunds" value={`−${money(report.serviceRefundsBase)} ${report.baseCurrencyCode}`} />
+          <SummaryLine label="Product Refunds" value={`−${money(report.productRefundsBase)} ${report.baseCurrencyCode}`} />
+          <SummaryLine label="Posted Refunds / Voids" value={String(report.refundCount)} />
+          <SummaryLine label="Net Sales" value={`${money(report.netSalesBase)} ${report.baseCurrencyCode}`} strong />
         </Section>
 
         <Section title="Payments">
           {report.payments.length === 0 ? <Empty /> : (
             <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full min-w-[650px] border-collapse text-sm print:min-w-0">
-                <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Account</th><th>Currency</th><th>Tendered</th><th>Change</th><th>Net</th><th>Base Net</th></tr></thead>
+                <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Account</th><th>Currency</th><th>Tendered</th><th>Change</th><th>Refunds</th><th>Net</th><th>Base Net</th></tr></thead>
                 <tbody>{report.payments.map((row) => (
                   <tr key={row.moneyAccountId} className="border-b last:border-0">
                     <td className="py-2 font-medium">{row.moneyAccountCode} — {row.moneyAccountName}</td>
-                    <td>{row.currencyCode}</td><td>{money(row.tenderedAmount)}</td><td>{money(row.changeAmount)}</td><td>{money(row.netAmount)}</td><td>{money(row.netBaseAmount)} {report.baseCurrencyCode}</td>
+                    <td>{row.currencyCode}</td><td>{money(row.tenderedAmount)}</td><td>{money(row.changeAmount)}</td><td>{money(row.refundAmount)}</td><td>{money(row.netAmount)}</td><td>{money(row.netBaseAmount)} {report.baseCurrencyCode}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -83,11 +87,11 @@ export function PosZReportPage() {
           {report.drawers.length === 0 ? <Empty text="No physical Cashbox currency was associated with this session." /> : (
             <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full min-w-[720px] border-collapse text-sm print:min-w-0">
-                <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Currency</th><th>Opening</th><th>Received</th><th>Change</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead>
+                <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Currency</th><th>Opening</th><th>Received</th><th>Change</th><th>Refunds</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead>
                 <tbody>{report.drawers.map((row) => (
                   <tr key={row.currencyId} className="border-b last:border-0">
                     <td className="py-2 font-mono font-semibold">{row.currencyCode}</td>
-                    <td>{money(row.openingAmount)}</td><td>{money(row.tenderedAmount)}</td><td>{money(row.changeAmount)}</td><td>{money(row.expectedAmount)}</td><td>{money(row.countedAmount ?? 0)}</td>
+                    <td>{money(row.openingAmount)}</td><td>{money(row.tenderedAmount)}</td><td>{money(row.changeAmount)}</td><td>{money(row.refundAmount)}</td><td>{money(row.expectedAmount)}</td><td>{money(row.countedAmount ?? 0)}</td>
                     <td className={(row.varianceAmount ?? 0) < 0 ? 'text-destructive print:text-black' : ''}>{signed(row.varianceAmount ?? 0)}</td>
                   </tr>
                 ))}</tbody>

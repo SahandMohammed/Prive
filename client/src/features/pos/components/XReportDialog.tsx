@@ -32,11 +32,12 @@ export function XReportDialog({
               <Metric label="Opened" value={formatDateTime(report.session.openedAtUtc)} />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <Metric label="Sales" value={String(report.saleCount)} />
-              <Metric label="Services" value={`${money(report.serviceSalesBase)} ${report.baseCurrencyCode}`} />
-              <Metric label="Products" value={`${money(report.productSalesBase)} ${report.baseCurrencyCode}`} />
               <Metric label="Gross Sales" value={`${money(report.grossSalesBase)} ${report.baseCurrencyCode}`} strong />
+              <Metric label="Refunds" value={`${report.refundCount} · ${money(report.refundTotalBase)} ${report.baseCurrencyCode}`} />
+              <Metric label="Net Sales" value={`${money(report.netSalesBase)} ${report.baseCurrencyCode}`} strong />
+              <Metric label="Mix" value={`Services ${money(report.serviceSalesBase - report.serviceRefundsBase)} · Products ${money(report.productSalesBase - report.productRefundsBase)}`} />
             </div>
 
             <Section title="Payments">
@@ -44,7 +45,7 @@ export function XReportDialog({
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[650px] text-sm">
                     <thead className="text-left text-xs uppercase text-muted-foreground">
-                      <tr><th className="pb-2">Account</th><th>Currency</th><th>Tendered</th><th>Change</th><th>Net</th><th>Base net</th></tr>
+                      <tr><th className="pb-2">Account</th><th>Currency</th><th>Tendered</th><th>Change</th><th>Refunds</th><th>Net</th><th>Base net</th></tr>
                     </thead>
                     <tbody className="divide-y">
                       {report.payments.map((row) => (
@@ -53,6 +54,7 @@ export function XReportDialog({
                           <td>{row.currencyCode}</td>
                           <td>{money(row.tenderedAmount)}</td>
                           <td>{money(row.changeAmount)}</td>
+                          <td>{money(row.refundAmount)}</td>
                           <td>{money(row.netAmount)}</td>
                           <td>{money(row.netBaseAmount)} {report.baseCurrencyCode}</td>
                         </tr>
@@ -75,6 +77,7 @@ export function XReportDialog({
                       <Line label="Opening" value={money(row.openingAmount)} />
                       <Line label="Cash tender" value={`+${money(row.tenderedAmount)}`} />
                       <Line label="Change" value={`-${money(row.changeAmount)}`} />
+                      <Line label="Refunds" value={`-${money(row.refundAmount)}`} />
                       <Line label="Expected base" value={`${money(row.expectedBaseAmount)} ${report.baseCurrencyCode}`} />
                     </div>
                   ))}

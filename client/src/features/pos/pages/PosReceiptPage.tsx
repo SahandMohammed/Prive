@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
+  Ban,
   BookOpen,
   Landmark,
   PackageSearch,
   Printer,
   ReceiptText,
   ShoppingCart,
+  Undo2,
 } from 'lucide-react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -20,12 +22,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SalesLineType } from '@/features/sales'
-import { usePosSale } from '../hooks/usePos'
+import { useCurrentUser } from '@/features/auth'
+import { RefundDialog } from '../components/RefundDialog'
+import { useActivePosSession, usePosSale, usePosSetup } from '../hooks/usePos'
+import { PosPaymentMode, PosRefundState } from '../types/pos.types'
 
 export function PosReceiptPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [refundMode, setRefundMode] = useState<'refund' | 'void' | null>(null)
   const query = usePosSale(id)
+  const currentUser = useCurrentUser().data
+  const activeSession = useActivePosSession().data
+  const setup = usePosSetup().data
   const sale = query.data
 
   useEffect(() => {
@@ -43,6 +53,13 @@ export function PosReceiptPage() {
       <p className="text-destructive">{query.error?.message ?? 'POS receipt was not found.'}</p>
     )
 
+  const hasMoneyMovement = sale.tenders.length > 0 || sale.change !== null
+  const canRefund = Boolean(currentUser && ['SuperAdmin', 'Owner', 'Manager'].includes(currentUser.role))
+  const refundAvailable = sale.remainingRefundableBaseAmount > 0
+  const refundState = sale.refundStatus === PosRefundState.FullyRefunded
+    ? 'Fully refunded'
+    : sale.refundStatus === PosRefundState.PartiallyRefunded ? 'Partially refunded' : 'Not refunded'
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
       <header className="flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-center">
@@ -58,11 +75,17 @@ export function PosReceiptPage() {
               <span className="font-mono text-primary">{sale.documentNumber}</span>
             </h1>
             <p className="text-sm text-muted-foreground">
-              All Sales, Inventory, Money Ledger, and Accounting effects were committed together.
+              Sales, accounting and stock effects were committed together. Money Ledger reflects only money actually received or returned.
             </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canRefund && refundAvailable && activeSession && setup && (
+            <>
+              <Button variant="outline" onClick={() => setRefundMode('refund')}><Undo2 /> Refund</Button>
+              <Button variant="destructive" onClick={() => setRefundMode('void')}><Ban /> Void remaining</Button>
+            </>
+          )}
           <Button variant="outline" onClick={() => window.print()}>
             <Printer />
             Print view
@@ -93,7 +116,7 @@ export function PosReceiptPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
-          <div className="grid gap-3 text-sm sm:grid-cols-3">
+          <div className="grid gap-3 text-sm sm:grid-cols-5">
             <Info label="Customer" value={sale.customerName ?? 'Walk-in'} />
             <Info label="Branch" value={`${sale.branchCode} — ${sale.branchName}`} />
             <Info
@@ -104,6 +127,15 @@ export function PosReceiptPage() {
                   : 'No product fulfilment'
               }
             />
+            <Info
+              label="Payment"
+              value={sale.paymentMode === PosPaymentMode.Paid
+                ? 'Paid'
+                : sale.paymentMode === PosPaymentMode.Partial
+                  ? 'Partial'
+                  : 'Credit'}
+            />
+            <Info label="Refund status" value={refundState} />
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <Table>
@@ -151,8 +183,13 @@ export function PosReceiptPage() {
           </div>
           <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
             <div>
-              <h3 className="mb-2 font-semibold">Payment received</h3>
+              <h3 className="mb-2 font-semibold">Payments</h3>
               <div className="space-y-2">
+                {sale.tenders.length === 0 && (
+                  <div className="rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
+                    No payment was received at checkout. The sale remains collectible through Customer Receipts.
+                  </div>
+                )}
                 {sale.tenders.map((tender) => (
                   <div
                     key={tender.id}
@@ -162,16 +199,20 @@ export function PosReceiptPage() {
                       <p className="font-medium">
                         {tender.moneyAccountCode} — {tender.moneyAccountName}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Rate snapshot: {tender.exchangeRate}
-                      </p>
+                      {tender.currencyId !== sale.baseCurrencyId && (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            Rate: 1 {tender.currencyCode} = {amount(tender.exchangeRate)} {sale.baseCurrencyCode}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Equivalent: {amount(tender.baseAmount)} {sale.baseCurrencyCode}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-mono font-semibold">
                         {amount(tender.tenderedAmount)} {tender.currencyCode}
-                      </p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {amount(tender.baseAmount)} {sale.baseCurrencyCode}
                       </p>
                     </div>
                   </div>
@@ -180,16 +221,20 @@ export function PosReceiptPage() {
                   <div className="flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50/50 px-3 py-2 text-sm dark:bg-amber-950/10">
                     <div>
                       <p className="font-medium">Change · {sale.change.moneyAccountCode}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Rate snapshot: {sale.change.exchangeRate}
-                      </p>
+                      {sale.change.currencyId !== sale.baseCurrencyId && (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            Rate: 1 {sale.change.currencyCode} = {amount(sale.change.exchangeRate)} {sale.baseCurrencyCode}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Equivalent: {amount(sale.change.baseAmount)} {sale.baseCurrencyCode}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-mono font-semibold">
                         −{amount(sale.change.amount)} {sale.change.currencyCode}
-                      </p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        −{amount(sale.change.baseAmount)} {sale.baseCurrencyCode}
                       </p>
                     </div>
                   </div>
@@ -208,18 +253,61 @@ export function PosReceiptPage() {
                 value={sale.changeBaseAmount}
                 currency={sale.baseCurrencyCode}
               />
+              <Total
+                label="Total received"
+                value={sale.settledBaseAmount}
+                currency={sale.baseCurrencyCode}
+              />
+              <div className="border-t pt-2">
+                <Total label="Original sale" value={sale.total} currency={sale.baseCurrencyCode} />
+                <Total label="Refunded" value={sale.refundedBaseAmount} currency={sale.baseCurrencyCode} />
+                <Total label="Net sale" value={sale.netSaleBaseAmount} currency={sale.baseCurrencyCode} strong />
+              </div>
               <div className="border-t pt-2">
                 <Total
-                  label="Total settled"
-                  value={sale.settledBaseAmount}
+                  label={sale.outstandingBaseAmount > 0 ? 'Customer owes' : 'Outstanding'}
+                  value={sale.outstandingBaseAmount}
                   currency={sale.baseCurrencyCode}
                   strong
                 />
               </div>
             </div>
           </div>
+
+          {sale.refunds.length > 0 && (
+            <section>
+              <h3 className="mb-2 font-semibold">Refunds and reversals</h3>
+              <div className="space-y-2">
+                {sale.refunds.map((refund) => (
+                  <Link key={refund.id} to={`/pos/refunds/${refund.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50">
+                    <div><p className="font-mono font-semibold text-primary">{refund.documentNumber}</p><p className="text-xs text-muted-foreground">{refund.isVoid ? 'Void reversal' : 'Refund'} · {new Date(refund.postedAtUtc).toLocaleString()} · approved by {refund.approvedByUsername}</p></div>
+                    <span className="font-mono font-semibold">−{amount(refund.totalRefundBase)} {sale.baseCurrencyCode}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </CardContent>
       </Card>
+
+      {!canRefund && refundAvailable && (
+        <p className="print:hidden text-sm text-muted-foreground">Refund details are visible to you. Posting a refund or void requires a Manager, Owner, or SuperAdmin.</p>
+      )}
+      {canRefund && refundAvailable && !activeSession && (
+        <p className="print:hidden rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">Open a POS session before posting a refund or void.</p>
+      )}
+
+      {refundMode && activeSession && setup && (
+        <RefundDialog
+          saleId={sale.id}
+          session={activeSession}
+          setup={setup}
+          mode={refundMode}
+          open
+          onOpenChange={(open) => { if (!open) setRefundMode(null) }}
+          onCompleted={(refund) => navigate(`/pos/refunds/${refund.id}`)}
+        />
+      )}
 
       <Card className="print:hidden">
         <CardHeader>
@@ -242,14 +330,16 @@ export function PosReceiptPage() {
               </Button>
             </Link>
           )}
-          <Link
-            to={`/finance/money-ledger?documentNumber=${encodeURIComponent(sale.documentNumber)}`}
-          >
-            <Button variant="outline">
-              <Landmark />
-              Money Ledger
-            </Button>
-          </Link>
+          {hasMoneyMovement && (
+            <Link
+              to={`/finance/money-ledger?documentNumber=${encodeURIComponent(sale.documentNumber)}`}
+            >
+              <Button variant="outline">
+                <Landmark />
+                Money Ledger
+              </Button>
+            </Link>
+          )}
           <Link to={`/accounting/journal?search=${encodeURIComponent(sale.documentNumber)}`}>
             <Button variant="outline">
               <BookOpen />

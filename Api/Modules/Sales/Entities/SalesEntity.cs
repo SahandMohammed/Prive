@@ -62,10 +62,12 @@ public sealed class SalesInvoiceEntity
   public DateTime? PostedAtUtc { get; set; }
   public Guid? JournalEntryId { get; set; }
   public JournalEntryEntity? JournalEntry { get; set; }
+  public Guid? AccountsReceivableAccountId { get; set; }
   public ICollection<SalesInvoiceLineEntity> Lines { get; set; } = new List<SalesInvoiceLineEntity>();
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
   public ICollection<CustomerReceiptAllocationEntity> ReceiptAllocations { get; set; } = new List<CustomerReceiptAllocationEntity>();
   public PosSaleEntity? PosSale { get; set; }
+  public ICollection<PosRefundEntity> PosRefunds { get; set; } = new List<PosRefundEntity>();
 }
 
 public sealed class SalesInvoiceLineEntity
@@ -93,7 +95,12 @@ public sealed class SalesInvoiceLineEntity
   public decimal BaseLineAmount { get; set; }
   public Guid? ProfessionalUserId { get; set; }
   public UserEntity? ProfessionalUser { get; set; }
+  public Guid? RevenueAccountId { get; set; }
+  public Guid? InventoryAccountId { get; set; }
+  public Guid? CostOfGoodsSoldAccountId { get; set; }
+  public decimal? OriginalUnitCostBase { get; set; }
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
+  public ICollection<PosRefundLineEntity> PosRefundLines { get; set; } = new List<PosRefundLineEntity>();
 }
 
 public enum SalesInvoiceStatus

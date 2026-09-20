@@ -112,6 +112,12 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(1, registers.Page);
     Assert.Equal(100, registers.PageSize);
     Assert.Equal(3, registers.Items.Count);
+    var singleRegister = await sessions.GetRegisterAsync(registers.Items[0].Id, default);
+    Assert.Equal(registers.Items[0].Id, singleRegister.Id);
+    var notFound = await Assert.ThrowsAsync<NotFoundException>(() => sessions.GetRegisterAsync(Guid.NewGuid(), default));
+    Assert.Equal(ErrorCodes.Pos.RegisterNotFound, notFound.Code);
+    var searched = await sessions.GetRegistersAsync(new() { Search = registers.Items[0].Code }, default);
+    Assert.Equal(registers.Items[0].Id, Assert.Single(searched.Items).Id);
     var registerPage = await sessions.GetRegistersAsync(new() { Page = 2, PageSize = 1 }, default);
     Assert.Equal(registers.Items[1].Id, Assert.Single(registerPage.Items).Id);
     var report = await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
@@ -160,6 +166,10 @@ public sealed partial class PosWorkflowTests
     var checkout = await Assert.ThrowsAsync<ConflictException>(() => CreateService(db).CompleteSaleAsync(
       Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]), data.CashierId, default));
     Assert.Equal(ErrorCodes.Pos.ConcurrentCheckout, checkout.Code);
+    var refund = await Assert.ThrowsAsync<ConflictException>(() => CreateRefundService(db).PostRefundAsync(
+      Guid.NewGuid(), new(data.SessionId, PosRefundReason.CustomerComplaint, "Concurrent", [], []),
+      data.CashierId, default));
+    Assert.Equal(ErrorCodes.Pos.RefundConcurrencyConflict, refund.Code);
   }
 
   private sealed class FailingConnectionInterceptor(string sqlState) : DbConnectionInterceptor

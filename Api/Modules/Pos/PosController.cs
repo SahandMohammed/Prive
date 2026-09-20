@@ -13,8 +13,13 @@ namespace Api.Modules.Pos;
 public sealed class PosController : ControllerBase
 {
   private readonly PosService _service;
+  private readonly PosRefundService _refunds;
 
-  public PosController(PosService service) => _service = service;
+  public PosController(PosService service, PosRefundService refunds)
+  {
+    _service = service;
+    _refunds = refunds;
+  }
 
   [HttpGet("setup")]
   [ProducesResponseType(typeof(ApiResponse<PosSetupResponse>), StatusCodes.Status200OK)]
@@ -57,7 +62,54 @@ public sealed class PosController : ControllerBase
   {
     var sale = await _service.CompleteSaleAsync(request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
-    return CreatedAtAction(nameof(GetSale), new { sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
+    return CreatedAtAction(nameof(GetSale), new { id = sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
+  }
+
+  [HttpGet("sales/{id:guid}/refundability")]
+  [ProducesResponseType(typeof(ApiResponse<PosRefundabilityResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetRefundability(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<PosRefundabilityResponse>.Ok(await _refunds.GetRefundabilityAsync(id, ct)));
+
+  [HttpGet("sales/{id:guid}/refunds")]
+  [ProducesResponseType(typeof(ApiResponse<List<PosRefundSummaryResponse>>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetSaleRefunds(Guid id, [FromQuery] PosRefundListQuery query, CancellationToken ct)
+  {
+    var result = await _refunds.GetSaleRefundsAsync(id, query, ct);
+    return Ok(ApiResponse<List<PosRefundSummaryResponse>>.Ok(result.Items, result.ToMetadata()));
+  }
+
+  [HttpGet("refunds/{id:guid}", Name = nameof(GetRefund))]
+  [ProducesResponseType(typeof(ApiResponse<PosRefundResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetRefund(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<PosRefundResponse>.Ok(await _refunds.GetRefundAsync(id, ct)));
+
+  [HttpPost("sales/{id:guid}/refunds")]
+  [Authorize(Roles = "SuperAdmin,Manager,Owner")]
+  [ProducesResponseType(typeof(ApiResponse<PosRefundResponse>), StatusCodes.Status201Created)]
+  public async Task<IActionResult> PostRefund(
+    Guid id,
+    [FromBody] CreatePosRefundRequest request,
+    CancellationToken ct)
+  {
+    var refund = await _refunds.PostRefundAsync(id, request, GetUserId(), ct);
+    var version = RouteData.Values["version"]?.ToString() ?? "1.0";
+    return CreatedAtAction(nameof(GetRefund), new { id = refund.Id, version }, ApiResponse<PosRefundResponse>.Ok(refund));
+  }
+
+  [HttpPost("sales/{id:guid}/void")]
+  [Authorize(Roles = "SuperAdmin,Manager,Owner")]
+  [ProducesResponseType(typeof(ApiResponse<PosRefundResponse>), StatusCodes.Status201Created)]
+  public async Task<IActionResult> VoidRemaining(
+    Guid id,
+    [FromBody] VoidPosSaleRequest request,
+    CancellationToken ct)
+  {
+    var refund = await _refunds.VoidRemainingAsync(id, request, GetUserId(), ct);
+    var version = RouteData.Values["version"]?.ToString() ?? "1.0";
+    return CreatedAtAction(nameof(GetRefund), new { id = refund.Id, version }, ApiResponse<PosRefundResponse>.Ok(refund));
   }
 
   private Guid GetUserId()

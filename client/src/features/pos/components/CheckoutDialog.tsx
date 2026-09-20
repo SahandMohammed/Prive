@@ -14,9 +14,15 @@ import {
 import { Input } from '@/components/ui/input'
 import { SalesLineType } from '@/features/sales'
 import { useCompletePosSale } from '../hooks/usePos'
+import { posCartTotal } from '../lib/posCart'
+import {
+  posTenderBaseAmount,
+  posTenderedBaseTotal,
+  roundPosMoney,
+} from '../lib/posMoney'
 import { posCheckoutSchema } from '../schemas/pos.schema'
 import type { PosCheckoutValues } from '../schemas/pos.schema'
-import { PosCatalogItemType } from '../types/pos.types'
+import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
 import type { PosCartLine, PosSale, PosSetup } from '../types/pos.types'
 
 export function CheckoutDialog({
@@ -40,20 +46,25 @@ export function CheckoutDialog({
   onOpenChange: (open: boolean) => void
   onCompleted: (sale: PosSale) => void
 }) {
-  const total = cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
+  const total = posCartTotal(cart)
   const complete = useCompletePosSale()
   const resetComplete = complete.reset
   const accounts = useMemo(
     () => setup.moneyAccounts.filter((account) => account.branchId === branchId),
     [branchId, setup.moneyAccounts]
   )
-  const baseAccount = accounts.find(
+  const availableAccounts = useMemo(
+    () => accounts.filter((account) => account.currentExchangeRate !== null),
+    [accounts]
+  )
+  const baseAccount = availableAccounts.find(
     (account) => account.currencyId === setup.baseCurrencyId && account.currentExchangeRate === 1
   )
-  const defaultAccount = baseAccount ?? accounts[0]
+  const defaultAccount = baseAccount ?? availableAccounts[0]
   const form = useForm<PosCheckoutValues>({
     resolver: zodResolver(posCheckoutSchema),
     defaultValues: {
+      paymentMode: PosPaymentMode.Paid,
       tenders: [{ moneyAccountId: '', amount: 0 }],
       changeMoneyAccountId: '',
       changeAmount: 0,
@@ -61,15 +72,17 @@ export function CheckoutDialog({
   })
   const tenderFields = useFieldArray({ control: form.control, name: 'tenders' })
   const values = useWatch({ control: form.control })
+  const paymentMode = values.paymentMode ?? PosPaymentMode.Paid
 
   useEffect(() => {
     if (!open) return
     form.reset({
+      paymentMode: PosPaymentMode.Paid,
       tenders: [
         {
           moneyAccountId: defaultAccount?.id ?? '',
           amount: defaultAccount?.currentExchangeRate
-            ? round4(total / defaultAccount.currentExchangeRate)
+            ? roundPosMoney(total / defaultAccount.currentExchangeRate)
             : 0,
         },
       ],
@@ -79,20 +92,38 @@ export function CheckoutDialog({
     resetComplete()
   }, [defaultAccount, form, open, resetComplete, total])
 
-  const tenderedBase = (values.tenders ?? []).reduce((sum, tender) => {
-    const account = accounts.find((item) => item.id === tender?.moneyAccountId)
-    return sum + (Number(tender?.amount) || 0) * (account?.currentExchangeRate ?? 0)
-  }, 0)
-  const remaining = round4(Math.max(total - tenderedBase, 0))
-  const changeDue = round4(Math.max(tenderedBase - total, 0))
-  const changeAccount = accounts.find((account) => account.id === values.changeMoneyAccountId)
-  const changeBase = round4(
-    (Number(values.changeAmount) || 0) * (changeAccount?.currentExchangeRate ?? 0)
+  const tenderedBase = posTenderedBaseTotal(
+    (values.tenders ?? []).map((tender) => {
+      const account = accounts.find((item) => item.id === tender?.moneyAccountId)
+      return {
+        amount: Number(tender?.amount) || 0,
+        exchangeRate: account?.currentExchangeRate ?? 0,
+      }
+    })
   )
-  const ready =
-    accounts.length > 0 &&
-    remaining === 0 &&
-    (changeDue === 0 || (Boolean(changeAccount) && changeBase === changeDue))
+  const remaining = roundPosMoney(Math.max(total - tenderedBase, 0))
+  const changeDue = paymentMode === PosPaymentMode.Paid
+    ? roundPosMoney(Math.max(tenderedBase - total, 0))
+    : 0
+  const changeAccount = accounts.find((account) => account.id === values.changeMoneyAccountId)
+  const changeBase = posTenderBaseAmount(
+    Number(values.changeAmount) || 0,
+    changeAccount?.currentExchangeRate ?? 0
+  )
+  const requiresCustomer = paymentMode !== PosPaymentMode.Paid
+  const hasCustomer = Boolean(customerId)
+  const tendersHaveRates = (values.tenders ?? []).every((tender) =>
+    availableAccounts.some((account) => account.id === tender?.moneyAccountId)
+  )
+  const ready = paymentMode === PosPaymentMode.Paid
+    ? availableAccounts.length > 0
+      && tendersHaveRates
+      && tenderedBase >= total
+      && (changeDue === 0 || (Boolean(changeAccount) && changeBase === changeDue))
+    : paymentMode === PosPaymentMode.Partial
+      ? hasCustomer && availableAccounts.length > 0 && tendersHaveRates
+        && tenderedBase > 0 && tenderedBase < total
+      : hasCustomer && tenderedBase === 0
 
   useEffect(() => {
     if (changeDue === 0) {
@@ -101,23 +132,62 @@ export function CheckoutDialog({
       return
     }
     if (!changeAccount?.currentExchangeRate) return
-    form.setValue('changeAmount', round4(changeDue / changeAccount.currentExchangeRate), {
+    form.setValue('changeAmount', roundPosMoney(changeDue / changeAccount.currentExchangeRate), {
       shouldValidate: true,
     })
   }, [changeAccount, changeDue, form])
 
+  const selectPaymentMode = (mode: PosPaymentMode) => {
+    form.setValue('paymentMode', mode, { shouldValidate: true })
+    form.clearErrors('root')
+    form.setValue('changeMoneyAccountId', '')
+    form.setValue('changeAmount', 0)
+
+    if (mode === PosPaymentMode.Credit) {
+      tenderFields.replace([])
+      return
+    }
+
+    if (mode === PosPaymentMode.Partial) {
+      tenderFields.replace([{ moneyAccountId: defaultAccount?.id ?? '', amount: 0 }])
+      return
+    }
+
+    tenderFields.replace([
+      {
+        moneyAccountId: defaultAccount?.id ?? '',
+        amount: defaultAccount?.currentExchangeRate
+          ? roundPosMoney(total / defaultAccount.currentExchangeRate)
+          : 0,
+      },
+    ])
+  }
+
   const submit = form.handleSubmit((value) => {
+    if (requiresCustomer && !customerId) {
+      form.setError('root', { message: 'Select a customer before creating a Partial or Credit sale.' })
+      return
+    }
+
     if (!ready) {
       form.setError('root', {
-        message:
-          accounts.length === 0
-            ? 'No operable Money Account is available for this branch.'
-            : remaining > 0
-              ? `Collect ${amount(remaining)} ${setup.baseCurrencyCode} more.`
-              : 'Record change that exactly resolves the excess tender.',
+        message: paymentMode === PosPaymentMode.Credit
+          ? 'Credit checkout requires a selected customer and no payment now.'
+          : availableAccounts.length === 0
+            ? 'No operable Money Account with a valid exchange rate is available for this branch.'
+            : !tendersHaveRates
+              ? 'A selected Money Account is unavailable because its exchange rate is missing.'
+            : paymentMode === PosPaymentMode.Partial
+              ? tenderedBase <= 0
+                ? 'Enter how much the customer is paying now.'
+                : 'A partial payment must be less than the sale total. Choose Paid for full settlement.'
+              : remaining > 0
+                ? `Collect ${amount(remaining)} ${setup.baseCurrencyCode} more, or choose Partial/Credit for a selected customer.`
+                : 'Record change that exactly resolves the excess tender.',
       })
       return
     }
+
     form.clearErrors('root')
     complete.mutate(
       {
@@ -142,9 +212,10 @@ export function CheckoutDialog({
           amount: tender.amount,
         })),
         change:
-          changeDue > 0
+          paymentMode === PosPaymentMode.Paid && changeDue > 0
             ? { moneyAccountId: value.changeMoneyAccountId, amount: value.changeAmount }
             : null,
+        paymentMode: value.paymentMode,
       },
       {
         onSuccess: (sale) => {
@@ -161,95 +232,139 @@ export function CheckoutDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Checkout · {amount(total)} {setup.baseCurrencyCode}</DialogTitle>
           <DialogDescription>
-            Record exactly what the customer hands over. The backend revalidates the active session, rates, account access, balances and stock before committing.
+            Choose whether the customer settles the sale now or leaves a receivable. Cash received is posted only to the selected Money Accounts.
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={submit}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">Payment</h3>
-                <p className="text-xs text-muted-foreground">One or more tender lines may settle the sale.</p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={accounts.length === 0}
-                onClick={() => tenderFields.append({ moneyAccountId: baseAccount?.id ?? accounts[0]?.id ?? '', amount: 0 })}
-              >
-                <Plus className="size-4" />
-                Add tender
-              </Button>
-            </div>
-
-            {tenderFields.fields.map((field, index) => {
-              const account = accounts.find((item) => item.id === values.tenders?.[index]?.moneyAccountId)
-              const baseEquivalent = round4(
-                (Number(values.tenders?.[index]?.amount) || 0) * (account?.currentExchangeRate ?? 0)
-              )
-              return (
-                <div key={field.id} className="grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_170px_auto]">
-                  <Field label="Money Account" error={form.formState.errors.tenders?.[index]?.moneyAccountId?.message}>
-                    <Select {...form.register(`tenders.${index}.moneyAccountId`)}>
-                      <option value="">Select account</option>
-                      {accounts.map((item) => (
-                        <option key={item.id} value={item.id} disabled={item.currentExchangeRate === null}>
-                          {item.code} — {item.name} · {item.currencyCode}{item.currentExchangeRate === null ? ' · rate missing' : ''}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label={`Tendered ${account?.currencyCode ?? ''}`} error={form.formState.errors.tenders?.[index]?.amount?.message}>
-                    <Input
-                      type="number"
-                      min="0.0001"
-                      step="0.0001"
-                      {...form.register(`tenders.${index}.amount`, { valueAsNumber: true })}
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="self-end"
-                    disabled={tenderFields.fields.length === 1}
-                    onClick={() => tenderFields.remove(index)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                  <p className="text-xs text-muted-foreground sm:col-span-3">
-                    {account
-                      ? `${amount(Number(values.tenders?.[index]?.amount) || 0)} ${account.currencyCode} × ${account.currentExchangeRate ?? '—'} = ${amount(baseEquivalent)} ${setup.baseCurrencyCode}`
-                      : 'Select an operable Money Account.'}
-                  </p>
-                </div>
-              )
-            })}
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={!baseAccount}
-              onClick={() => form.setValue('tenders', [{ moneyAccountId: baseAccount?.id ?? '', amount: total }], { shouldValidate: true })}
-            >
-              Exact cash · {amount(total)} {setup.baseCurrencyCode}
-            </Button>
-          </div>
-
-          <div className="grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-3">
-            <Summary label="Sale total" value={`${amount(total)} ${setup.baseCurrencyCode}`} />
-            <Summary label="Tendered" value={`${amount(tenderedBase)} ${setup.baseCurrencyCode}`} />
-            <Summary
-              label={remaining > 0 ? 'Remaining' : 'Change due'}
-              value={`${amount(remaining > 0 ? remaining : changeDue)} ${setup.baseCurrencyCode}`}
-              accent={remaining > 0 || changeDue > 0}
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-1.5">
+            <PaymentModeButton
+              active={paymentMode === PosPaymentMode.Paid}
+              title="Paid"
+              description="Fully settle now"
+              onClick={() => selectPaymentMode(PosPaymentMode.Paid)}
+            />
+            <PaymentModeButton
+              active={paymentMode === PosPaymentMode.Partial}
+              title="Partial"
+              description="Pay some, owe rest"
+              onClick={() => selectPaymentMode(PosPaymentMode.Partial)}
+            />
+            <PaymentModeButton
+              active={paymentMode === PosPaymentMode.Credit}
+              title="Credit"
+              description="Pay later"
+              onClick={() => selectPaymentMode(PosPaymentMode.Credit)}
             />
           </div>
 
-          {changeDue > 0 && (
+          {requiresCustomer && !hasCustomer && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
+              Select a customer in the cart first. Receivables cannot be assigned to a walk-in customer.
+            </p>
+          )}
+
+          {paymentMode !== PosPaymentMode.Credit ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">Payment received now</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Add one or more Money Accounts. IQD and USD may be combined when both have valid rates.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={availableAccounts.length === 0}
+                  onClick={() => tenderFields.append({
+                    moneyAccountId: baseAccount?.id ?? availableAccounts[0]?.id ?? '',
+                    amount: 0,
+                  })}
+                >
+                  <Plus className="size-4" />
+                  Add tender
+                </Button>
+              </div>
+
+              {tenderFields.fields.map((field, index) => {
+                const account = accounts.find((item) => item.id === values.tenders?.[index]?.moneyAccountId)
+                const baseEquivalent = posTenderBaseAmount(
+                  Number(values.tenders?.[index]?.amount) || 0,
+                  account?.currentExchangeRate ?? 0
+                )
+                return (
+                  <div key={field.id} className="grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_170px_auto]">
+                    <Field label="Money Account" error={form.formState.errors.tenders?.[index]?.moneyAccountId?.message}>
+                      <Select {...form.register(`tenders.${index}.moneyAccountId`)}>
+                        <option value="">Select account</option>
+                        {accounts.map((item) => (
+                          <option key={item.id} value={item.id} disabled={item.currentExchangeRate === null}>
+                            {item.code} — {item.name} · {item.currencyCode}{item.currentExchangeRate === null ? ' · Rate missing' : ''}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label={`Received ${account?.currencyCode ?? ''}`} error={form.formState.errors.tenders?.[index]?.amount?.message}>
+                      <Input
+                        type="number"
+                        min="0.0001"
+                        step="0.0001"
+                        {...form.register(`tenders.${index}.amount`, { valueAsNumber: true })}
+                      />
+                    </Field>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="self-end"
+                      disabled={tenderFields.fields.length === 1}
+                      onClick={() => tenderFields.remove(index)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                    <p className="text-xs text-muted-foreground sm:col-span-3">
+                      {account
+                        ? `${amount(Number(values.tenders?.[index]?.amount) || 0)} ${account.currencyCode} × ${account.currentExchangeRate ?? '—'} = ${amount(baseEquivalent)} ${setup.baseCurrencyCode}`
+                        : 'Select an operable Money Account.'}
+                    </p>
+                  </div>
+                )
+              })}
+
+              {paymentMode === PosPaymentMode.Paid && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!baseAccount}
+                  onClick={() => tenderFields.replace([{ moneyAccountId: baseAccount?.id ?? '', amount: total }])}
+                >
+                  Exact cash · {amount(total)} {setup.baseCurrencyCode}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-muted/30 p-4">
+              <h3 className="font-semibold">No payment received now</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The full {amount(total)} {setup.baseCurrencyCode} will remain in Accounts Receivable for the selected customer. No Money Ledger entry is created until a later Customer Receipt is posted.
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-3">
+            <Summary label="Sale total" value={`${amount(total)} ${setup.baseCurrencyCode}`} />
+            <Summary label="Received now" value={`${amount(tenderedBase)} ${setup.baseCurrencyCode}`} />
+            <Summary
+              label={paymentMode === PosPaymentMode.Paid && changeDue > 0 ? 'Change due' : 'Receivable after sale'}
+              value={`${amount(paymentMode === PosPaymentMode.Paid ? changeDue : remaining)} ${setup.baseCurrencyCode}`}
+              accent={paymentMode !== PosPaymentMode.Paid ? remaining > 0 : changeDue > 0}
+            />
+          </div>
+
+          {paymentMode === PosPaymentMode.Paid && changeDue > 0 && (
             <div className="grid gap-3 rounded-xl border border-amber-300 bg-amber-50/50 p-4 sm:grid-cols-2 dark:bg-amber-950/10">
               <Field label="Return change from">
                 <Select {...form.register('changeMoneyAccountId')}>
@@ -284,12 +399,44 @@ export function CheckoutDialog({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Back to cart</Button>
             <Button type="submit" className="min-w-40" disabled={!ready || complete.isPending}>
-              {complete.isPending ? 'Completing…' : 'Complete Sale'}
+              {complete.isPending
+                ? 'Completing…'
+                : paymentMode === PosPaymentMode.Credit
+                  ? 'Complete Credit Sale'
+                  : paymentMode === PosPaymentMode.Partial
+                    ? 'Complete Partial Sale'
+                    : 'Complete Sale'}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PaymentModeButton({
+  active,
+  title,
+  description,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  description: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-lg px-3 py-2.5 text-left transition-colors ${
+        active ? 'bg-background shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <span className="block text-sm font-semibold">{title}</span>
+      <span className="mt-0.5 block text-[11px]">{description}</span>
+    </button>
   )
 }
 
@@ -317,4 +464,3 @@ function Summary({ label, value, accent = false }: { label: string; value: strin
 }
 
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
-const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10_000) / 10_000

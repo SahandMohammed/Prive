@@ -58,6 +58,8 @@ public sealed class DashboardService
     var (currencyCode, currencySymbol) = await GetBaseCurrencyAsync(ct);
     var today = DateOnly.FromDateTime(DateTime.UtcNow);
     var yesterday = today.AddDays(-1);
+    var todayStart = today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var tomorrowStart = today.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
 
     // 1. Today's Sales (Both POS and regular posted sales invoices via SalesInvoices table)
     var salesToday = await _db.SalesInvoices.AsNoTracking()
@@ -65,12 +67,22 @@ public sealed class DashboardService
       .Select(s => s.BaseTotal)
       .ToListAsync(ct);
 
-    var todaySalesBase = salesToday.Sum();
+    var refundsTodayBase = await _db.PosRefunds.AsNoTracking()
+      .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
+        && refund.PostedAtUtc >= todayStart && refund.PostedAtUtc < tomorrowStart)
+      .SumAsync(refund => (decimal?)refund.TotalRefundBase, ct) ?? 0m;
+    var todaySalesBase = salesToday.Sum() - refundsTodayBase;
     var todaySalesCount = salesToday.Count;
 
     var yesterdaySalesBase = await _db.SalesInvoices.AsNoTracking()
       .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.InvoiceDate == yesterday)
       .SumAsync(s => (decimal?)s.BaseTotal, ct) ?? 0m;
+    var yesterdayStart = yesterday.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var yesterdayRefundsBase = await _db.PosRefunds.AsNoTracking()
+      .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
+        && refund.PostedAtUtc >= yesterdayStart && refund.PostedAtUtc < todayStart)
+      .SumAsync(refund => (decimal?)refund.TotalRefundBase, ct) ?? 0m;
+    yesterdaySalesBase -= yesterdayRefundsBase;
 
     decimal? todaySalesChangePercent = null;
     if (yesterdaySalesBase > 0)
@@ -88,22 +100,30 @@ public sealed class DashboardService
     var todayCashPaidBase = ledgerEntriesToday.Where(a => a < 0).Sum(a => -a);
     var todayNetCashMovementBase = todayCashReceivedBase - todayCashPaidBase;
 
-    // 3. Customer Receivables (Posted regular sales invoices minus posted customer receipt allocations)
+    // 3. Customer Receivables (all posted invoices minus initial POS settlement and posted customer receipts)
     var unpaidCustomerInvoices = await _db.SalesInvoices.AsNoTracking()
-      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.PosSale == null)
+      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted)
       .Select(s => new
       {
         s.Id,
         s.CustomerId,
         s.BaseTotal,
+        PosSettledBase = s.PosSale == null
+          ? 0m
+          : (s.PosSale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
+            - (s.PosSale.Change == null ? 0m : s.PosSale.Change.BaseAmount),
         AllocatedBase = _db.CustomerReceiptAllocations
           .Where(a => a.SalesInvoiceId == s.Id && a.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-          .Sum(a => (decimal?)a.BaseAmount) ?? 0m
+          .Sum(a => (decimal?)a.BaseAmount) ?? 0m,
+        RefundReceivableBase = _db.PosRefunds
+          .Where(refund => refund.SalesInvoiceId == s.Id && refund.Status == PosRefundStatus.Posted)
+          .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m
       })
-      .Where(s => s.BaseTotal - s.AllocatedBase > 0.001m)
+      .Where(s => s.BaseTotal - s.PosSettledBase - s.AllocatedBase - s.RefundReceivableBase > 0.001m)
       .ToListAsync(ct);
 
-    var customerReceivablesBase = unpaidCustomerInvoices.Sum(s => s.BaseTotal - s.AllocatedBase);
+    var customerReceivablesBase = unpaidCustomerInvoices.Sum(s =>
+      s.BaseTotal - s.PosSettledBase - s.AllocatedBase - s.RefundReceivableBase);
     var customerOutstandingInvoiceCount = unpaidCustomerInvoices.Count;
     var customerOutstandingCustomerCount = unpaidCustomerInvoices.Select(s => s.CustomerId).Where(c => c != null).Distinct().Count();
 
@@ -188,6 +208,15 @@ public sealed class DashboardService
       .GroupBy(s => s.InvoiceDate)
       .Select(g => new { Date = g.Key, Total = g.Sum(s => s.BaseTotal) })
       .ToDictionaryAsync(x => x.Date, x => x.Total, ct);
+    var trendStart = startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var trendEnd = today.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var refundRows = await _db.PosRefunds.AsNoTracking()
+      .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
+        && refund.PostedAtUtc >= trendStart && refund.PostedAtUtc < trendEnd)
+      .Select(refund => new { refund.PostedAtUtc, refund.TotalRefundBase })
+      .ToListAsync(ct);
+    var refundMap = refundRows.GroupBy(refund => DateOnly.FromDateTime(refund.PostedAtUtc))
+      .ToDictionary(group => group.Key, group => group.Sum(refund => refund.TotalRefundBase));
 
     var expenseMap = await _db.ExpenseDocuments.AsNoTracking()
       .Where(e => e.BranchId == branchId && e.Status == ExpenseDocumentStatus.Posted && e.ExpenseDate >= startDate && e.ExpenseDate <= today)
@@ -198,7 +227,7 @@ public sealed class DashboardService
     var items = new List<DashboardTrendItem>(days);
     for (var date = startDate; date <= today; date = date.AddDays(1))
     {
-      var sales = salesMap.GetValueOrDefault(date, 0m);
+      var sales = salesMap.GetValueOrDefault(date, 0m) - refundMap.GetValueOrDefault(date, 0m);
       var expenses = expenseMap.GetValueOrDefault(date, 0m);
       items.Add(new DashboardTrendItem(date, sales, expenses, sales - expenses));
     }
@@ -218,6 +247,13 @@ public sealed class DashboardService
 
     var serviceRevenueBase = lines.Where(l => l.LineType == SalesLineType.Service).Sum(l => l.BaseLineAmount);
     var productRevenueBase = lines.Where(l => l.LineType == SalesLineType.Product).Sum(l => l.BaseLineAmount);
+    var refundLines = await _db.PosRefundLines.AsNoTracking()
+      .Where(line => line.PosRefund.BranchId == branchId && line.PosRefund.Status == PosRefundStatus.Posted)
+      .Select(line => new { line.LineType, line.RefundAmountBase }).ToListAsync(ct);
+    serviceRevenueBase = Math.Max(serviceRevenueBase
+      - refundLines.Where(line => line.LineType == SalesLineType.Service).Sum(line => line.RefundAmountBase), 0);
+    productRevenueBase = Math.Max(productRevenueBase
+      - refundLines.Where(line => line.LineType == SalesLineType.Product).Sum(line => line.RefundAmountBase), 0);
     var totalRevenueBase = serviceRevenueBase + productRevenueBase;
 
     var servicePct = totalRevenueBase > 0 ? Math.Round((serviceRevenueBase / totalRevenueBase) * 100m, 1) : 0m;
@@ -259,6 +295,24 @@ public sealed class DashboardService
         $"/pos/sales/{p.Id}"))
       .ToListAsync(ct);
     transactions.AddRange(posSales);
+
+    var posRefunds = await _db.PosRefunds.AsNoTracking()
+      .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted)
+      .OrderByDescending(refund => refund.PostedAtUtc)
+      .Take(safeLimit)
+      .Select(refund => new DashboardRecentTransactionResponse(
+        refund.Id,
+        refund.DocumentNumber,
+        refund.IsVoid ? "POS Void" : "POS Refund",
+        refund.PostedAtUtc,
+        refund.TotalRefundBase,
+        refund.SalesInvoice.BaseCurrency.Code,
+        refund.TotalRefundBase,
+        "out",
+        refund.Customer != null ? refund.Customer.Name : "Walk-in Customer",
+        $"/pos/refunds/{refund.Id}"))
+      .ToListAsync(ct);
+    transactions.AddRange(posRefunds);
 
     // 2. Regular Sales Invoices (non-POS)
     var salesInvoices = await _db.SalesInvoices.AsNoTracking()

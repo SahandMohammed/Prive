@@ -31,6 +31,7 @@ public sealed class PosSaleListQuery : PaginationRequest
 
 public sealed class PosRegisterListQuery : PaginationRequest
 {
+  public string? Search { get; init; }
   public bool IncludeInactive { get; init; }
 }
 
@@ -51,6 +52,8 @@ public sealed class PosZReportListQuery : PaginationRequest
   public DateOnly? FromDate { get; init; }
   public DateOnly? ToDate { get; init; }
 }
+
+public sealed class PosRefundListQuery : PaginationRequest { }
 
 public sealed record PosSaleLineRequest(
   [Required] SalesLineType LineType,
@@ -74,8 +77,32 @@ public sealed record CompletePosSaleRequest(
   Guid? WarehouseId,
   Guid? CustomerId,
   [Required, MinLength(1)] List<PosSaleLineRequest> Lines,
-  [Required, MinLength(1)] List<PosTenderRequest> Tenders,
-  PosChangeRequest? Change);
+  [Required] List<PosTenderRequest> Tenders,
+  PosChangeRequest? Change,
+  [EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode = PosPaymentMode.Paid);
+
+public sealed record PosRefundLineRequest(
+  [Required] Guid SalesInvoiceLineId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
+  bool RestockProduct);
+
+public sealed record PosRefundTenderRequest(
+  [Required] Guid MoneyAccountId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount);
+
+public sealed record CreatePosRefundRequest(
+  [Required] Guid PosSessionId,
+  [Required, EnumDataType(typeof(PosRefundReason))] PosRefundReason Reason,
+  [MaxLength(1000)] string? Notes,
+  [Required, MinLength(1)] List<PosRefundLineRequest> Lines,
+  [Required] List<PosRefundTenderRequest> RefundTenders);
+
+public sealed record VoidPosSaleRequest(
+  [Required] Guid PosSessionId,
+  [Required, EnumDataType(typeof(PosRefundReason))] PosRefundReason Reason,
+  [MaxLength(1000)] string? Notes,
+  [Required] List<Guid> RestockSalesInvoiceLineIds,
+  [Required] List<PosRefundTenderRequest> RefundTenders);
 
 public sealed record CreatePosRegisterRequest(
   [Required, MaxLength(32)] string Code,
@@ -208,9 +235,11 @@ public sealed record PosPaymentSummaryResponse(
   string CurrencyCode,
   decimal TenderedAmount,
   decimal ChangeAmount,
+  decimal RefundAmount,
   decimal NetAmount,
   decimal TenderedBaseAmount,
   decimal ChangeBaseAmount,
+  decimal RefundBaseAmount,
   decimal NetBaseAmount);
 
 public sealed record PosDrawerSummaryResponse(
@@ -219,12 +248,14 @@ public sealed record PosDrawerSummaryResponse(
   decimal OpeningAmount,
   decimal TenderedAmount,
   decimal ChangeAmount,
+  decimal RefundAmount,
   decimal ExpectedAmount,
   decimal? CountedAmount,
   decimal? VarianceAmount,
   decimal OpeningBaseAmount,
   decimal TenderedBaseAmount,
   decimal ChangeBaseAmount,
+  decimal RefundBaseAmount,
   decimal ExpectedBaseAmount,
   decimal? CountedBaseAmount,
   decimal? VarianceBaseAmount);
@@ -236,6 +267,11 @@ public sealed record PosXReportResponse(
   decimal ServiceSalesBase,
   decimal ProductSalesBase,
   decimal GrossSalesBase,
+  int RefundCount,
+  decimal ServiceRefundsBase,
+  decimal ProductRefundsBase,
+  decimal RefundTotalBase,
+  decimal NetSalesBase,
   Guid BaseCurrencyId,
   string BaseCurrencyCode,
   List<PosPaymentSummaryResponse> Payments,
@@ -255,6 +291,9 @@ public sealed record PosZReportListResponse(
   DateTimeOffset ClosedAtUtc,
   int SaleCount,
   decimal GrossSalesBase,
+  int RefundCount,
+  decimal RefundTotalBase,
+  decimal NetSalesBase,
   decimal VarianceBase,
   string BaseCurrencyCode);
 
@@ -280,6 +319,11 @@ public sealed record PosZReportResponse(
   decimal ServiceSalesBase,
   decimal ProductSalesBase,
   decimal GrossSalesBase,
+  int RefundCount,
+  decimal ServiceRefundsBase,
+  decimal ProductRefundsBase,
+  decimal RefundTotalBase,
+  decimal NetSalesBase,
   Guid BaseCurrencyId,
   string BaseCurrencyCode,
   List<PosPaymentSummaryResponse> Payments,
@@ -294,6 +338,9 @@ public sealed record PosSaleListResponse(
   Guid? CustomerId,
   string? CustomerName,
   decimal Total,
+  decimal RefundedBaseAmount,
+  decimal NetSaleBaseAmount,
+  PosRefundState RefundStatus,
   string BaseCurrencyCode,
   string CashierUsername);
 
@@ -363,6 +410,12 @@ public sealed record PosSaleResponse(
   decimal TenderedBaseAmount,
   decimal ChangeBaseAmount,
   decimal SettledBaseAmount,
+  decimal OutstandingBaseAmount,
+  decimal RefundedBaseAmount,
+  decimal RemainingRefundableBaseAmount,
+  decimal NetSaleBaseAmount,
+  PosRefundState RefundStatus,
+  PosPaymentMode PaymentMode,
   Guid CashierUserId,
   string CashierUsername,
   DateTime CompletedAtUtc,
@@ -370,10 +423,125 @@ public sealed record PosSaleResponse(
   List<Guid> StockMovementIds,
   List<PosSaleLineResponse> Lines,
   List<PosTenderResponse> Tenders,
-  PosChangeResponse? Change);
+  PosChangeResponse? Change,
+  List<PosRefundSummaryResponse> Refunds);
+
+public sealed record PosRefundSummaryResponse(
+  Guid Id,
+  string DocumentNumber,
+  bool IsVoid,
+  PosRefundReason Reason,
+  decimal TotalRefundBase,
+  decimal ReceivableReversalBase,
+  decimal CashRefundBase,
+  DateTime PostedAtUtc,
+  string ApprovedByUsername);
+
+public sealed record PosRefundabilityLineResponse(
+  Guid SalesInvoiceLineId,
+  SalesLineType LineType,
+  string Description,
+  string? Sku,
+  string? UnitCode,
+  string? ProfessionalUsername,
+  decimal OriginalQuantity,
+  decimal RefundedQuantity,
+  decimal RefundableQuantity,
+  decimal OriginalLineAmountBase,
+  decimal RefundedAmountBase,
+  decimal RefundableAmountBase,
+  bool CanRestock);
+
+public sealed record PosRefundabilityResponse(
+  Guid PosSaleId,
+  string PosSaleDocumentNumber,
+  Guid SalesInvoiceId,
+  string SalesInvoiceDocumentNumber,
+  Guid BranchId,
+  Guid? CustomerId,
+  string? CustomerName,
+  Guid? WarehouseId,
+  DateTime CompletedAtUtc,
+  string CashierUsername,
+  decimal OriginalTotalBase,
+  decimal RefundedBaseAmount,
+  decimal RemainingRefundableBaseAmount,
+  decimal CurrentOutstandingBaseAmount,
+  PosRefundState RefundStatus,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  List<PosRefundabilityLineResponse> Lines,
+  List<PosRefundSummaryResponse> Refunds);
+
+public sealed record PosRefundLineResponse(
+  Guid Id,
+  Guid OriginalSalesInvoiceLineId,
+  SalesLineType LineType,
+  string Description,
+  string? UnitCode,
+  string? ProfessionalUsername,
+  decimal Quantity,
+  decimal BaseQuantity,
+  decimal RefundAmountBase,
+  bool RestockProduct,
+  decimal? OriginalUnitCostBase,
+  List<Guid> StockMovementIds);
+
+public sealed record PosRefundTenderResponse(
+  Guid Id,
+  int Sequence,
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Amount,
+  decimal ExchangeRate,
+  decimal BaseAmount,
+  Guid MoneyLedgerEntryId);
+
+public sealed record PosRefundResponse(
+  Guid Id,
+  string DocumentNumber,
+  Guid PosSaleId,
+  string PosSaleDocumentNumber,
+  Guid SalesInvoiceId,
+  string SalesInvoiceDocumentNumber,
+  Guid BranchId,
+  string BranchCode,
+  string BranchName,
+  Guid PosSessionId,
+  string PosSessionNumber,
+  Guid? CustomerId,
+  string? CustomerName,
+  PosRefundReason Reason,
+  string? Notes,
+  bool IsVoid,
+  PosRefundStatus Status,
+  decimal TotalRefundBase,
+  decimal ReceivableReversalBase,
+  decimal CashRefundBase,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  Guid CreatedByUserId,
+  string CreatedByUsername,
+  Guid ApprovedByUserId,
+  string ApprovedByUsername,
+  DateTime CreatedAtUtc,
+  DateTime PostedAtUtc,
+  Guid JournalEntryId,
+  List<PosRefundLineResponse> Lines,
+  List<PosRefundTenderResponse> Tenders);
 
 public enum PosCatalogItemType
 {
   Service,
   Product
+}
+
+public enum PosPaymentMode
+{
+  Paid,
+  Partial,
+  Credit
 }

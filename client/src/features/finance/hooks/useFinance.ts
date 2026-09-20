@@ -91,14 +91,18 @@ export function useEffectiveExchangeRate(currencyId?: string, date?: string, ena
 }
 export function useExchangeRateActions() {
   const client = useQueryClient()
+  const done = () => {
+    refresh(client)
+    client.invalidateQueries({ queryKey: ['pos', 'setup'] })
+  }
   return {
     create: useMutation({
       mutationFn: (body: ExchangeRateInput) => financeApi.createExchangeRate(body),
-      onSuccess: () => refresh(client),
+      onSuccess: done,
     }),
     deactivate: useMutation({
       mutationFn: financeApi.deactivateExchangeRate,
-      onSuccess: () => refresh(client),
+      onSuccess: done,
     }),
   }
 }

@@ -14,7 +14,7 @@ export function DashboardHeader({ onRefresh, isRefreshing }: DashboardHeaderProp
   const currentBranch = branches?.find((b) => b.id === branchId)
 
   const userName = user?.username ? user.username.split(' ')[0] : 'there'
-  const branchName = currentBranch?.name?.toUpperCase() ?? 'PRIVE STUDIO'
+  const branchName = currentBranch?.name?.toUpperCase() ?? 'MAIN BRANCH'
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -3,6 +3,7 @@ using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Business;
 using Api.Modules.Purchase;
+using Api.Modules.Pos;
 using Api.Modules.Sales;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
@@ -857,21 +858,43 @@ public sealed class FinanceService
     CancellationToken ct)
   {
     var query = _db.SalesInvoices.AsNoTracking()
-      .Where(invoice => invoice.CustomerId == customerId && invoice.Status == SalesInvoiceStatus.Posted
-        && invoice.PosSale == null);
+      .Where(invoice => invoice.CustomerId == customerId && invoice.Status == SalesInvoiceStatus.Posted);
     if (currencyId is not null) query = query.Where(invoice => invoice.CurrencyId == currencyId);
     var rows = await query.OrderBy(invoice => invoice.InvoiceDate).ThenBy(invoice => invoice.DocumentNumber)
-      .Select(invoice => new OutstandingSalesInvoiceResponse(
-        invoice.Id, invoice.DocumentNumber, invoice.InvoiceDate, invoice.CustomerId!.Value, invoice.Customer!.Name,
-        invoice.CurrencyId, invoice.Currency.Code, invoice.ExchangeRate, invoice.Total,
-        _db.CustomerReceiptAllocations.Where(allocation => allocation.SalesInvoiceId == invoice.Id
+      .Select(invoice => new
+      {
+        invoice.Id,
+        invoice.DocumentNumber,
+        invoice.InvoiceDate,
+        CustomerId = invoice.CustomerId!.Value,
+        CustomerName = invoice.Customer!.Name,
+        invoice.CurrencyId,
+        CurrencyCode = invoice.Currency.Code,
+        invoice.ExchangeRate,
+        invoice.Total,
+        ReceiptAmount = _db.CustomerReceiptAllocations.Where(allocation => allocation.SalesInvoiceId == invoice.Id
           && allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-          .Sum(allocation => (decimal?)allocation.Amount) ?? 0,
-        invoice.Total - (_db.CustomerReceiptAllocations.Where(allocation => allocation.SalesInvoiceId == invoice.Id
-          && allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-          .Sum(allocation => (decimal?)allocation.Amount) ?? 0)))
+          .Sum(allocation => (decimal?)allocation.Amount) ?? 0m,
+        PosSettledBase = invoice.PosSale == null
+          ? 0m
+          : (invoice.PosSale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
+            - (invoice.PosSale.Change == null ? 0m : invoice.PosSale.Change.BaseAmount),
+        RefundReceivableBase = _db.PosRefunds.Where(refund => refund.SalesInvoiceId == invoice.Id
+          && refund.Status == PosRefundStatus.Posted)
+          .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m
+      })
       .ToListAsync(ct);
-    return rows.Where(invoice => invoice.OutstandingAmount > 0).ToList();
+
+    return rows.Select(row =>
+    {
+      var posReceived = row.ExchangeRate > 0 ? Money(row.PosSettledBase / row.ExchangeRate) : 0m;
+      var received = Money(row.ReceiptAmount + posReceived);
+      var refundReduction = row.ExchangeRate > 0 ? Money(row.RefundReceivableBase / row.ExchangeRate) : 0m;
+      var outstanding = Math.Max(Money(row.Total - received - refundReduction), 0);
+      return new OutstandingSalesInvoiceResponse(
+        row.Id, row.DocumentNumber, row.InvoiceDate, row.CustomerId, row.CustomerName,
+        row.CurrencyId, row.CurrencyCode, row.ExchangeRate, row.Total, received, outstanding);
+    }).Where(invoice => invoice.OutstandingAmount > 0).ToList();
   }
 
   public Task<List<FinanceCustomerResponse>> GetCustomersAsync(CancellationToken ct) =>
@@ -987,7 +1010,7 @@ public sealed class FinanceService
     var rate = ResolveExplicitRate(account.CurrencyId, business.BaseCurrencyId, request.ExchangeRate);
     var invoiceIds = request.Allocations.Select(allocation => allocation.SalesInvoiceId).ToList();
     var invoices = await _db.SalesInvoices.AsNoTracking()
-      .Where(invoice => invoiceIds.Contains(invoice.Id) && invoice.PosSale == null)
+      .Where(invoice => invoiceIds.Contains(invoice.Id))
       .ToDictionaryAsync(invoice => invoice.Id, ct);
     if (invoices.Count != invoiceIds.Count || invoices.Values.Any(invoice => invoice.Status != SalesInvoiceStatus.Posted))
       throw new BadRequestException(ErrorCodes.Finance.SalesInvoiceInvalid,
@@ -1008,13 +1031,40 @@ public sealed class FinanceService
       .GroupBy(allocation => allocation.SalesInvoiceId)
       .Select(group => new { SalesInvoiceId = group.Key, Amount = group.Sum(allocation => allocation.Amount) })
       .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.Amount, ct);
+    var posSettlements = await _db.PosSales.AsNoTracking()
+      .Where(sale => invoiceIds.Contains(sale.SalesInvoiceId))
+      .Select(sale => new
+      {
+        sale.SalesInvoiceId,
+        BaseAmount = (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
+          - (sale.Change == null ? 0m : sale.Change.BaseAmount)
+      })
+      .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.BaseAmount, ct);
+    var refundReductions = await _db.PosRefunds.AsNoTracking()
+      .Where(refund => invoiceIds.Contains(refund.SalesInvoiceId)
+        && refund.Status == PosRefundStatus.Posted)
+      .GroupBy(refund => refund.SalesInvoiceId)
+      .Select(group => new
+      {
+        SalesInvoiceId = group.Key,
+        BaseAmount = group.Sum(refund => refund.ReceivableReversalBase)
+      })
+      .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.BaseAmount, ct);
+
     foreach (var allocation in request.Allocations)
     {
-      var received = postedAllocations.GetValueOrDefault(allocation.SalesInvoiceId);
-      var outstanding = invoices[allocation.SalesInvoiceId].Total - received;
+      var invoice = invoices[allocation.SalesInvoiceId];
+      var posReceived = invoice.ExchangeRate > 0
+        ? Money(posSettlements.GetValueOrDefault(allocation.SalesInvoiceId) / invoice.ExchangeRate)
+        : 0m;
+      var received = Money(postedAllocations.GetValueOrDefault(allocation.SalesInvoiceId) + posReceived);
+      var refundReduction = invoice.ExchangeRate > 0
+        ? Money(refundReductions.GetValueOrDefault(allocation.SalesInvoiceId) / invoice.ExchangeRate)
+        : 0m;
+      var outstanding = Math.Max(Money(invoice.Total - received - refundReduction), 0);
       if (allocation.Amount > outstanding)
         throw new BadRequestException(ErrorCodes.Finance.ReceiptAllocationExceedsOutstanding,
-          $"Allocation for Sales Invoice '{invoices[allocation.SalesInvoiceId].DocumentNumber}' exceeds its outstanding amount.");
+          $"Allocation for Sales Invoice '{invoice.DocumentNumber}' exceeds its outstanding amount.");
     }
     return new CustomerReceiptValidation(account, customer.Name, business.BaseCurrencyId, rate, invoices);
   }

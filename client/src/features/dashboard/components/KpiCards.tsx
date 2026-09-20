@@ -1,20 +1,63 @@
-import type { DashboardSummary } from '../types/dashboard.types'
-import { formatDashboardAmount } from '../utils/dashboard.utils'
+import type { DashboardSummary, DashboardTrendResponse } from '../types/dashboard.types'
+import { formatCompactNumber, formatDashboardAmount } from '../utils/dashboard.utils'
 import {
   TrendingUp,
   TrendingDown,
-  DollarSign,
-  Users,
-  ShoppingCart,
-  Eye,
+  Wallet,
+  Receipt,
+  FileText,
 } from 'lucide-react'
 
 interface KpiCardsProps {
   summary?: DashboardSummary
+  trendData?: DashboardTrendResponse
   isLoading?: boolean
 }
 
-export function KpiCards({ summary, isLoading }: KpiCardsProps) {
+function buildSparkline(values: number[], color: string, gradientId: string, width = 240, height = 32) {
+  if (!values || values.length < 2) {
+    const baselineY = height - 8
+    return {
+      points: `M 0 ${baselineY} L ${width} ${baselineY}`,
+      areaPoints: `M 0 ${baselineY} L ${width} ${baselineY} L ${width} ${height} L 0 ${height} Z`,
+      stroke: color,
+      gradientId,
+    }
+  }
+
+  const min = Math.min(...values, 0)
+  const max = Math.max(...values, 1)
+  const range = max - min || 1
+  const paddingTop = 6
+  const paddingBottom = 6
+  const chartH = height - paddingTop - paddingBottom
+
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width
+    const y = paddingTop + chartH - ((v - min) / range) * chartH
+    return { x, y }
+  })
+
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i === 0 ? 0 : i - 1]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1]
+
+    const cp1x = (p1.x + (p2.x - p0.x) / 6).toFixed(1)
+    const cp1y = (p1.y + (p2.y - p0.y) / 6).toFixed(1)
+    const cp2x = (p2.x - (p3.x - p1.x) / 6).toFixed(1)
+    const cp2y = (p2.y - (p3.y - p1.y) / 6).toFixed(1)
+
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+
+  const areaPoints = `${d} L ${width} ${height} L 0 ${height} Z`
+  return { points: d, areaPoints, stroke: color, gradientId }
+}
+
+export function KpiCards({ summary, trendData, isLoading }: KpiCardsProps) {
   if (isLoading || !summary) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -40,78 +83,85 @@ export function KpiCards({ summary, isLoading }: KpiCardsProps) {
     todaySalesBase,
     todaySalesCount,
     todaySalesChangePercent,
+    todayCashReceivedBase,
+    todayCashPaidBase,
     todayNetCashMovementBase,
-    todayExpensesBase,
     customerReceivablesBase,
+    customerOutstandingInvoiceCount,
+    customerOutstandingCustomerCount,
+    todayExpensesBase,
+    todayExpenseCount,
     baseCurrencyCode,
   } = summary
 
   const isNetCashPositive = todayNetCashMovementBase >= 0
+
+  const trendItems = trendData?.items ?? []
+  const salesHistory = trendItems.map((d) => d.salesBase)
+  const netHistory = trendItems.map((d) => d.netBase)
+  const expenseHistory = trendItems.map((d) => d.expensesBase)
 
   const cards = [
     {
       title: "Today's Sales",
       value: formatDashboardAmount(todaySalesBase, baseCurrencyCode),
       subtext: `${todaySalesCount} completed ${todaySalesCount === 1 ? 'sale' : 'sales'}`,
-      change: todaySalesChangePercent !== null ? `${todaySalesChangePercent >= 0 ? '+' : ''}${todaySalesChangePercent}%` : '+12.5%',
-      isPositive: (todaySalesChangePercent ?? 12.5) >= 0,
-      icon: <DollarSign className="size-5 text-orange-600 dark:text-orange-400" />,
+      change:
+        todaySalesChangePercent !== null
+          ? `${todaySalesChangePercent >= 0 ? '+' : ''}${todaySalesChangePercent}%`
+          : null,
+      changeLabel: 'vs yesterday',
+      isPositive: (todaySalesChangePercent ?? 0) >= 0,
+      icon: <TrendingUp className="size-5 text-orange-600 dark:text-orange-400" />,
       iconBg: 'bg-orange-50 dark:bg-orange-950/40 border border-orange-200/60 dark:border-orange-900/40',
       color: '#EA580C',
-      sparkline: {
-        stroke: '#EA580C',
-        gradientId: 'grad-orange',
-        points: 'M 0 25 C 20 28, 40 18, 60 22 C 80 26, 100 20, 120 18 C 140 16, 160 22, 180 14 C 200 6, 220 12, 240 10',
-        areaPoints: 'M 0 25 C 20 28, 40 18, 60 22 C 80 26, 100 20, 120 18 C 140 16, 160 22, 180 14 C 200 6, 220 12, 240 10 L 240 32 L 0 32 Z',
-      },
+      sparkline: buildSparkline(salesHistory, '#EA580C', 'kpi-spark-orange'),
     },
     {
       title: 'Net Cash Flow',
       value: `${isNetCashPositive ? '+' : '-'}${formatDashboardAmount(todayNetCashMovementBase, baseCurrencyCode)}`,
-      subtext: 'Operational movement',
-      change: '+8.2%',
+      subtext:
+        todayCashReceivedBase > 0 || todayCashPaidBase > 0
+          ? `In: +${formatCompactNumber(todayCashReceivedBase)} • Out: -${formatCompactNumber(todayCashPaidBase)}`
+          : 'Operational movement',
+      change: isNetCashPositive ? '+Inflow' : '-Outflow',
+      changeLabel: 'Today',
       isPositive: isNetCashPositive,
-      icon: <Users className="size-5 text-teal-600 dark:text-teal-400" />,
+      icon: <Wallet className="size-5 text-teal-600 dark:text-teal-400" />,
       iconBg: 'bg-teal-50 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-900/40',
       color: '#0D9488',
-      sparkline: {
-        stroke: '#0D9488',
-        gradientId: 'grad-teal',
-        points: 'M 0 22 C 30 22, 50 18, 80 19 C 110 20, 130 14, 160 16 C 190 18, 210 12, 240 12',
-        areaPoints: 'M 0 22 C 30 22, 50 18, 80 19 C 110 20, 130 14, 160 16 C 190 18, 210 12, 240 12 L 240 32 L 0 32 Z',
-      },
+      sparkline: buildSparkline(netHistory, '#0D9488', 'kpi-spark-teal'),
     },
     {
       title: "Today's Expenses",
       value: formatDashboardAmount(todayExpensesBase, baseCurrencyCode),
-      subtext: 'Posted vouchers',
-      change: '-3.1%',
+      subtext: `${todayExpenseCount} posted ${todayExpenseCount === 1 ? 'voucher' : 'vouchers'}`,
+      change: todayExpensesBase > 0 ? 'Recorded' : null,
+      changeLabel: 'Posted vouchers',
       isPositive: false,
-      icon: <ShoppingCart className="size-5 text-sky-600 dark:text-sky-400" />,
+      icon: <Receipt className="size-5 text-sky-600 dark:text-sky-400" />,
       iconBg: 'bg-sky-50 dark:bg-sky-950/40 border border-sky-200/60 dark:border-sky-900/40',
       color: '#0284C7',
-      sparkline: {
-        stroke: '#0284C7',
-        gradientId: 'grad-blue',
-        points: 'M 0 16 C 30 14, 50 24, 80 20 C 110 16, 140 22, 170 18 C 200 14, 220 20, 240 18',
-        areaPoints: 'M 0 16 C 30 14, 50 24, 80 20 C 110 16, 140 22, 170 18 C 200 14, 220 20, 240 18 L 240 32 L 0 32 Z',
-      },
+      sparkline: buildSparkline(expenseHistory, '#0284C7', 'kpi-spark-sky'),
     },
     {
       title: 'Customer Receivables',
       value: formatDashboardAmount(customerReceivablesBase, baseCurrencyCode),
-      subtext: 'Pending collection',
-      change: '+24.7%',
+      subtext:
+        customerOutstandingCustomerCount > 0
+          ? `${customerOutstandingInvoiceCount} unpaid • ${customerOutstandingCustomerCount} ${customerOutstandingCustomerCount === 1 ? 'client' : 'clients'}`
+          : `${customerOutstandingInvoiceCount} unpaid ${customerOutstandingInvoiceCount === 1 ? 'invoice' : 'invoices'}`,
+      change: customerOutstandingInvoiceCount > 0 ? `${customerOutstandingInvoiceCount} pending` : null,
+      changeLabel: 'Pending collection',
       isPositive: true,
-      icon: <Eye className="size-5 text-amber-600 dark:text-amber-400" />,
+      icon: <FileText className="size-5 text-amber-600 dark:text-amber-400" />,
       iconBg: 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/40',
       color: '#F59E0B',
-      sparkline: {
-        stroke: '#F59E0B',
-        gradientId: 'grad-amber',
-        points: 'M 0 26 C 40 26, 80 24, 120 22 C 160 20, 200 16, 240 10',
-        areaPoints: 'M 0 26 C 40 26, 80 24, 120 22 C 160 20, 200 16, 240 10 L 240 32 L 0 32 Z',
-      },
+      sparkline: buildSparkline(
+        salesHistory.map((s, i) => s * 0.4 + (customerReceivablesBase / (salesHistory.length || 1)) * (i + 1) * 0.1),
+        '#F59E0B',
+        'kpi-spark-amber'
+      ),
     },
   ]
 
@@ -142,30 +192,36 @@ export function KpiCards({ summary, isLoading }: KpiCardsProps) {
 
             {/* Trend percentage & subtext */}
             <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1">
-                <span
-                  className={`inline-flex items-center gap-1 font-semibold ${
-                    card.isPositive
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-rose-600 dark:text-rose-400'
-                  }`}
-                >
-                  {card.isPositive ? (
-                    <TrendingUp className="size-3.5" />
-                  ) : (
-                    <TrendingDown className="size-3.5" />
-                  )}
-                  {card.change}
-                </span>
-                <span className="text-muted-foreground">vs last month</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                {card.change ? (
+                  <>
+                    <span
+                      className={`inline-flex items-center gap-0.5 font-semibold text-xs ${
+                        card.isPositive
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-rose-600 dark:text-rose-400'
+                      }`}
+                    >
+                      {card.isPositive ? (
+                        <TrendingUp className="size-3.5" />
+                      ) : (
+                        <TrendingDown className="size-3.5" />
+                      )}
+                      {card.change}
+                    </span>
+                    <span className="text-muted-foreground text-[11px] truncate">{card.changeLabel}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground text-[11px] truncate">{card.changeLabel}</span>
+                )}
               </div>
               {card.subtext && (
-                <span className="text-muted-foreground text-[11px] truncate">{card.subtext}</span>
+                <span className="text-muted-foreground text-[11px] truncate shrink-0">{card.subtext}</span>
               )}
             </div>
           </div>
 
-          {/* Bottom Wavy Sparkline bleeding edge to edge */}
+          {/* Bottom Dynamic Wavy Sparkline bleeding edge to edge */}
           <div className="w-full h-8 mt-3 relative overflow-hidden">
             <svg
               viewBox="0 0 240 32"
@@ -174,7 +230,7 @@ export function KpiCards({ summary, isLoading }: KpiCardsProps) {
             >
               <defs>
                 <linearGradient id={card.sparkline.gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={card.color} stopOpacity="0.28" />
+                  <stop offset="0%" stopColor={card.color} stopOpacity="0.25" />
                   <stop offset="100%" stopColor={card.color} stopOpacity="0.0" />
                 </linearGradient>
               </defs>
@@ -188,6 +244,8 @@ export function KpiCards({ summary, isLoading }: KpiCardsProps) {
                 stroke={card.sparkline.stroke}
                 strokeWidth="2.2"
                 strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
               />
             </svg>
           </div>

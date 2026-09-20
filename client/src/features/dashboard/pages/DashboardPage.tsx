@@ -17,8 +17,6 @@ import { RecentActivityList } from '../components/RecentActivityList'
 import { NeedsAttentionPanel } from '../components/NeedsAttentionPanel'
 import { AlertCircle, RotateCw } from 'lucide-react'
 
-import { MonthlyGoalsCard } from '../components/MonthlyGoalsCard'
-
 export function DashboardPage() {
   const queryClient = useQueryClient()
   const [selectedDays, setSelectedDays] = useState(14)
@@ -62,7 +60,7 @@ export function DashboardPage() {
           <button
             type="button"
             onClick={handleRefresh}
-            className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors cursor-pointer"
           >
             <RotateCw className="size-3.5" />
             Try Again
@@ -74,15 +72,19 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Header with greeting */}
+      {/* 1. Header with greeting and branch info */}
       <DashboardHeader onRefresh={handleRefresh} isRefreshing={isRefreshing} />
 
-      {/* 2. Top 4 KPI Cards with Wavy Sparklines */}
-      <KpiCards summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
+      {/* 2. Top 4 KPI Cards with Dynamic Sparklines */}
+      <KpiCards
+        summary={summaryQuery.data}
+        trendData={trendsQuery.data}
+        isLoading={summaryQuery.isLoading}
+      />
 
-      {/* 3. Main Dashboard Content: Left Column (Trend Chart + Recent Transactions) & Right Column (Sales Mix + Goals + Activity) */}
+      {/* 3. Main Dashboard Content: Left Column (Trend Chart + Recent Transactions) & Right Column (Sales Mix + Needs Attention + Recent Activity) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Overview Monthly Spline Chart + Recent Transactions */}
+        {/* Left Column: Trend Spline Chart + Recent Transactions */}
         <div className="lg:col-span-7 xl:col-span-8 space-y-6">
           <SalesExpenseTrendChart
             data={trendsQuery.data}
@@ -97,14 +99,12 @@ export function DashboardPage() {
           />
         </div>
 
-        {/* Right Column: Sales Mix, Monthly Goals, Needs Attention, Activity */}
+        {/* Right Column: Sales Mix + Needs Attention + Team Activity */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-6">
           <SalesMixChart
             data={salesMixQuery.data}
             isLoading={salesMixQuery.isLoading}
           />
-
-          <MonthlyGoalsCard isLoading={summaryQuery.isLoading} />
 
           <NeedsAttentionPanel
             summary={summaryQuery.data}

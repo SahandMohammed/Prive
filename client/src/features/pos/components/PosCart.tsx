@@ -4,6 +4,8 @@ import { convertBasePriceToUnitPrice, convertToBaseQuantity, productUnitOptions 
 import type { UnitConvertibleProduct } from '@/features/inventory'
 import { cn } from '@/lib/utils'
 import { CustomerPicker } from './CustomerPicker'
+import { posCartLineTotal, posCartTotal } from '../lib/posCart'
+import { roundPosMoney } from '../lib/posMoney'
 import { PosCatalogItemType } from '../types/pos.types'
 import type { PosCartLine, PosCustomer, PosSetup } from '../types/pos.types'
 
@@ -26,12 +28,13 @@ export function PosCart({
   onCustomerChange: (customer: PosCustomer | null) => void
   onCheckout: () => void
 }) {
-  const total = cart.reduce((sum, line) => sum + line.unitPriceBase * line.quantity, 0)
+  const total = posCartTotal(cart)
   const hasProduct = cart.some((line) => line.item.itemType === PosCatalogItemType.Product)
+  const hasUsableMoneyAccount = setup.moneyAccounts.some((account) => account.currentExchangeRate !== null)
   const canCheckout =
     cart.length > 0 &&
     (!hasProduct || warehouseSelected) &&
-    setup.moneyAccounts.length > 0
+    hasUsableMoneyAccount
 
   const updateQuantity = (index: number, quantity: number) => {
     if (quantity <= 0) {
@@ -126,7 +129,7 @@ export function PosCart({
                         const unitPrice = convertBasePriceToUnitPrice(product, event.target.value, line.item.unitPriceBase)
                         const baseQuantity = convertToBaseQuantity(product, event.target.value, line.quantity)
                         if (unitPrice === null || baseQuantity === null || baseQuantity > (line.item.availableQuantity ?? 0)) return
-                        onCartChange(cart.map((item, currentIndex) => currentIndex === index ? { ...item, unitOfMeasureId: event.target.value, unitPriceBase: round4(unitPrice) } : item))
+                        onCartChange(cart.map((item, currentIndex) => currentIndex === index ? { ...item, unitOfMeasureId: event.target.value, unitPriceBase: roundPosMoney(unitPrice) } : item))
                       }}
                       className="mt-2 h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
                     >
@@ -146,7 +149,7 @@ export function PosCart({
                         <Plus className="size-3.5" />
                       </Button>
                     </div>
-                    <span className="font-mono text-sm font-bold">{amount(line.unitPriceBase * line.quantity)}</span>
+                    <span className="font-mono text-sm font-bold">{amount(posCartLineTotal(line))}</span>
                   </div>
 
                   {isProduct && (
@@ -176,8 +179,8 @@ export function PosCart({
           <Banknote className="size-4" />
           Checkout · {amount(total)} {setup.baseCurrencyCode}
         </Button>
-        {setup.moneyAccounts.length === 0 ? (
-          <p className="mt-2 text-center text-[11px] text-destructive">No operable Money Account is available for this branch.</p>
+        {!hasUsableMoneyAccount ? (
+          <p className="mt-2 text-center text-[11px] text-destructive">No operable Money Account with a valid exchange rate is available for this branch.</p>
         ) : hasProduct && !warehouseSelected ? (
           <p className="mt-2 text-center text-[11px] text-destructive">Select a warehouse before selling products.</p>
         ) : (
@@ -198,4 +201,3 @@ function asUnitProduct(item: PosCartLine['item']): UnitConvertibleProduct {
 }
 
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
-const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10_000) / 10_000

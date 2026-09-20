@@ -60,6 +60,7 @@ public sealed class SalesInvoiceEntityConfiguration : IEntityTypeConfiguration<S
     builder.HasOne(invoice => invoice.CreatedByUser).WithMany().HasForeignKey(invoice => invoice.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(invoice => invoice.JournalEntry).WithOne(entry => entry.SourceSalesInvoice).HasForeignKey<SalesInvoiceEntity>(invoice => invoice.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
     builder.HasIndex(invoice => invoice.JournalEntryId).IsUnique().HasFilter("\"JournalEntryId\" IS NOT NULL");
+    builder.HasIndex(invoice => invoice.AccountsReceivableAccountId);
   }
 }
 
@@ -80,6 +81,8 @@ public sealed class SalesInvoiceLineEntityConfiguration : IEntityTypeConfigurati
     builder.Property(line => line.LineSubtotal).HasPrecision(19, 4).IsRequired();
     builder.Property(line => line.LineAmount).HasPrecision(19, 4).IsRequired();
     builder.Property(line => line.BaseLineAmount).HasPrecision(19, 4).IsRequired();
+    builder.Property(line => line.OriginalUnitCostBase).HasPrecision(19, 4);
+    builder.HasIndex(line => line.RevenueAccountId);
     builder.HasIndex(line => new { line.SalesInvoiceId, line.ServiceId }).IsUnique().HasFilter("\"ServiceId\" IS NOT NULL");
     builder.HasIndex(line => new { line.SalesInvoiceId, line.ProductId }).IsUnique().HasFilter("\"ProductId\" IS NOT NULL");
     builder.HasOne(line => line.SalesInvoice).WithMany(invoice => invoice.Lines).HasForeignKey(line => line.SalesInvoiceId).OnDelete(DeleteBehavior.Cascade);

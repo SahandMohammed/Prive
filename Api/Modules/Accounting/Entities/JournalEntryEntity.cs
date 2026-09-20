@@ -3,6 +3,7 @@ using Api.Modules.Purchase;
 using Api.Modules.Finance;
 using Api.Modules.Sales;
 using Api.Modules.Expenses;
+using Api.Modules.Pos;
 
 namespace Api.Modules.Accounting;
 
@@ -27,6 +28,7 @@ public sealed class JournalEntryEntity
   public SupplierPaymentEntity? SourceSupplierPayment { get; set; }
   public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
   public ExpenseDocumentEntity? SourceExpenseDocument { get; set; }
+  public PosRefundEntity? SourcePosRefund { get; set; }
 }
 
 public enum JournalEntryStatus

@@ -54,6 +54,9 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<PosSaleEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSale.SalesInvoice.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosChangeEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSale.SalesInvoice.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosRefundEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosRefundLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosRefundTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
     modelBuilder.Entity<ContactEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ProductCategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ProductSubcategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
@@ -183,6 +186,20 @@ public sealed partial class AppDbContext
           DocumentNumber = posSale.DocumentNumber,
           Description = "Completed POS sale",
           TimestampUtc = posSale.CompletedAtUtc
+        });
+      }
+      else if (entry.Entity is PosRefundEntity refund && entry.State == EntityState.Added)
+      {
+        ActivityLogs.Add(new ActivityLogEntity
+        {
+          BranchId = branchId,
+          UserId = refund.ApprovedByUserId,
+          Action = refund.IsVoid ? "voided" : "refunded",
+          EntityType = "POS Refund",
+          EntityId = refund.Id,
+          DocumentNumber = refund.DocumentNumber,
+          Description = refund.IsVoid ? "Voided remaining POS sale" : "Posted POS refund",
+          TimestampUtc = refund.PostedAtUtc
         });
       }
       else if (entry.Entity is SalesInvoiceEntity sale)

@@ -30,10 +30,20 @@ export function OpenSessionScreen({
   )
   const cashCurrencies = useMemo(() => {
     const rows = setup.moneyAccounts
-      .filter((account) => account.type === MoneyAccountType.Cashbox)
+      .filter((account) => account.type === MoneyAccountType.Cashbox
+        && account.branchId === branch?.id
+        && account.currentExchangeRate !== null)
       .map((account) => ({ id: account.currencyId, code: account.currencyCode }))
     return [...new Map(rows.map((row) => [row.id, row])).values()].sort((a, b) => a.code.localeCompare(b.code))
-  }, [setup.moneyAccounts])
+  }, [branch?.id, setup.moneyAccounts])
+  const unavailableCashCurrencies = useMemo(() => {
+    const rows = setup.moneyAccounts
+      .filter((account) => account.type === MoneyAccountType.Cashbox
+        && account.branchId === branch?.id
+        && account.currentExchangeRate === null)
+      .map((account) => account.currencyCode)
+    return [...new Set(rows)].sort()
+  }, [branch?.id, setup.moneyAccounts])
 
   const form = useForm<PosOpenSessionValues>({
     resolver: zodResolver(posOpenSessionSchema),
@@ -99,6 +109,11 @@ export function OpenSessionScreen({
               <p className="text-xs text-muted-foreground">Count each physical Cashbox currency separately.</p>
             </div>
             <div className="space-y-2">
+              {unavailableCashCurrencies.length > 0 && (
+                <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
+                  {unavailableCashCurrencies.join(', ')} cash is unavailable because its rate to {setup.baseCurrencyCode} is missing. You can still open the session and use currencies with a valid rate.
+                </p>
+              )}
               {cashCurrencies.length === 0 ? (
                 <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
                   No operable Cashbox Money Account is assigned to this cashier. The session can open with no physical drawer currencies, but cash tender will not be available until Finance access is configured.
