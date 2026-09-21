@@ -165,7 +165,7 @@ export function OpenSessionScreen({
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             <Button type="button" variant="outline" onClick={onExit}>
-              <ArrowLeft className="size-4" /> Exit POS
+              <ArrowLeft className="size-4" /> Back to Sessions
             </Button>
             <Button type="submit" disabled={availableRegisters.length === 0 || openSession.isPending}>
               {openSession.isPending ? 'Opening…' : 'Open Session'}
