@@ -487,7 +487,7 @@ export function PosSessionsPage() {
       </Tabs>
 
       <Dialog open={openSessionDialog} onOpenChange={setOpenSessionDialog}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto p-0">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-4xl overflow-y-auto p-0 sm:w-full">
           {setup.data ? (
             <OpenSessionScreen
               embedded
