@@ -153,7 +153,7 @@ describe('POS session dashboard', () => {
 
   it('routes a user without an open session to create one in the workspace', async () => {
     mount()
-    fireEvent.click(await screen.findByRole('button', { name: 'New Session' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
     expect(await screen.findByText('POS workspace route')).toBeInTheDocument()
   })
 
