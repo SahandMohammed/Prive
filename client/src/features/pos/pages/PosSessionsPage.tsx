@@ -1,14 +1,25 @@
 import { useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Play, Plus } from 'lucide-react'
+import { AlertCircle, Loader2, Play, Plus, ReceiptText, Settings2, Store } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
+import { DataTableShell } from '@/components/data-table/DataTableShell'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCurrentUser } from '@/features/auth'
 import { useBranchSelectionStore } from '@/features/business'
+import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import {
   useActivePosSession,
   useCreatePosRegister,
@@ -18,7 +29,6 @@ import {
   usePosZReports,
   useUpdatePosRegister,
 } from '../hooks/usePos'
-import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { posRegisterSchema } from '../schemas/pos.schema'
 import type { PosRegisterValues } from '../schemas/pos.schema'
 import { PosSessionStatus } from '../types/pos.types'
@@ -27,33 +37,45 @@ import type { PosSession } from '../types/pos.types'
 export function PosSessionsPage() {
   const navigate = useNavigate()
   const { data: user } = useCurrentUser()
+  const selectedBranchId = useBranchSelectionStore((state) => state.branchId)
   const [status, setStatus] = useState<'' | PosSessionStatus>('')
   const [sessionPage, setSessionPage] = useState(1)
   const [sessionPageSize, setSessionPageSize] = useState(20)
   const [reportPage, setReportPage] = useState(1)
   const [reportPageSize, setReportPageSize] = useState(20)
   const [openSessionDialog, setOpenSessionDialog] = useState(false)
-  const selectedBranchId = useBranchSelectionStore((state) => state.branchId)
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false)
+
   const activeSession = useActivePosSession()
   const setup = usePosSetup()
   const registers = usePosRegisters(true)
-  const sessions = usePosSessions({ page: sessionPage, pageSize: sessionPageSize, status: status === '' ? undefined : status })
+  const sessions = usePosSessions({
+    page: sessionPage,
+    pageSize: sessionPageSize,
+    status: status === '' ? undefined : status,
+  })
   const reports = usePosZReports({ page: reportPage, pageSize: reportPageSize })
   const createRegister = useCreatePosRegister()
   const updateRegister = useUpdatePosRegister()
-  const canManageRegisters = user?.role === 'SuperAdmin' || user?.role === 'Owner' || user?.role === 'Manager'
-  const selectedBranch = setup.data?.branches.find((branch) => branch.id === selectedBranchId)
-    ?? setup.data?.branches[0]
+
+  const canManageRegisters =
+    user?.role === 'SuperAdmin' || user?.role === 'Owner' || user?.role === 'Manager'
+  const selectedBranch =
+    setup.data?.branches.find((branch) => branch.id === selectedBranchId) ?? setup.data?.branches[0]
 
   const registerForm = useForm<PosRegisterValues>({
     resolver: zodResolver(posRegisterSchema),
     defaultValues: { code: '', name: '' },
   })
 
+  const closeRegisterDialog = () => {
+    setRegisterDialogOpen(false)
+    registerForm.reset()
+    createRegister.reset()
+  }
+
   const create = registerForm.handleSubmit((values) => {
-    createRegister.mutate(values, {
-      onSuccess: () => registerForm.reset(),
-    })
+    createRegister.mutate(values, { onSuccess: closeRegisterDialog })
   })
 
   const openWorkspace = () => {
@@ -77,259 +99,510 @@ export function PosSessionsPage() {
     navigate('/pos/workspace')
   }
 
+  const sessionPrerequisiteError =
+    activeSession.error?.message ?? setup.error?.message ?? registers.error?.message
+
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
-        <header className="flex flex-col gap-4 rounded-2xl border bg-card p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Point of Sale</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Start your own POS session, continue an open session, or review branch session history.
-            </p>
-            {activeSession.data && (
-              <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                Your current session is {activeSession.data.sessionNumber} on {activeSession.data.registerCode}.
-              </p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={activeSession.data ? openWorkspace : () => setOpenSessionDialog(true)}
-              disabled={
-                activeSession.isPending
-                || activeSession.isError
-                || (!activeSession.data && (setup.isPending || setup.isError || registers.isPending || registers.isError))
-              }
-            >
-              {activeSession.data ? <Play className="size-4" /> : <Plus className="size-4" />}
-              {activeSession.isPending
-                ? 'Checking Session…'
-                : activeSession.data
-                  ? 'Continue Session'
-                  : 'Create New Session'}
-            </Button>
-          </div>
-        </header>
-
-        {(activeSession.isError || setup.isError || registers.isError) && (
-          <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {activeSession.error?.message ?? setup.error?.message ?? registers.error?.message}
+    <div className="flex h-full w-full flex-col space-y-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Point of Sale
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage cashier sessions, POS registers, and immutable closing reports.
           </p>
-        )}
+        </div>
+        <Button
+          className="gap-1.5"
+          onClick={activeSession.data ? openWorkspace : () => setOpenSessionDialog(true)}
+          disabled={
+            activeSession.isPending
+            || activeSession.isError
+            || (!activeSession.data && (setup.isPending || setup.isError || registers.isPending || registers.isError))
+          }
+        >
+          {activeSession.data ? <Play className="size-4" /> : <Plus className="size-4" />}
+          {activeSession.isPending
+            ? 'Checking session…'
+            : activeSession.data
+              ? 'Continue session'
+              : 'Create new session'}
+        </Button>
+      </div>
 
-        <section aria-label="Session history" className="rounded-2xl border bg-card p-5">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-semibold">Sessions</h2>
-              <p className="text-sm text-muted-foreground">
-                Cashiers see their own sessions. Managers and owners can monitor sessions for the selected branch.
-              </p>
-            </div>
-            <select
-              value={status}
-              aria-label="Session status"
-              onChange={(event) => {
-                const value = event.target.value
-                setStatus(value === String(PosSessionStatus.Open) ? PosSessionStatus.Open
-                  : value === String(PosSessionStatus.Closed) ? PosSessionStatus.Closed : '')
-                setSessionPage(1)
-              }}
-              className="h-9 rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="">All statuses</option>
-              <option value={PosSessionStatus.Open}>Open</option>
-              <option value={PosSessionStatus.Closed}>Closed</option>
-            </select>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="pb-2">Session</th>
-                  <th>Register</th>
-                  <th>Cashier</th>
-                  <th>Opened</th>
-                  <th>Closed</th>
-                  <th>Status</th>
-                  <th>Sales</th>
-                  <th>Gross</th>
-                  <th>Variance</th>
-                  <th className="text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {(sessions.data?.data ?? []).map((row) => {
-                  const isCurrentSession = row.status === PosSessionStatus.Open && row.id === activeSession.data?.id
-                  return (
-                    <tr key={row.id}>
-                      <td className="py-3 font-mono font-medium">{row.sessionNumber}</td>
-                      <td>{row.registerCode} — {row.registerName}</td>
-                      <td>{row.cashierUsername}</td>
-                      <td>{dateTime(row.openedAtUtc)}</td>
-                      <td>{row.closedAtUtc ? dateTime(row.closedAtUtc) : '—'}</td>
-                      <td>
-                        <span className={row.status === PosSessionStatus.Open
-                          ? 'inline-flex rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400'
-                          : 'inline-flex rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground'}
-                        >
-                          {row.status === PosSessionStatus.Open ? 'Open' : 'Closed'}
-                          {isCurrentSession ? ' · Yours' : ''}
-                        </span>
-                      </td>
-                      <td>{row.saleCount}</td>
-                      <td>{money(row.grossSalesBase)} {row.baseCurrencyCode}</td>
-                      <td>{signed(row.varianceBase)} {row.baseCurrencyCode}</td>
-                      <td className="text-right">
-                        {isCurrentSession ? (
-                          <Button size="sm" variant="outline" onClick={openWorkspace}>
-                            <Play className="size-3.5" /> Continue
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          {sessions.isPending && <p className="py-4 text-sm text-muted-foreground">Loading sessions…</p>}
-          {sessions.isError && <p role="alert" className="py-4 text-sm text-destructive">{sessions.error.message}</p>}
-          {sessions.data?.data.length === 0 && (
-            <p className="py-4 text-sm text-muted-foreground">
-              No sessions found. Use Create New Session to start the first session available to you.
+      {activeSession.data && (
+        <div className="flex flex-col gap-2 rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900 dark:bg-emerald-950/20">
+          <div>
+            <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
+              Session {activeSession.data.sessionNumber} is open
             </p>
+            <p className="text-xs text-emerald-700/80 dark:text-emerald-400">
+              {activeSession.data.registerCode} — {activeSession.data.registerName}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={openWorkspace}>
+            <Play className="size-3.5" />
+            Open workspace
+          </Button>
+        </div>
+      )}
+
+      {sessionPrerequisiteError && (
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          {sessionPrerequisiteError}
+        </p>
+      )}
+
+      <Tabs defaultValue="sessions" className="gap-5">
+        <TabsList variant="line" className="w-full justify-start border-b border-slate-200 dark:border-slate-800">
+          <TabsTrigger value="sessions">
+            <Store data-icon="inline-start" />
+            Sessions
+          </TabsTrigger>
+          {canManageRegisters && (
+            <TabsTrigger value="registers">
+              <Settings2 data-icon="inline-start" />
+              Registers
+            </TabsTrigger>
           )}
-          {sessions.data && (
-            <DataTablePagination
-              page={sessionPage}
-              pageSize={sessionPageSize}
-              totalItems={sessions.data.meta.totalCount}
-              onPageChange={setSessionPage}
-              onPageSizeChange={(size) => { setSessionPageSize(size); setSessionPage(1) }}
-            />
-          )}
-        </section>
+          <TabsTrigger value="reports">
+            <ReceiptText data-icon="inline-start" />
+            Z Reports
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="sessions" className="space-y-4">
+          <section aria-label="Session history" className="space-y-4">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Sessions</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Cashiers see their own history. Managers and owners can monitor the selected branch.
+                </p>
+              </div>
+              <select
+                value={status}
+                aria-label="Session status"
+                onChange={(event) => {
+                  const value = event.target.value
+                  setStatus(
+                    value === String(PosSessionStatus.Open)
+                      ? PosSessionStatus.Open
+                      : value === String(PosSessionStatus.Closed)
+                        ? PosSessionStatus.Closed
+                        : ''
+                  )
+                  setSessionPage(1)
+                }}
+                className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+              >
+                <option value="">All statuses</option>
+                <option value={PosSessionStatus.Open}>Open</option>
+                <option value={PosSessionStatus.Closed}>Closed</option>
+              </select>
+            </div>
+
+            <DataTableShell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className={head}>
+                      <TableHead className="px-4">Session</TableHead>
+                      <TableHead className="px-4">Register</TableHead>
+                      <TableHead className="px-4">Cashier</TableHead>
+                      <TableHead className="px-4">Opened</TableHead>
+                      <TableHead className="px-4">Closed</TableHead>
+                      <TableHead className="px-4">Status</TableHead>
+                      <TableHead className="px-4 text-right">Sales</TableHead>
+                      <TableHead className="px-4 text-right">Gross</TableHead>
+                      <TableHead className="px-4 text-right">Variance</TableHead>
+                      <TableHead className="w-24 px-4 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {sessions.isPending && <StateRow colSpan={10} loading message="Loading sessions…" />}
+                    {sessions.isError && !sessions.isPending && (
+                      <StateRow colSpan={10} error message={sessions.error.message} />
+                    )}
+                    {!sessions.isPending && !sessions.isError && sessions.data?.data.length === 0 && (
+                      <StateRow
+                        colSpan={10}
+                        message="No sessions found. Create a new session to start selling."
+                      />
+                    )}
+                    {(sessions.data?.data ?? []).map((row) => {
+                      const isCurrentSession =
+                        row.status === PosSessionStatus.Open && row.id === activeSession.data?.id
+                      return (
+                        <TableRow key={row.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
+                          <TableCell className="px-4 py-3.5 font-mono text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {row.sessionNumber}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5">
+                            <p className="font-medium text-slate-800 dark:text-slate-200">{row.registerName}</p>
+                            <p className="font-mono text-xs text-slate-500">{row.registerCode}</p>
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">
+                            {row.cashierUsername}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">
+                            {dateTime(row.openedAtUtc)}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">
+                            {row.closedAtUtc ? dateTime(row.closedAtUtc) : '—'}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5">
+                            <StatusBadge open={row.status === PosSessionStatus.Open} current={isCurrentSession} />
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-right font-mono">{row.saleCount}</TableCell>
+                          <TableCell className="px-4 py-3.5 text-right font-mono">
+                            {money(row.grossSalesBase)} {row.baseCurrencyCode}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-right font-mono">
+                            {signed(row.varianceBase)} {row.baseCurrencyCode}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-right">
+                            {isCurrentSession ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={openWorkspace}
+                                aria-label={`Continue ${row.sessionNumber}`}
+                              >
+                                <Play className="size-4" />
+                              </Button>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </DataTableShell>
+
+            {sessions.data && (
+              <DataTablePagination
+                page={sessionPage}
+                pageSize={sessionPageSize}
+                totalItems={sessions.data.meta.totalCount}
+                onPageChange={setSessionPage}
+                onPageSizeChange={(size) => {
+                  setSessionPageSize(size)
+                  setSessionPage(1)
+                }}
+              />
+            )}
+          </section>
+        </TabsContent>
 
         {canManageRegisters && (
-          <section aria-label="POS registers" className="rounded-2xl border bg-card p-5">
-            <h2 className="font-semibold">Registers</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              One register may have only one open session at a time. Registers in use cannot be deactivated.
-            </p>
-            <form className="mt-4 grid gap-2 sm:grid-cols-[180px_1fr_auto]" onSubmit={create}>
-              <div>
-                <Input {...registerForm.register('code')} placeholder="Code · RECEPTION" maxLength={32} />
-                {registerForm.formState.errors.code?.message && (
-                  <p className="mt-1 text-xs text-destructive">{registerForm.formState.errors.code.message}</p>
-                )}
-              </div>
-              <div>
-                <Input {...registerForm.register('name')} placeholder="Register name · Reception POS" maxLength={120} />
-                {registerForm.formState.errors.name?.message && (
-                  <p className="mt-1 text-xs text-destructive">{registerForm.formState.errors.name.message}</p>
-                )}
-              </div>
-              <Button type="submit" disabled={createRegister.isPending}>
-                <Plus className="size-4" /> Add Register
-              </Button>
-            </form>
-            {(createRegister.error || updateRegister.error) && (
-              <p className="mt-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                {createRegister.error?.message ?? updateRegister.error?.message}
-              </p>
-            )}
-            <div className="mt-4 grid gap-2 md:grid-cols-2">
-              {(registers.data ?? []).map((register) => (
-                <div key={register.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{register.code} — {register.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {register.isActive
-                        ? register.hasOpenSession ? 'Active · In use' : 'Active · Available'
-                        : 'Inactive'}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    title={register.hasOpenSession ? 'Close the open session before deactivating this register.' : undefined}
-                    disabled={updateRegister.isPending || register.hasOpenSession}
-                    onClick={() => updateRegister.mutate({
-                      id: register.id,
-                      body: { code: register.code, name: register.name, isActive: !register.isActive },
-                    })}
-                  >
-                    {register.isActive ? 'Deactivate' : 'Activate'}
-                  </Button>
+          <TabsContent value="registers" className="space-y-4">
+            <section aria-label="POS registers" className="space-y-4">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Registers</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Configure physical POS stations for the selected branch.
+                  </p>
                 </div>
-              ))}
-              {registers.isPending && <p className="text-sm text-muted-foreground">Loading registers…</p>}
-              {registers.isError && <p role="alert" className="text-sm text-destructive">{registers.error.message}</p>}
-              {registers.data?.length === 0 && <p className="text-sm text-muted-foreground">No registers configured.</p>}
-            </div>
-          </section>
+                <Button onClick={() => setRegisterDialogOpen(true)}>
+                  <Plus className="size-4" />
+                  Add register
+                </Button>
+              </div>
+
+              <DataTableShell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className={head}>
+                        <TableHead className="px-4">Code</TableHead>
+                        <TableHead className="px-4">Register</TableHead>
+                        <TableHead className="px-4">Status</TableHead>
+                        <TableHead className="px-4">Availability</TableHead>
+                        <TableHead className="w-28 px-4 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {registers.isPending && <StateRow colSpan={5} loading message="Loading registers…" />}
+                      {registers.isError && !registers.isPending && (
+                        <StateRow colSpan={5} error message={registers.error.message} />
+                      )}
+                      {!registers.isPending && !registers.isError && registers.data?.length === 0 && (
+                        <StateRow colSpan={5} message="No POS registers configured for this branch." />
+                      )}
+                      {(registers.data ?? []).map((register) => (
+                        <TableRow key={register.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
+                          <TableCell className="px-4 py-3.5 font-mono text-sm text-slate-500">
+                            {register.code}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200">
+                            {register.name}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5">
+                            <span className={register.isActive
+                              ? 'inline-flex rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                              : 'inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800'}>
+                              {register.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5">
+                            <span className={register.hasOpenSession
+                              ? 'inline-flex rounded bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                              : 'inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300'}>
+                              {register.hasOpenSession ? 'In use' : 'Available'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title={register.hasOpenSession
+                                ? 'Close the open session before deactivating this register.'
+                                : undefined}
+                              disabled={updateRegister.isPending || register.hasOpenSession}
+                              onClick={() => updateRegister.mutate({
+                                id: register.id,
+                                body: {
+                                  code: register.code,
+                                  name: register.name,
+                                  isActive: !register.isActive,
+                                },
+                              })}
+                            >
+                              {register.isActive ? 'Deactivate' : 'Activate'}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </DataTableShell>
+
+              {updateRegister.isError && (
+                <p className="text-sm text-destructive">{updateRegister.error.message}</p>
+              )}
+            </section>
+          </TabsContent>
         )}
 
-        <Dialog open={openSessionDialog} onOpenChange={setOpenSessionDialog}>
-          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto p-0">
-            {setup.data ? (
-              <OpenSessionScreen
-                embedded
-                setup={setup.data}
-                branch={selectedBranch}
-                registers={registers.data ?? []}
-                cashier={user?.username ?? 'Cashier'}
-                onExit={() => setOpenSessionDialog(false)}
-                prepareWorkspaceWindow={prepareWorkspaceWindow}
-                onOpened={completeSessionOpen}
-              />
-            ) : (
-              <p className="p-6 text-sm text-muted-foreground">Loading POS setup…</p>
-            )}
-          </DialogContent>
-        </Dialog>
+        <TabsContent value="reports" className="space-y-4">
+          <section aria-label="Z reports" className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Z Reports</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Immutable closing snapshots for completed POS sessions.
+              </p>
+            </div>
 
-        <section aria-label="Z reports" className="rounded-2xl border bg-card p-5">
-          <h2 className="font-semibold">Z Reports</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Closed-session snapshots are view-only and printable.</p>
-          <div className="mt-4 grid gap-2 md:grid-cols-2">
-            {(reports.data?.data ?? []).map((report) => (
-              <button
-                key={report.id}
-                type="button"
-                onClick={() => navigate(`/pos/z-reports/${report.id}`)}
-                className="rounded-xl border p-4 text-left transition-colors hover:bg-muted/50"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-mono font-semibold">{report.reportNumber}</span>
-                  <span className="text-xs text-muted-foreground">{dateTime(report.closedAtUtc)}</span>
-                </div>
-                <p className="mt-1 text-sm">{report.registerCode} · {report.cashierUsername}</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {report.saleCount} sales · {money(report.grossSalesBase)} {report.baseCurrencyCode} · variance {signed(report.varianceBase)} {report.baseCurrencyCode}
-                </p>
-              </button>
-            ))}
-            {reports.isPending && <p className="text-sm text-muted-foreground">Loading Z Reports…</p>}
-            {reports.isError && <p role="alert" className="text-sm text-destructive">{reports.error.message}</p>}
-            {reports.data?.data.length === 0 && <p className="text-sm text-muted-foreground">No Z Reports yet.</p>}
-          </div>
-          {reports.data && (
-            <DataTablePagination
-              page={reportPage}
-              pageSize={reportPageSize}
-              totalItems={reports.data.meta.totalCount}
-              onPageChange={setReportPage}
-              onPageSizeChange={(size) => { setReportPageSize(size); setReportPage(1) }}
+            <DataTableShell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className={head}>
+                      <TableHead className="px-4">Report</TableHead>
+                      <TableHead className="px-4">Register</TableHead>
+                      <TableHead className="px-4">Cashier</TableHead>
+                      <TableHead className="px-4">Closed</TableHead>
+                      <TableHead className="px-4 text-right">Sales</TableHead>
+                      <TableHead className="px-4 text-right">Gross</TableHead>
+                      <TableHead className="px-4 text-right">Refunds</TableHead>
+                      <TableHead className="px-4 text-right">Net</TableHead>
+                      <TableHead className="px-4 text-right">Variance</TableHead>
+                      <TableHead className="w-20 px-4 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {reports.isPending && <StateRow colSpan={10} loading message="Loading Z Reports…" />}
+                    {reports.isError && !reports.isPending && (
+                      <StateRow colSpan={10} error message={reports.error.message} />
+                    )}
+                    {!reports.isPending && !reports.isError && reports.data?.data.length === 0 && (
+                      <StateRow colSpan={10} message="No Z Reports yet." />
+                    )}
+                    {(reports.data?.data ?? []).map((report) => (
+                      <TableRow key={report.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
+                        <TableCell className="px-4 py-3.5 font-mono text-sm font-medium text-slate-700 dark:text-slate-300">
+                          {report.reportNumber}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5">
+                          <p className="font-medium text-slate-800 dark:text-slate-200">{report.registerName}</p>
+                          <p className="font-mono text-xs text-slate-500">{report.registerCode}</p>
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">
+                          {report.cashierUsername}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">
+                          {dateTime(report.closedAtUtc)}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-right font-mono">{report.saleCount}</TableCell>
+                        <TableCell className="px-4 py-3.5 text-right font-mono">
+                          {money(report.grossSalesBase)} {report.baseCurrencyCode}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-right font-mono">
+                          {money(report.refundTotalBase)} {report.baseCurrencyCode}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-right font-mono font-medium">
+                          {money(report.netSalesBase)} {report.baseCurrencyCode}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-right font-mono">
+                          {signed(report.varianceBase)} {report.baseCurrencyCode}
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => navigate(`/pos/z-reports/${report.id}`)}
+                            aria-label={`View ${report.reportNumber}`}
+                          >
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </DataTableShell>
+
+            {reports.data && (
+              <DataTablePagination
+                page={reportPage}
+                pageSize={reportPageSize}
+                totalItems={reports.data.meta.totalCount}
+                onPageChange={setReportPage}
+                onPageSizeChange={(size) => {
+                  setReportPageSize(size)
+                  setReportPage(1)
+                }}
+              />
+            )}
+          </section>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={openSessionDialog} onOpenChange={setOpenSessionDialog}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto p-0">
+          {setup.data ? (
+            <OpenSessionScreen
+              embedded
+              setup={setup.data}
+              branch={selectedBranch}
+              registers={registers.data ?? []}
+              cashier={user?.username ?? 'Cashier'}
+              onExit={() => setOpenSessionDialog(false)}
+              prepareWorkspaceWindow={prepareWorkspaceWindow}
+              onOpened={completeSessionOpen}
             />
+          ) : (
+            <p className="p-6 text-sm text-muted-foreground">Loading POS setup…</p>
           )}
-        </section>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={registerDialogOpen}
+        onOpenChange={(open) => open ? setRegisterDialogOpen(true) : closeRegisterDialog()}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add POS register</DialogTitle>
+            <DialogDescription>
+              Create a physical POS station for the selected branch. Only one open session can use it at a time.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={create} className="space-y-4">
+            <Field label="Register code" error={registerForm.formState.errors.code?.message}>
+              <Input {...registerForm.register('code')} placeholder="e.g. RECEPTION" maxLength={32} />
+            </Field>
+            <Field label="Register name" error={registerForm.formState.errors.name?.message}>
+              <Input {...registerForm.register('name')} placeholder="e.g. Reception POS" maxLength={120} />
+            </Field>
+            {createRegister.isError && (
+              <p className="text-sm text-destructive">{createRegister.error.message}</p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeRegisterDialog} disabled={createRegister.isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createRegister.isPending}>
+                {createRegister.isPending ? 'Creating…' : 'Add register'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
+function StatusBadge({ open, current }: { open: boolean; current: boolean }) {
+  if (open) {
+    return (
+      <span className="inline-flex rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+        {current ? 'Open · Yours' : 'Open'}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800">
+      Closed
+    </span>
+  )
+}
+
+function StateRow({
+  colSpan,
+  message,
+  loading = false,
+  error = false,
+}: {
+  colSpan: number
+  message: string
+  loading?: boolean
+  error?: boolean
+}) {
+  return (
+    <TableRow>
+      <TableCell colSpan={colSpan} className="h-48 text-center">
+        <div className={error
+          ? 'flex items-center justify-center gap-2 text-sm text-destructive'
+          : 'flex items-center justify-center gap-2 text-sm text-slate-500'}
+        >
+          {loading && <Loader2 className="size-5 animate-spin text-primary" />}
+          {error && <AlertCircle className="size-5" />}
+          <span>{message}</span>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string
+  error?: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className="grid gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+      {label}
+      {children}
+      {error && <span className="text-xs font-normal text-destructive">{error}</span>}
+    </label>
+  )
+}
+
+const head =
+  'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'
 const money = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
 const signed = (value: number) => `${value > 0 ? '+' : ''}${money(value)}`
 const dateTime = (value: string) => new Date(value).toLocaleString()
