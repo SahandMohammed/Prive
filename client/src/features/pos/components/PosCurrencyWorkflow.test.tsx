@@ -135,6 +135,7 @@ describe('POS currency availability', () => {
           name: 'Main POS',
           branchId: ids.branch,
           isActive: true,
+          hasOpenSession: false,
         }]}
         cashier="cashier"
         onExit={vi.fn()}
@@ -149,6 +150,38 @@ describe('POS currency availability', () => {
       openingCounts: [{ currencyId: ids.iqd, amount: 0 }],
       notes: null,
     }))
+  })
+
+  it('offers only registers that do not already have an open session', () => {
+    render(
+      <OpenSessionScreen
+        setup={setup}
+        branch={setup.branches[0]}
+        registers={[
+          {
+            id: ids.register,
+            code: 'BUSY',
+            name: 'Busy POS',
+            branchId: ids.branch,
+            isActive: true,
+            hasOpenSession: true,
+          },
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            code: 'FREE',
+            name: 'Free POS',
+            branchId: ids.branch,
+            isActive: true,
+            hasOpenSession: false,
+          },
+        ]}
+        cashier="cashier"
+        onExit={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole('option', { name: /BUSY.*Busy POS/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /FREE.*Free POS/ })).toBeEnabled()
   })
 })
 
