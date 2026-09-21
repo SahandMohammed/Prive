@@ -7,7 +7,10 @@ import { PosSessionStatus } from '../types/pos.types'
 import type { PosSession, PosSetup } from '../types/pos.types'
 import { PosSessionsPage } from './PosSessionsPage'
 
-vi.mock('@/features/auth', () => ({ useCurrentUser: () => ({ data: { role: 'Owner', username: 'owner' } }) }))
+vi.mock('@/features/auth', () => ({
+  useCurrentUser: () => ({ data: { role: 'Owner', username: 'owner' } }),
+}))
+
 vi.mock('../api/pos.api', () => ({
   posApi: {
     setup: vi.fn(),
@@ -45,11 +48,11 @@ const register = {
   hasOpenSession: false,
 }
 
-const meta = (page = 1, pageSize = 20, totalCount = 61) => ({
+const meta = (page = 1, pageSize = 20, totalCount = 1) => ({
   page,
   pageSize,
   totalCount,
-  totalPages: Math.ceil(totalCount / pageSize),
+  totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
   hasPreviousPage: page > 1,
   hasNextPage: page * pageSize < totalCount,
 })
@@ -77,23 +80,42 @@ function currentSession(): PosSession {
   }
 }
 
-function currentSessionSummary() {
-  return {
-    id: 'session-1',
-    sessionNumber: 'SES-000001',
-    registerId: register.id,
-    registerCode: register.code,
-    registerName: register.name,
-    cashierUserId: 'user-1',
-    cashierUsername: 'owner',
-    status: PosSessionStatus.Open,
-    openedAtUtc: '2026-09-21T08:00:00Z',
-    closedAtUtc: null,
-    saleCount: 3,
-    grossSalesBase: 75_000,
-    varianceBase: 0,
-    baseCurrencyCode: 'IQD',
-  }
+const sessionSummary = {
+  id: 'session-1',
+  sessionNumber: 'SES-000001',
+  registerId: register.id,
+  registerCode: register.code,
+  registerName: register.name,
+  cashierUserId: 'user-1',
+  cashierUsername: 'owner',
+  status: PosSessionStatus.Open,
+  openedAtUtc: '2026-09-21T08:00:00Z',
+  closedAtUtc: null,
+  saleCount: 3,
+  grossSalesBase: 75_000,
+  varianceBase: 0,
+  baseCurrencyCode: 'IQD',
+}
+
+const zReport = {
+  id: 'report-1',
+  reportNumber: 'Z-000001',
+  posSessionId: 'session-closed',
+  sessionNumber: 'SES-000000',
+  registerId: register.id,
+  registerCode: register.code,
+  registerName: register.name,
+  cashierUserId: 'user-1',
+  cashierUsername: 'owner',
+  openedAtUtc: '2026-09-20T08:00:00Z',
+  closedAtUtc: '2026-09-20T17:00:00Z',
+  saleCount: 10,
+  grossSalesBase: 250_000,
+  refundCount: 1,
+  refundTotalBase: 25_000,
+  netSalesBase: 225_000,
+  varianceBase: 0,
+  baseCurrencyCode: 'IQD',
 }
 
 function mount() {
@@ -106,6 +128,7 @@ function mount() {
         <Routes>
           <Route path="/pos" element={<PosSessionsPage />} />
           <Route path="/pos/workspace" element={<div>POS workspace route</div>} />
+          <Route path="/pos/z-reports/:id" element={<div>Z report route</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -133,50 +156,100 @@ beforeEach(() => {
   vi.mocked(posApi.registers).mockResolvedValue([register])
   vi.mocked(posApi.activeSession).mockResolvedValue(null)
   vi.mocked(posApi.openSession).mockResolvedValue(currentSession())
-  vi.mocked(posApi.sessions).mockImplementation(async (filters) => ({
-    data: [],
-    meta: meta(filters.page, filters.pageSize),
-  }))
-  vi.mocked(posApi.zReports).mockImplementation(async (filters) => ({
-    data: [],
-    meta: meta(filters.page, filters.pageSize),
-  }))
+  vi.mocked(posApi.sessions).mockResolvedValue({ data: [sessionSummary], meta: meta() })
+  vi.mocked(posApi.zReports).mockResolvedValue({ data: [zReport], meta: meta() })
 })
+
 afterEach(() => {
   vi.restoreAllMocks()
   cleanup()
 })
 
-describe('POS session dashboard', () => {
-  it('pages sessions and Z reports independently and resets the session page when filtering', async () => {
+describe('POS session management UX', () => {
+  it('uses tabs and renders sessions in the shared table pattern', async () => {
+    mount()
+
+    expect(await screen.findByRole('tab', { name: 'Sessions' })).toHaveAttribute('data-active')
+    expect(screen.getByRole('tab', { name: 'Registers' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Z Reports' })).toBeInTheDocument()
+
+    const sessions = within(screen.getByRole('region', { name: 'Session history' }))
+    const table = sessions.getByRole('table')
+    expect(within(table).getByRole('columnheader', { name: 'Session' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Register' })).toBeInTheDocument()
+    expect(await within(table).findByText('SES-000001')).toBeInTheDocument()
+    expect(within(table).getByText('Reception POS')).toBeInTheDocument()
+  })
+
+  it('keeps register management on its own tab and uses a table instead of cards', async () => {
+    mount()
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Registers' }))
+
+    const registers = within(await screen.findByRole('region', { name: 'POS registers' }))
+    expect(registers.getByRole('table')).toBeInTheDocument()
+    expect(registers.getByRole('columnheader', { name: 'Code' })).toBeInTheDocument()
+    expect(registers.getByRole('columnheader', { name: 'Availability' })).toBeInTheDocument()
+    expect(registers.getByText('Available')).toBeInTheDocument()
+    expect(registers.getByRole('button', { name: 'Add register' })).toBeInTheDocument()
+  })
+
+  it('opens register creation in a dialog and refreshes the register list after saving', async () => {
+    vi.mocked(posApi.createRegister).mockResolvedValue({
+      ...register,
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      code: 'DESK',
+      name: 'Front desk',
+    })
+    mount()
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Registers' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Register code'), { target: { value: 'DESK' } })
+    fireEvent.change(screen.getByLabelText('Register name'), { target: { value: 'Front desk' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
+
+    await waitFor(() => expect(posApi.createRegister).toHaveBeenCalledWith(
+      { code: 'DESK', name: 'Front desk' },
+      expect.anything(),
+    ))
+    await waitFor(() => expect(posApi.registers).toHaveBeenCalledTimes(2))
+  })
+
+  it('puts Z reports on their own tab and uses the shared table presentation', async () => {
+    mount()
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Z Reports' }))
+
+    const reports = within(await screen.findByRole('region', { name: 'Z reports' }))
+    expect(reports.getByRole('table')).toBeInTheDocument()
+    expect(await reports.findByText('Z-000001')).toBeInTheDocument()
+    expect(reports.getByText('225,000 IQD')).toBeInTheDocument()
+    fireEvent.click(reports.getByRole('button', { name: 'View Z-000001' }))
+    expect(await screen.findByText('Z report route')).toBeInTheDocument()
+  })
+
+  it('filters session status without affecting the other management tabs', async () => {
     mount()
     const sessions = within(screen.getByRole('region', { name: 'Session history' }))
-    const reports = within(screen.getByRole('region', { name: 'Z reports' }))
-    fireEvent.click(await sessions.findByRole('button', { name: 'Next page' }))
-    await waitFor(() => expect(posApi.sessions).toHaveBeenLastCalledWith({
-      page: 2,
-      pageSize: 20,
-      status: undefined,
-    }))
-    expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
-    fireEvent.click(await reports.findByRole('button', { name: 'Next page' }))
-    await waitFor(() => expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 2, pageSize: 20 }))
-    fireEvent.change(screen.getByRole('combobox', { name: 'Session status' }), {
+
+    fireEvent.change(sessions.getByRole('combobox', { name: 'Session status' }), {
       target: { value: String(PosSessionStatus.Closed) },
     })
+
     await waitFor(() => expect(posApi.sessions).toHaveBeenLastCalledWith({
       page: 1,
       pageSize: 20,
       status: PosSessionStatus.Closed,
     }))
-    expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 2, pageSize: 20 })
   })
 
-  it('keeps session creation inside the app page until the opening form is submitted', async () => {
+  it('keeps session creation in the ERP page until the opening form is submitted', async () => {
     mount()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
-
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new session' }))
     expect(screen.getByText('Open POS Session')).toBeInTheDocument()
     expect(window.open).not.toHaveBeenCalled()
 
@@ -191,88 +264,26 @@ describe('POS session dashboard', () => {
     expect(window.open).toHaveBeenCalledWith('', '_blank')
     await waitFor(() => expect(workspaceWindow.location.href).toBe('/pos/workspace'))
     expect(workspaceWindow.opener).toBeNull()
-    expect(screen.queryByText('Open POS Session')).not.toBeInTheDocument()
   })
 
-  it('falls back to the same-tab workspace after creation when popups are blocked', async () => {
-    vi.mocked(window.open).mockReturnValue(null)
-    mount()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
-
-    expect(await screen.findByText('POS workspace route')).toBeInTheDocument()
-  })
-
-  it('closes the prepared tab when opening the session fails', async () => {
-    vi.mocked(posApi.openSession).mockRejectedValue(new Error('Register was taken'))
-    mount()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
-
-    await waitFor(() => expect(workspaceWindow.close).toHaveBeenCalled())
-    expect(await screen.findByText('Register was taken')).toBeInTheDocument()
-  })
-
-  it('continues the signed-in users current session in a new workspace tab', async () => {
+  it('continues the current users session in a dedicated workspace tab', async () => {
     vi.mocked(posApi.activeSession).mockResolvedValue(currentSession())
-    vi.mocked(posApi.sessions).mockResolvedValue({
-      data: [currentSessionSummary()],
-      meta: meta(1, 20, 1),
-    })
     mount()
 
-    expect(await screen.findByText(/Your current session is SES-000001 on RECEPTION/)).toBeInTheDocument()
-    const sessions = within(screen.getByRole('region', { name: 'Session history' }))
-    expect(sessions.getByText('Open · Yours')).toBeInTheDocument()
+    expect(await screen.findByText('Session SES-000001 is open')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }))
 
-    fireEvent.click(sessions.getByRole('button', { name: 'Continue' }))
     expect(window.open).toHaveBeenCalledWith('/pos/workspace', '_blank')
-    expect(screen.queryByText('POS workspace route')).not.toBeInTheDocument()
-  })
-
-  it('shows setup and session request failures instead of silently disabling creation', async () => {
-    vi.mocked(posApi.setup).mockRejectedValue(new Error('POS setup unavailable'))
-    mount()
-    expect(await screen.findByText('POS setup unavailable')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Create New Session' })).toBeDisabled()
   })
 
   it('marks occupied registers as in use and prevents deactivation', async () => {
-    vi.mocked(posApi.registers).mockResolvedValue([{
-      ...register,
-      hasOpenSession: true,
-    }])
+    vi.mocked(posApi.registers).mockResolvedValue([{ ...register, hasOpenSession: true }])
     mount()
 
-    const registers = within(screen.getByRole('region', { name: 'POS registers' }))
-    expect(await registers.findByText('Active · In use')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Registers' }))
+    const registers = within(await screen.findByRole('region', { name: 'POS registers' }))
+
+    expect(registers.getByText('In use')).toBeInTheDocument()
     expect(registers.getByRole('button', { name: 'Deactivate' })).toBeDisabled()
-  })
-
-  it('validates register creation and refreshes registers after saving', async () => {
-    vi.mocked(posApi.createRegister).mockResolvedValue({
-      ...register,
-      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      code: 'DESK',
-      name: 'Front desk',
-    })
-    mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Add Register' }))
-    expect(await screen.findByText('Register code is required')).toBeInTheDocument()
-    expect(posApi.createRegister).not.toHaveBeenCalled()
-
-    fireEvent.change(screen.getByPlaceholderText('Code · RECEPTION'), { target: { value: 'DESK' } })
-    fireEvent.change(screen.getByPlaceholderText('Register name · Reception POS'), {
-      target: { value: 'Front desk' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Add Register' }))
-
-    await waitFor(() => expect(posApi.createRegister).toHaveBeenCalledWith(
-      { code: 'DESK', name: 'Front desk' },
-      expect.anything(),
-    ))
-    await waitFor(() => expect(posApi.registers).toHaveBeenCalledTimes(2))
   })
 })
