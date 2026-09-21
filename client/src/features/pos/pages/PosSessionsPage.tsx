@@ -22,6 +22,7 @@ import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { posRegisterSchema } from '../schemas/pos.schema'
 import type { PosRegisterValues } from '../schemas/pos.schema'
 import { PosSessionStatus } from '../types/pos.types'
+import type { PosSession } from '../types/pos.types'
 
 export function PosSessionsPage() {
   const navigate = useNavigate()
@@ -66,7 +67,7 @@ export function PosSessionsPage() {
 
   const prepareWorkspaceWindow = () => window.open('', '_blank')
 
-  const completeSessionOpen = (_session: unknown, workspace: Window | null) => {
+  const completeSessionOpen = (_session: PosSession, workspace: Window | null) => {
     setOpenSessionDialog(false)
     if (workspace) {
       workspace.location.href = '/pos/workspace'
@@ -109,9 +110,9 @@ export function PosSessionsPage() {
           </div>
         </header>
 
-        {activeSession.isError && (
+        {(activeSession.isError || setup.isError || registers.isError) && (
           <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {activeSession.error.message}
+            {activeSession.error?.message ?? setup.error?.message ?? registers.error?.message}
           </p>
         )}
 
