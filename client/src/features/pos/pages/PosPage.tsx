@@ -56,14 +56,14 @@ export function PosPage() {
         <div>
           <p className="font-semibold text-destructive">POS setup is unavailable.</p>
           <p className="mt-1 text-sm text-muted-foreground">{message ?? 'Refresh the page or return to the ERP workspace.'}</p>
-          <Button className="mt-4" variant="outline" onClick={() => navigate('/dashboard')}>Exit POS</Button>
+          <Button className="mt-4" variant="outline" onClick={() => navigate('/pos')}>Back to POS Sessions</Button>
         </div>
       </div>
     )
   }
 
   if (closedReport) {
-    return <SessionClosedScreen report={closedReport} onNewSession={() => setClosedReport(null)} />
+    return <SessionClosedScreen report={closedReport} onNewSession={() => navigate('/pos')} />
   }
 
   if (!sessionQuery.data) {
@@ -73,7 +73,7 @@ export function PosPage() {
         branch={selectedBranch}
         registers={registersQuery.data ?? []}
         cashier={user?.username ?? 'Cashier'}
-        onExit={() => navigate('/dashboard')}
+        onExit={() => navigate('/pos')}
       />
     )
   }
@@ -86,8 +86,8 @@ export function PosPage() {
       selectedBranchId={selectedBranchId}
       cashier={user?.username ?? sessionQuery.data.cashierUsername}
       onSessionClosed={setClosedReport}
-      onExit={() => navigate('/dashboard')}
-      onHistory={() => navigate('/pos/sessions')}
+      onExit={() => navigate('/pos')}
+      onHistory={() => navigate('/pos')}
     />
   )
 }
