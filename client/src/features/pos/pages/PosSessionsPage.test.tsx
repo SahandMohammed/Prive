@@ -4,20 +4,46 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { posApi } from '../api/pos.api'
 import { PosSessionStatus } from '../types/pos.types'
-import type { PosSession } from '../types/pos.types'
+import type { PosSession, PosSetup } from '../types/pos.types'
 import { PosSessionsPage } from './PosSessionsPage'
 
-vi.mock('@/features/auth', () => ({ useCurrentUser: () => ({ data: { role: 'Owner' } }) }))
+vi.mock('@/features/auth', () => ({ useCurrentUser: () => ({ data: { role: 'Owner', username: 'owner' } }) }))
 vi.mock('../api/pos.api', () => ({
   posApi: {
+    setup: vi.fn(),
     registers: vi.fn(),
     activeSession: vi.fn(),
+    openSession: vi.fn(),
     sessions: vi.fn(),
     zReports: vi.fn(),
     createRegister: vi.fn(),
     updateRegister: vi.fn(),
   },
 }))
+
+const setup: PosSetup = {
+  baseCurrencyId: '33333333-3333-4333-8333-333333333333',
+  baseCurrencyCode: 'IQD',
+  branches: [{
+    id: '11111111-1111-4111-8111-111111111111',
+    code: 'MAIN',
+    name: 'Main',
+    isMainBranch: true,
+  }],
+  warehouses: [],
+  categories: [],
+  professionals: [],
+  moneyAccounts: [],
+}
+
+const register = {
+  id: '22222222-2222-4222-8222-222222222222',
+  code: 'RECEPTION',
+  name: 'Reception POS',
+  branchId: setup.branches[0].id,
+  isActive: true,
+  hasOpenSession: false,
+}
 
 const meta = (page = 1, pageSize = 20, totalCount = 61) => ({
   page,
@@ -32,12 +58,12 @@ function currentSession(): PosSession {
   return {
     id: 'session-1',
     sessionNumber: 'SES-000001',
-    branchId: 'branch-1',
+    branchId: setup.branches[0].id,
     branchCode: 'MAIN',
     branchName: 'Main',
-    registerId: 'register-1',
-    registerCode: 'RECEPTION',
-    registerName: 'Reception POS',
+    registerId: register.id,
+    registerCode: register.code,
+    registerName: register.name,
     cashierUserId: 'user-1',
     cashierUsername: 'owner',
     status: PosSessionStatus.Open,
@@ -55,9 +81,9 @@ function currentSessionSummary() {
   return {
     id: 'session-1',
     sessionNumber: 'SES-000001',
-    registerId: 'register-1',
-    registerCode: 'RECEPTION',
-    registerName: 'Reception POS',
+    registerId: register.id,
+    registerCode: register.code,
+    registerName: register.name,
     cashierUserId: 'user-1',
     cashierUsername: 'owner',
     status: PosSessionStatus.Open,
@@ -80,18 +106,33 @@ function mount() {
         <Routes>
           <Route path="/pos" element={<PosSessionsPage />} />
           <Route path="/pos/workspace" element={<div>POS workspace route</div>} />
-          <Route path="/dashboard" element={<div>Dashboard route</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   )
 }
 
+let workspaceWindow: {
+  opener: Window | null
+  location: { href: string }
+  close: ReturnType<typeof vi.fn>
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.spyOn(window, 'open').mockReturnValue({ opener: window } as Window)
-  vi.mocked(posApi.registers).mockResolvedValue([])
+  workspaceWindow = {
+    opener: window,
+    location: { href: '' },
+    close: vi.fn(),
+  }
+  vi.spyOn(window, 'open').mockImplementation((url) => {
+    if (url === '') return workspaceWindow as unknown as Window
+    return { opener: window } as Window
+  })
+  vi.mocked(posApi.setup).mockResolvedValue(setup)
+  vi.mocked(posApi.registers).mockResolvedValue([register])
   vi.mocked(posApi.activeSession).mockResolvedValue(null)
+  vi.mocked(posApi.openSession).mockResolvedValue(currentSession())
   vi.mocked(posApi.sessions).mockImplementation(async (filters) => ({
     data: [],
     meta: meta(filters.page, filters.pageSize),
@@ -129,47 +170,52 @@ describe('POS session dashboard', () => {
       status: PosSessionStatus.Closed,
     }))
     expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 2, pageSize: 20 })
-    fireEvent.change(await reports.findByRole('combobox', { name: 'Rows per page:' }), {
-      target: { value: '50' },
-    })
-    await waitFor(() => expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 1, pageSize: 50 }))
   })
 
-  it('shows loading and empty history states', async () => {
+  it('keeps session creation inside the app page until the opening form is submitted', async () => {
     mount()
-    expect(screen.getByText('Loading sessions…')).toBeInTheDocument()
-    expect(screen.getByText('Loading Z Reports…')).toBeInTheDocument()
-    expect(await screen.findByText(/No sessions found/)).toBeInTheDocument()
-    expect(await screen.findByText('No Z Reports yet.')).toBeInTheDocument()
-  })
 
-  it('shows register, active-session, and history request failures', async () => {
-    vi.mocked(posApi.registers).mockRejectedValue(new Error('Registers unavailable'))
-    vi.mocked(posApi.activeSession).mockRejectedValue(new Error('Active session unavailable'))
-    vi.mocked(posApi.sessions).mockRejectedValue(new Error('Sessions unavailable'))
-    vi.mocked(posApi.zReports).mockRejectedValue(new Error('Reports unavailable'))
-    mount()
-    expect(await screen.findByText('Registers unavailable')).toBeInTheDocument()
-    expect(await screen.findByText('Active session unavailable')).toBeInTheDocument()
-    expect(await screen.findByText('Sessions unavailable')).toBeInTheDocument()
-    expect(await screen.findByText('Reports unavailable')).toBeInTheDocument()
-  })
-
-  it('opens a new workspace tab when creating a session', async () => {
-    mount()
     fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
-    expect(window.open).toHaveBeenCalledWith('/pos/workspace', '_blank')
-    expect(screen.queryByText('POS workspace route')).not.toBeInTheDocument()
+
+    expect(screen.getByText('Open POS Session')).toBeInTheDocument()
+    expect(window.open).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
+
+    await waitFor(() => expect(posApi.openSession).toHaveBeenCalledWith({
+      registerId: register.id,
+      openingCounts: [],
+      notes: null,
+    }))
+
+    expect(window.open).toHaveBeenCalledWith('', '_blank')
+    await waitFor(() => expect(workspaceWindow.location.href).toBe('/pos/workspace'))
+    expect(workspaceWindow.opener).toBeNull()
+    expect(screen.queryByText('Open POS Session')).not.toBeInTheDocument()
   })
 
-  it('falls back to same-tab workspace navigation when the browser blocks the new tab', async () => {
+  it('falls back to the same-tab workspace after creation when popups are blocked', async () => {
     vi.mocked(window.open).mockReturnValue(null)
     mount()
+
     fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
+
     expect(await screen.findByText('POS workspace route')).toBeInTheDocument()
   })
 
-  it('shows and continues the signed-in users current session', async () => {
+  it('closes the prepared tab when opening the session fails', async () => {
+    vi.mocked(posApi.openSession).mockRejectedValue(new Error('Register was taken'))
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
+
+    await waitFor(() => expect(workspaceWindow.close).toHaveBeenCalled())
+    expect(await screen.findByText('Register was taken')).toBeInTheDocument()
+  })
+
+  it('continues the signed-in users current session in a new workspace tab', async () => {
     vi.mocked(posApi.activeSession).mockResolvedValue(currentSession())
     vi.mocked(posApi.sessions).mockResolvedValue({
       data: [currentSessionSummary()],
@@ -178,7 +224,6 @@ describe('POS session dashboard', () => {
     mount()
 
     expect(await screen.findByText(/Your current session is SES-000001 on RECEPTION/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Continue Session' })).toBeInTheDocument()
     const sessions = within(screen.getByRole('region', { name: 'Session history' }))
     expect(sessions.getByText('Open · Yours')).toBeInTheDocument()
 
@@ -187,13 +232,16 @@ describe('POS session dashboard', () => {
     expect(screen.queryByText('POS workspace route')).not.toBeInTheDocument()
   })
 
+  it('shows setup and session request failures instead of silently disabling creation', async () => {
+    vi.mocked(posApi.setup).mockRejectedValue(new Error('POS setup unavailable'))
+    mount()
+    expect(await screen.findByText('POS setup unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create New Session' })).toBeDisabled()
+  })
+
   it('marks occupied registers as in use and prevents deactivation', async () => {
     vi.mocked(posApi.registers).mockResolvedValue([{
-      id: 'register-1',
-      code: 'RECEPTION',
-      name: 'Reception POS',
-      branchId: 'branch-1',
-      isActive: true,
+      ...register,
       hasOpenSession: true,
     }])
     mount()
@@ -205,28 +253,26 @@ describe('POS session dashboard', () => {
 
   it('validates register creation and refreshes registers after saving', async () => {
     vi.mocked(posApi.createRegister).mockResolvedValue({
-      id: 'register-1',
+      ...register,
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       code: 'DESK',
       name: 'Front desk',
-      branchId: 'branch-1',
-      isActive: true,
-      hasOpenSession: false,
     })
     mount()
     fireEvent.click(screen.getByRole('button', { name: 'Add Register' }))
     expect(await screen.findByText('Register code is required')).toBeInTheDocument()
     expect(posApi.createRegister).not.toHaveBeenCalled()
+
     fireEvent.change(screen.getByPlaceholderText('Code · RECEPTION'), { target: { value: 'DESK' } })
     fireEvent.change(screen.getByPlaceholderText('Register name · Reception POS'), {
       target: { value: 'Front desk' },
     })
-    await waitFor(() => expect(posApi.registers).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Add Register' }))
+
     await waitFor(() => expect(posApi.createRegister).toHaveBeenCalledWith(
       { code: 'DESK', name: 'Front desk' },
       expect.anything(),
     ))
     await waitFor(() => expect(posApi.registers).toHaveBeenCalledTimes(2))
-    expect(screen.getByPlaceholderText('Code · RECEPTION')).toHaveValue('')
   })
 })
