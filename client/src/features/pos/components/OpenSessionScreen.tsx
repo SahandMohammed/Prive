@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, Store } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -30,6 +30,12 @@ export function OpenSessionScreen({
   onOpened?: (session: PosSession, workspace: Window | null) => void
 }) {
   const openSession = useOpenPosSession()
+  const preparedWorkspace = useRef<Window | null>(null)
+
+  useEffect(() => () => {
+    preparedWorkspace.current?.close()
+  }, [])
+
   const activeRegisters = useMemo(
     () => registers.filter((register) => register.isActive),
     [registers]
@@ -65,7 +71,8 @@ export function OpenSessionScreen({
   })
 
   const submit = form.handleSubmit((values) => {
-    const workspace = prepareWorkspaceWindow?.() ?? null
+    const workspace = preparedWorkspace.current
+    preparedWorkspace.current = null
     openSession.mutate({
       registerId: values.registerId,
       openingCounts: values.openingCounts,
@@ -74,7 +81,16 @@ export function OpenSessionScreen({
       onSuccess: (session) => onOpened?.(session, workspace),
       onError: () => workspace?.close(),
     })
+  }, () => {
+    preparedWorkspace.current?.close()
+    preparedWorkspace.current = null
   })
+
+  const prepareWorkspace = () => {
+    if (!prepareWorkspaceWindow) return
+    preparedWorkspace.current?.close()
+    preparedWorkspace.current = prepareWorkspaceWindow()
+  }
 
   return (
     <div className={embedded ? 'w-full' : 'min-h-screen bg-muted/20 p-4 sm:grid sm:place-items-center sm:p-6'}>
@@ -177,7 +193,11 @@ export function OpenSessionScreen({
             <Button type="button" variant="outline" onClick={onExit}>
               <ArrowLeft className="size-4" /> Back to Sessions
             </Button>
-            <Button type="submit" disabled={availableRegisters.length === 0 || openSession.isPending}>
+            <Button
+              type="submit"
+              disabled={availableRegisters.length === 0 || openSession.isPending}
+              onClick={prepareWorkspace}
+            >
               {openSession.isPending ? 'Opening…' : 'Open Session'}
             </Button>
           </div>
