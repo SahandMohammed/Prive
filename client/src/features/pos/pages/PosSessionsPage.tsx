@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowLeft, Play, Plus } from 'lucide-react'
+import { Play, Plus } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -57,8 +57,7 @@ export function PosSessionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/20 p-4 sm:p-6">
-      <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
         <header className="flex flex-col gap-4 rounded-2xl border bg-card p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Point of Sale</h1>
@@ -72,9 +71,6 @@ export function PosSessionsPage() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="size-4" /> Exit POS
-            </Button>
             <Button
               onClick={enterWorkspace}
               disabled={activeSession.isPending || activeSession.isError}
@@ -286,7 +282,6 @@ export function PosSessionsPage() {
             />
           )}
         </section>
-      </div>
     </div>
   )
 }
