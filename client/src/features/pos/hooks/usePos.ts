@@ -52,6 +52,7 @@ export function useOpenPosSession() {
     onSuccess: (session) => {
       client.setQueryData([...POS_KEY, 'session', 'active'], session)
       client.setQueryData([...POS_KEY, 'session', session.id], session)
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'registers'] })
       return client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] })
     },
   })
@@ -68,6 +69,7 @@ export function useClosePosSession() {
       client.removeQueries({ queryKey: [...POS_KEY, 'x-report', report.posSessionId] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'session', report.posSessionId] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] })
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'registers'] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] })
     },
   })
