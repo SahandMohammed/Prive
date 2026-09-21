@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { useOpenPosSession } from '../hooks/usePos'
 import { posOpenSessionSchema } from '../schemas/pos.schema'
 import type { PosOpenSessionValues } from '../schemas/pos.schema'
-import type { PosBranch, PosRegister, PosSetup } from '../types/pos.types'
+import type { PosBranch, PosRegister, PosSession, PosSetup } from '../types/pos.types'
 
 export function OpenSessionScreen({
   setup,
@@ -16,12 +16,18 @@ export function OpenSessionScreen({
   registers,
   cashier,
   onExit,
+  embedded = false,
+  prepareWorkspaceWindow,
+  onOpened,
 }: {
   setup: PosSetup
   branch: PosBranch | undefined
   registers: PosRegister[]
   cashier: string
   onExit: () => void
+  embedded?: boolean
+  prepareWorkspaceWindow?: () => Window | null
+  onOpened?: (session: PosSession, workspace: Window | null) => void
 }) {
   const openSession = useOpenPosSession()
   const activeRegisters = useMemo(
@@ -59,16 +65,20 @@ export function OpenSessionScreen({
   })
 
   const submit = form.handleSubmit((values) => {
+    const workspace = prepareWorkspaceWindow?.() ?? null
     openSession.mutate({
       registerId: values.registerId,
       openingCounts: values.openingCounts,
       notes: values.notes.trim() || null,
+    }, {
+      onSuccess: (session) => onOpened?.(session, workspace),
+      onError: () => workspace?.close(),
     })
   })
 
   return (
-    <div className="min-h-screen bg-muted/20 p-4 sm:grid sm:place-items-center sm:p-6">
-      <div className="mx-auto w-full max-w-xl rounded-2xl border bg-card shadow-sm">
+    <div className={embedded ? 'w-full' : 'min-h-screen bg-muted/20 p-4 sm:grid sm:place-items-center sm:p-6'}>
+      <div className={embedded ? 'w-full bg-card' : 'mx-auto w-full max-w-xl rounded-2xl border bg-card shadow-sm'}>
         <div className="flex items-center gap-3 border-b p-5">
           <div className="grid size-10 place-items-center rounded-xl bg-foreground text-background">
             <Store className="size-4" />
