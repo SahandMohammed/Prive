@@ -128,7 +128,14 @@ export interface CompletePosSaleInput {
   paymentMode: PosPaymentMode
 }
 
-export interface PosRegister { id: string; code: string; name: string; branchId: string; isActive: boolean }
+export interface PosRegister {
+  id: string
+  code: string
+  name: string
+  branchId: string
+  isActive: boolean
+  hasOpenSession: boolean
+}
 export interface PosSessionCount {
   currencyId: string
   currencyCode: string
