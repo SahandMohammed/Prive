@@ -149,7 +149,10 @@ describe('POS currency availability', () => {
       registerId: ids.register,
       openingCounts: [{ currencyId: ids.iqd, amount: 0 }],
       notes: null,
-    }))
+    }, expect.objectContaining({
+      onSuccess: expect.any(Function),
+      onError: expect.any(Function),
+    })))
   })
 
   it('offers only registers that do not already have an open session', () => {

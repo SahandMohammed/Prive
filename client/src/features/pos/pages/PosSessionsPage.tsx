@@ -487,7 +487,13 @@ export function PosSessionsPage() {
       </Tabs>
 
       <Dialog open={openSessionDialog} onOpenChange={setOpenSessionDialog}>
-        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto p-0 sm:w-full sm:max-w-4xl">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto p-0 sm:max-w-4xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Open POS Session</DialogTitle>
+            <DialogDescription>
+              Select an available register and count the opening drawer before selling.
+            </DialogDescription>
+          </DialogHeader>
           {setup.data ? (
             <OpenSessionScreen
               embedded

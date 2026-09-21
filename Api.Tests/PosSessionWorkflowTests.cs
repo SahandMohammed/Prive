@@ -99,6 +99,40 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
+  public async Task Register_availability_tracks_open_sessions_across_all_response_shapes()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var sessions = CreateSessionService(db);
+    var seededSession = await sessions.GetSessionAsync(data.CashierId, data.SessionId, default);
+
+    Assert.True((await sessions.GetRegistersAsync(new(), default)).Items
+      .Single(register => register.Id == seededSession.RegisterId).HasOpenSession);
+    Assert.True((await sessions.GetRegisterAsync(seededSession.RegisterId, default)).HasOpenSession);
+
+    await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
+      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+    Assert.False((await sessions.GetRegistersAsync(new(), default)).Items
+      .Single(register => register.Id == seededSession.RegisterId).HasOpenSession);
+    Assert.False((await sessions.GetRegisterAsync(seededSession.RegisterId, default)).HasOpenSession);
+
+    var spare = await sessions.CreateRegisterAsync(new("SPARE", "Spare POS"), default);
+    Assert.False(spare.HasOpenSession);
+    var availableUpdate = await sessions.UpdateRegisterAsync(spare.Id,
+      new(spare.Code, "Updated Spare POS", true), default);
+    Assert.False(availableUpdate.HasOpenSession);
+
+    await sessions.OpenSessionAsync(data.CashierId,
+      new(spare.Id, [new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+    var occupiedUpdate = await sessions.UpdateRegisterAsync(spare.Id,
+      new(spare.Code, spare.Name, true), default);
+    Assert.True(occupiedUpdate.HasOpenSession);
+    Assert.True((await sessions.GetRegistersAsync(new(), default)).Items
+      .Single(register => register.Id == spare.Id).HasOpenSession);
+    Assert.True((await sessions.GetRegisterAsync(spare.Id, default)).HasOpenSession);
+  }
+
+  [Fact]
   public async Task Session_and_report_history_normalize_paging_and_scope_cashier_access()
   {
     await using var db = CreateDb();

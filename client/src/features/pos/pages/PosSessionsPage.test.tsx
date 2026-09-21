@@ -149,8 +149,8 @@ beforeEach(() => {
     close: vi.fn(),
   }
   vi.spyOn(window, 'open').mockImplementation((url) => {
-    if (url === '') return workspaceWindow as unknown as Window
-    return { opener: window } as Window
+    if (url === '' || url === '/pos/workspace') return workspaceWindow as unknown as Window
+    return null
   })
   vi.mocked(posApi.setup).mockResolvedValue(setup)
   vi.mocked(posApi.registers).mockResolvedValue([register])
@@ -206,9 +206,14 @@ describe('POS session management UX', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Registers' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
 
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Register code'), { target: { value: 'DESK' } })
-    fireEvent.change(screen.getByLabelText('Register name'), { target: { value: 'Front desk' } })
+    expect(screen.getByRole('dialog', { name: 'Add POS register' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
+    expect(await screen.findByText('Register code is required')).toBeInTheDocument()
+    expect(screen.getByText('Register name is required')).toBeInTheDocument()
+    expect(posApi.createRegister).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText(/Register code/), { target: { value: 'DESK' } })
+    fireEvent.change(screen.getByLabelText(/Register name/), { target: { value: 'Front desk' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
 
     await waitFor(() => expect(posApi.createRegister).toHaveBeenCalledWith(
@@ -216,6 +221,7 @@ describe('POS session management UX', () => {
       expect.anything(),
     ))
     await waitFor(() => expect(posApi.registers).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add POS register' })).not.toBeInTheDocument())
   })
 
   it('puts Z reports on their own tab and uses the shared table presentation', async () => {
@@ -246,11 +252,88 @@ describe('POS session management UX', () => {
     }))
   })
 
+  it('pages sessions and Z reports independently and resets only the changed list', async () => {
+    vi.mocked(posApi.sessions).mockImplementation(async (filters) => ({
+      data: [sessionSummary],
+      meta: meta(filters.page, filters.pageSize, 61),
+    }))
+    vi.mocked(posApi.zReports).mockImplementation(async (filters) => ({
+      data: [zReport],
+      meta: meta(filters.page, filters.pageSize, 61),
+    }))
+    mount()
+
+    let sessions = within(screen.getByRole('region', { name: 'Session history' }))
+    fireEvent.click(await sessions.findByRole('button', { name: 'Next page' }))
+    await waitFor(() => expect(posApi.sessions).toHaveBeenLastCalledWith({
+      page: 2,
+      pageSize: 20,
+      status: undefined,
+    }))
+    expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Z Reports' }))
+    const reports = within(await screen.findByRole('region', { name: 'Z reports' }))
+    fireEvent.click(await reports.findByRole('button', { name: 'Next page' }))
+    await waitFor(() => expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 2, pageSize: 20 }))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sessions' }))
+    sessions = within(await screen.findByRole('region', { name: 'Session history' }))
+    fireEvent.change(sessions.getByRole('combobox', { name: 'Session status' }), {
+      target: { value: String(PosSessionStatus.Closed) },
+    })
+    await waitFor(() => expect(posApi.sessions).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 20,
+      status: PosSessionStatus.Closed,
+    }))
+    expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 2, pageSize: 20 })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Z Reports' }))
+    fireEvent.change(within(await screen.findByRole('region', { name: 'Z reports' }))
+      .getByRole('combobox', { name: 'Rows per page:' }), { target: { value: '50' } })
+    await waitFor(() => expect(posApi.zReports).toHaveBeenLastCalledWith({ page: 1, pageSize: 50 }))
+  })
+
+  it('renders loading and empty list states', async () => {
+    vi.mocked(posApi.sessions).mockImplementation(() => new Promise(() => {}))
+    vi.mocked(posApi.zReports).mockImplementation(() => new Promise(() => {}))
+    mount()
+
+    expect(screen.getByText('Loading sessions…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Z Reports' }))
+    expect(screen.getByText('Loading Z Reports…')).toBeInTheDocument()
+
+    cleanup()
+    vi.mocked(posApi.sessions).mockResolvedValue({ data: [], meta: meta(1, 20, 0) })
+    vi.mocked(posApi.zReports).mockResolvedValue({ data: [], meta: meta(1, 20, 0) })
+    mount()
+
+    expect(await screen.findByText('No sessions found. Create a new session to start selling.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Z Reports' }))
+    expect(await screen.findByText('No Z Reports yet.')).toBeInTheDocument()
+  })
+
+  it('renders register, session, and report request failures', async () => {
+    vi.mocked(posApi.registers).mockRejectedValue(new Error('Registers unavailable'))
+    vi.mocked(posApi.sessions).mockRejectedValue(new Error('Sessions unavailable'))
+    vi.mocked(posApi.zReports).mockRejectedValue(new Error('Reports unavailable'))
+    mount()
+
+    expect(await screen.findByText('Sessions unavailable')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Registers' }))
+    expect(within(await screen.findByRole('region', { name: 'POS registers' }))
+      .getByText('Registers unavailable')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Z Reports' }))
+    expect(within(await screen.findByRole('region', { name: 'Z reports' }))
+      .getByText('Reports unavailable')).toBeInTheDocument()
+  })
+
   it('keeps session creation in the ERP page until the opening form is submitted', async () => {
     mount()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Create new session' }))
-    expect(screen.getByText('Open POS Session')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Open POS Session' })).toBeInTheDocument()
     expect(window.open).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
@@ -259,11 +342,43 @@ describe('POS session management UX', () => {
       registerId: register.id,
       openingCounts: [],
       notes: null,
-    }))
+    }, expect.anything()))
 
     expect(window.open).toHaveBeenCalledWith('', '_blank')
     await waitFor(() => expect(workspaceWindow.location.href).toBe('/pos/workspace'))
     expect(workspaceWindow.opener).toBeNull()
+  })
+
+  it('closes the prepared workspace when session validation fails', async () => {
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new session' }))
+    fireEvent.change(screen.getByLabelText('Register'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
+
+    await waitFor(() => expect(workspaceWindow.close).toHaveBeenCalledOnce())
+    expect(posApi.openSession).not.toHaveBeenCalled()
+  })
+
+  it('closes the prepared workspace when session creation fails', async () => {
+    vi.mocked(posApi.openSession).mockRejectedValue(new Error('Session creation failed'))
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
+
+    await waitFor(() => expect(workspaceWindow.close).toHaveBeenCalledOnce())
+    expect(await screen.findByText('Session creation failed')).toBeInTheDocument()
+  })
+
+  it('falls back to the current tab when the workspace popup is blocked', async () => {
+    vi.mocked(window.open).mockReturnValue(null)
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
+
+    expect(await screen.findByText('POS workspace route')).toBeInTheDocument()
   })
 
   it('continues the current users session in a dedicated workspace tab', async () => {
@@ -274,6 +389,7 @@ describe('POS session management UX', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }))
 
     expect(window.open).toHaveBeenCalledWith('/pos/workspace', '_blank')
+    expect(workspaceWindow.opener).toBeNull()
   })
 
   it('marks occupied registers as in use and prevents deactivation', async () => {

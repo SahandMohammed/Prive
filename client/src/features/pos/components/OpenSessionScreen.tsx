@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type FormEvent } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, Store } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -70,21 +70,23 @@ export function OpenSessionScreen({
     },
   })
 
-  const submit = form.handleSubmit((values) => {
-    const workspace = preparedWorkspace.current
-    preparedWorkspace.current = null
-    openSession.mutate({
-      registerId: values.registerId,
-      openingCounts: values.openingCounts,
-      notes: values.notes.trim() || null,
-    }, {
-      onSuccess: (session) => onOpened?.(session, workspace),
-      onError: () => workspace?.close(),
-    })
-  }, () => {
-    preparedWorkspace.current?.close()
-    preparedWorkspace.current = null
-  })
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    void form.handleSubmit((values) => {
+      const workspace = preparedWorkspace.current
+      preparedWorkspace.current = null
+      openSession.mutate({
+        registerId: values.registerId,
+        openingCounts: values.openingCounts,
+        notes: values.notes.trim() || null,
+      }, {
+        onSuccess: (session) => onOpened?.(session, workspace),
+        onError: () => workspace?.close(),
+      })
+    }, () => {
+      preparedWorkspace.current?.close()
+      preparedWorkspace.current = null
+    })(event)
+  }
 
   const prepareWorkspace = () => {
     if (!prepareWorkspaceWindow) return
