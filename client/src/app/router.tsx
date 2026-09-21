@@ -70,9 +70,10 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/contacts', element: <ContactsPage /> },
 
-          // POS full-screen workspace and historical reports.
-          { path: '/pos', element: <PosPage /> },
-          { path: '/pos/sessions', element: <PosSessionsPage /> },
+          // POS session dashboard, full-screen selling workspace, and historical reports.
+          { path: '/pos', element: <PosSessionsPage /> },
+          { path: '/pos/workspace', element: <PosPage /> },
+          { path: '/pos/sessions', element: <Navigate to="/pos" replace /> },
           { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
           { path: '/pos/sales/:id', element: <PosReceiptPage /> },
           { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
