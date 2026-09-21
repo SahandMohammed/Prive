@@ -112,7 +112,9 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(1, registers.Page);
     Assert.Equal(100, registers.PageSize);
     Assert.Equal(3, registers.Items.Count);
+    Assert.All(registers.Items, register => Assert.True(register.HasOpenSession));
     var singleRegister = await sessions.GetRegisterAsync(registers.Items[0].Id, default);
+    Assert.True(singleRegister.HasOpenSession);
     Assert.Equal(registers.Items[0].Id, singleRegister.Id);
     var notFound = await Assert.ThrowsAsync<NotFoundException>(() => sessions.GetRegisterAsync(Guid.NewGuid(), default));
     Assert.Equal(ErrorCodes.Pos.RegisterNotFound, notFound.Code);
