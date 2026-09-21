@@ -89,6 +89,7 @@ function mount() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.spyOn(window, 'open').mockReturnValue({ opener: window } as Window)
   vi.mocked(posApi.registers).mockResolvedValue([])
   vi.mocked(posApi.activeSession).mockResolvedValue(null)
   vi.mocked(posApi.sessions).mockImplementation(async (filters) => ({
@@ -100,7 +101,10 @@ beforeEach(() => {
     meta: meta(filters.page, filters.pageSize),
   }))
 })
-afterEach(cleanup)
+afterEach(() => {
+  vi.restoreAllMocks()
+  cleanup()
+})
 
 describe('POS session dashboard', () => {
   it('pages sessions and Z reports independently and resets the session page when filtering', async () => {
@@ -151,7 +155,15 @@ describe('POS session dashboard', () => {
     expect(await screen.findByText('Reports unavailable')).toBeInTheDocument()
   })
 
-  it('routes a user without an open session to create one in the workspace', async () => {
+  it('opens a new workspace tab when creating a session', async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
+    expect(window.open).toHaveBeenCalledWith('/pos/workspace', '_blank')
+    expect(screen.queryByText('POS workspace route')).not.toBeInTheDocument()
+  })
+
+  it('falls back to same-tab workspace navigation when the browser blocks the new tab', async () => {
+    vi.mocked(window.open).mockReturnValue(null)
     mount()
     fireEvent.click(await screen.findByRole('button', { name: 'Create New Session' }))
     expect(await screen.findByText('POS workspace route')).toBeInTheDocument()
@@ -171,7 +183,8 @@ describe('POS session dashboard', () => {
     expect(sessions.getByText('Open · Yours')).toBeInTheDocument()
 
     fireEvent.click(sessions.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('POS workspace route')).toBeInTheDocument()
+    expect(window.open).toHaveBeenCalledWith('/pos/workspace', '_blank')
+    expect(screen.queryByText('POS workspace route')).not.toBeInTheDocument()
   })
 
   it('marks occupied registers as in use and prevents deactivation', async () => {
