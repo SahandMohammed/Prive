@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { financeApi } from '../api/finance.api'
 import type {
   CustomerReceiptInput,
+  SetDollarRateInput,
   ExchangeRateInput,
   MoneyAccountAccessInput,
   MoneyAccountInput,
@@ -87,6 +88,22 @@ export function useEffectiveExchangeRate(currencyId?: string, date?: string, ena
     queryKey: [...FINANCE_KEY, 'exchange-rate', currencyId, date],
     queryFn: () => financeApi.effectiveExchangeRate(currencyId!, date!),
     enabled: enabled && Boolean(currencyId && date),
+  })
+}
+export function useCurrentDollarRate() {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'dollar-rate'],
+    queryFn: financeApi.currentDollarRate,
+  })
+}
+export function useSetDollarRate() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: SetDollarRateInput) => financeApi.setDollarRate(body),
+    onSuccess: () => {
+      refresh(client)
+      client.invalidateQueries({ queryKey: ['pos', 'setup'] })
+    },
   })
 }
 export function useExchangeRateActions() {

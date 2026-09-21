@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { BranchWorkspace, resetBranchSelection, BranchSelector } from '@/features/business'
 import { useCurrentUser } from '@/features/auth'
+import { DollarRatePopover } from '@/features/finance'
 import { useThemeStore } from '@/lib/theme'
 import { useTranslation } from 'react-i18next'
 import { changeAppLanguage } from '@/lib/i18n'
@@ -124,6 +125,8 @@ export function AppLayout() {
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {/* Branch Selector */}
             <BranchSelector compact align={isRtl ? 'start' : 'end'} />
+
+            <DollarRatePopover />
 
             {/* Language Switcher Button (English / کوردی سۆرانی) */}
             <button

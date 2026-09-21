@@ -16,6 +16,10 @@ vi.mock('@/features/business', () => ({
   resetBranchSelection: vi.fn(),
 }))
 
+vi.mock('@/features/finance', () => ({
+  DollarRatePopover: () => <div>Dollar rate control</div>,
+}))
+
 vi.mock('@/lib/theme', () => ({
   useThemeStore: () => ({ theme: 'light', toggleTheme: vi.fn() }),
 }))
@@ -50,6 +54,7 @@ describe('AppLayout POS routes', () => {
     mount('/pos')
 
     expect(screen.getByText('ERP sidebar')).toBeInTheDocument()
+    expect(screen.getByText('Dollar rate control')).toBeInTheDocument()
     expect(screen.getByTestId('branch-workspace')).toContainElement(screen.getByText('Route content'))
   })
 
@@ -57,6 +62,7 @@ describe('AppLayout POS routes', () => {
     mount('/pos/workspace')
 
     expect(screen.queryByText('ERP sidebar')).not.toBeInTheDocument()
+    expect(screen.queryByText('Dollar rate control')).not.toBeInTheDocument()
     expect(screen.getByTestId('branch-workspace')).toContainElement(screen.getByText('Route content'))
   })
 })

@@ -140,6 +140,7 @@ public static class ErrorCodes
     public const string ExchangeRateNotFound = "FINANCE_EXCHANGE_RATE_NOT_FOUND";
     public const string ExchangeRatePairInvalid = "FINANCE_EXCHANGE_RATE_PAIR_INVALID";
     public const string ExchangeRateConflict = "FINANCE_EXCHANGE_RATE_CONFLICT";
+    public const string DollarCurrencyNotConfigured = "FINANCE_DOLLAR_CURRENCY_NOT_CONFIGURED";
     public const string MoneyTransferNotFound = "FINANCE_MONEY_TRANSFER_NOT_FOUND";
     public const string TransferSameAccount = "FINANCE_TRANSFER_SAME_ACCOUNT";
     public const string TransferCurrencyMismatch = "FINANCE_TRANSFER_CURRENCY_MISMATCH";

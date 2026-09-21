@@ -386,6 +386,67 @@ public sealed class FinanceService
     return await ExchangeRateResponseQuery(id).SingleAsync(ct);
   }
 
+  public async Task<DollarRateResponse> GetCurrentDollarRateAsync(CancellationToken ct)
+  {
+    var context = await GetDollarRateContextAsync(ct);
+    if (context.IsBaseCurrency)
+      return new DollarRateResponse(
+        context.DollarCurrencyId, context.DollarCurrencyCode,
+        context.BaseCurrencyId, context.BaseCurrencyCode,
+        1m, null, null, null, true);
+
+    var currentRate = await _db.ExchangeRates.AsNoTracking()
+      .Where(rate => rate.FromCurrencyId == context.DollarCurrencyId
+        && rate.ToCurrencyId == context.BaseCurrencyId
+        && rate.IsActive
+        && rate.EffectiveAtUtc <= DateTime.UtcNow)
+      .OrderByDescending(rate => rate.EffectiveAtUtc)
+      .ThenByDescending(rate => rate.Id)
+      .Select(rate => new
+      {
+        rate.Rate,
+        rate.EffectiveAtUtc,
+        rate.CreatedByUserId,
+        CreatedByUsername = rate.CreatedByUser.Username
+      })
+      .FirstOrDefaultAsync(ct);
+
+    return new DollarRateResponse(
+      context.DollarCurrencyId, context.DollarCurrencyCode,
+      context.BaseCurrencyId, context.BaseCurrencyCode,
+      currentRate?.Rate, currentRate?.EffectiveAtUtc,
+      currentRate?.CreatedByUserId, currentRate?.CreatedByUsername,
+      false);
+  }
+
+  public async Task<DollarRateResponse> SetDollarRateAsync(
+    SetDollarRateRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    if (request.Rate <= 0)
+      throw new BadRequestException(ErrorCodes.Finance.ExchangeRateRequired,
+        "Enter a positive USD exchange rate.");
+
+    var context = await GetDollarRateContextAsync(ct);
+    if (context.IsBaseCurrency)
+      throw new BadRequestException(ErrorCodes.Finance.ExchangeRatePairInvalid,
+        "USD is the Business base currency and does not require an exchange rate.");
+
+    var rate = await CreateExchangeRateAsync(new CreateExchangeRateRequest(
+      context.DollarCurrencyId,
+      context.BaseCurrencyId,
+      request.Rate,
+      DateTime.UtcNow), userId, ct);
+
+    return new DollarRateResponse(
+      context.DollarCurrencyId, context.DollarCurrencyCode,
+      context.BaseCurrencyId, context.BaseCurrencyCode,
+      rate.Rate, rate.EffectiveAtUtc,
+      rate.CreatedByUserId, rate.CreatedByUsername,
+      false);
+  }
+
   public async Task<PagedResult<MoneyTransferResponse>> GetMoneyTransfersAsync(
     MoneyTransferListQuery request,
     Guid userId,
@@ -1151,6 +1212,26 @@ public sealed class FinanceService
       ?? throw new BadRequestException(ErrorCodes.Finance.BusinessNotConfigured,
         "Complete Business Setup before using Finance.");
 
+  private async Task<DollarRateContext> GetDollarRateContextAsync(CancellationToken ct)
+  {
+    var business = await GetBusinessAsync(ct);
+    var baseCurrency = await _db.Currencies.AsNoTracking()
+      .SingleOrDefaultAsync(currency => currency.Id == business.BaseCurrencyId && currency.IsActive, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.CurrencyInvalid,
+        "The Business base currency must be active.");
+    var dollar = await _db.Currencies.AsNoTracking()
+      .SingleOrDefaultAsync(currency => currency.Code == "USD" && currency.IsActive, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.DollarCurrencyNotConfigured,
+        "Configure an active USD currency before setting the dollar rate.");
+
+    return new DollarRateContext(
+      dollar.Id,
+      dollar.Code,
+      baseCurrency.Id,
+      baseCurrency.Code,
+      dollar.Id == baseCurrency.Id);
+  }
+
   internal Task<decimal> ResolveCurrentRateAsync(
     Guid currencyId,
     Guid baseCurrencyId,
@@ -1561,4 +1642,11 @@ public sealed class FinanceService
     Guid BaseCurrencyId,
     decimal ExchangeRate,
     IReadOnlyDictionary<Guid, SalesInvoiceEntity> Invoices);
+
+  private sealed record DollarRateContext(
+    Guid DollarCurrencyId,
+    string DollarCurrencyCode,
+    Guid BaseCurrencyId,
+    string BaseCurrencyCode,
+    bool IsBaseCurrency);
 }

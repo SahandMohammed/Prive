@@ -101,38 +101,6 @@ public sealed class FinanceController : ControllerBase
     return Ok(ApiResponse<List<MoneyLedgerEntryResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
-  [HttpGet("exchange-rates")]
-  [ProducesResponseType(typeof(ApiResponse<List<ExchangeRateResponse>>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> GetExchangeRates([FromQuery] ExchangeRateListQuery query, CancellationToken ct)
-  {
-    var result = await _service.GetExchangeRatesAsync(query, ct);
-    return Ok(ApiResponse<List<ExchangeRateResponse>>.Ok(result.Items, result.ToMetadata()));
-  }
-
-  [HttpGet("exchange-rates/effective")]
-  [ProducesResponseType(typeof(ApiResponse<EffectiveExchangeRateResponse>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> GetEffectiveExchangeRate(
-    [FromQuery] Guid currencyId,
-    [FromQuery] DateOnly date,
-    CancellationToken ct) =>
-    Ok(ApiResponse<EffectiveExchangeRateResponse>.Ok(
-      await _service.GetEffectiveExchangeRateAsync(currencyId, date, ct)));
-
-  [HttpPost("exchange-rates")]
-  [Authorize(Roles = Administrators)]
-  [ProducesResponseType(typeof(ApiResponse<ExchangeRateResponse>), StatusCodes.Status201Created)]
-  public async Task<IActionResult> CreateExchangeRate([FromBody] CreateExchangeRateRequest request, CancellationToken ct)
-  {
-    var rate = await _service.CreateExchangeRateAsync(request, GetUserId(), ct);
-    return StatusCode(StatusCodes.Status201Created, ApiResponse<ExchangeRateResponse>.Ok(rate));
-  }
-
-  [HttpPut("exchange-rates/{id:guid}/deactivate")]
-  [Authorize(Roles = Administrators)]
-  [ProducesResponseType(typeof(ApiResponse<ExchangeRateResponse>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> DeactivateExchangeRate(Guid id, CancellationToken ct) =>
-    Ok(ApiResponse<ExchangeRateResponse>.Ok(await _service.DeactivateExchangeRateAsync(id, ct)));
-
   [HttpGet("transfers")]
   [ProducesResponseType(typeof(ApiResponse<List<MoneyTransferResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetMoneyTransfers([FromQuery] MoneyTransferListQuery query, CancellationToken ct)

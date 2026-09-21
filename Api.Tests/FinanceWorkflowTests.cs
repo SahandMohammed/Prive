@@ -19,12 +19,12 @@ namespace Api.Tests;
 public sealed class FinanceWorkflowTests
 {
   [Fact]
-  public void Exchange_rate_mutations_require_management_roles()
+  public void Generic_exchange_rate_mutations_require_management_roles()
   {
     foreach (var methodName in new[]
-      { nameof(FinanceController.CreateExchangeRate), nameof(FinanceController.DeactivateExchangeRate) })
+      { nameof(ExchangeRateController.CreateExchangeRate), nameof(ExchangeRateController.DeactivateExchangeRate) })
     {
-      var method = typeof(FinanceController).GetMethod(methodName)!;
+      var method = typeof(ExchangeRateController).GetMethod(methodName)!;
       var roles = method.GetCustomAttributes<AuthorizeAttribute>()
         .SelectMany(attribute => (attribute.Roles ?? string.Empty).Split(','))
         .ToHashSet(StringComparer.Ordinal);
@@ -35,6 +35,22 @@ public sealed class FinanceWorkflowTests
       Assert.DoesNotContain("Cashier", roles);
       Assert.DoesNotContain("Professional", roles);
     }
+  }
+
+  [Fact]
+  public void Dollar_rate_actions_are_branch_independent_and_authenticated_without_role_constraints()
+  {
+    Assert.True(typeof(ExchangeRateController).IsDefined(typeof(BranchIndependentAttribute), true));
+
+    foreach (var methodName in new[]
+      { nameof(ExchangeRateController.GetCurrentDollarRate), nameof(ExchangeRateController.SetDollarRate) })
+    {
+      var method = typeof(ExchangeRateController).GetMethod(methodName)!;
+      Assert.Empty(method.GetCustomAttributes<AuthorizeAttribute>());
+    }
+
+    var controllerAuthorization = typeof(ExchangeRateController).GetCustomAttributes<AuthorizeAttribute>().Single();
+    Assert.True(string.IsNullOrEmpty(controllerAuthorization.Roles));
   }
 
   [Fact]
@@ -245,6 +261,60 @@ public sealed class FinanceWorkflowTests
     Assert.Equal(32750, posted.BaseAmount);
     Assert.All(await db.MoneyLedgerEntries.Where(entry => entry.SourceDocumentId == transfer.Id).ToListAsync(),
       entry => Assert.Equal(1310, entry.ExchangeRate));
+  }
+
+  [Fact]
+  public async Task Dollar_rate_updates_append_history_and_return_the_latest_active_rate()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var service = CreateService(db);
+    var before = DateTime.UtcNow;
+
+    var first = await service.SetDollarRateAsync(new SetDollarRateRequest(1310), data.OperatorUserId, default);
+    var second = await service.SetDollarRateAsync(new SetDollarRateRequest(1320), data.OperatorUserId, default);
+    var current = await service.GetCurrentDollarRateAsync(default);
+
+    Assert.Equal("USD", first.DollarCurrencyCode);
+    Assert.Equal("IQD", first.BaseCurrencyCode);
+    Assert.Equal(data.OperatorUserId, first.CreatedByUserId);
+    Assert.NotNull(first.EffectiveAtUtc);
+    Assert.True(first.EffectiveAtUtc >= before);
+    Assert.Equal(1320, second.Rate);
+    Assert.Equal(1320, current.Rate);
+    Assert.Equal(second.EffectiveAtUtc, current.EffectiveAtUtc);
+    Assert.Equal(2, await db.ExchangeRates.CountAsync(rate =>
+      rate.FromCurrencyId == data.ForeignCurrencyId && rate.ToCurrencyId == data.BaseCurrencyId));
+  }
+
+  [Fact]
+  public async Task Dollar_rate_requires_an_active_usd_currency_a_positive_rate_and_a_non_usd_base_currency()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var service = CreateService(db);
+
+    var invalidRate = await Assert.ThrowsAsync<BadRequestException>(() =>
+      service.SetDollarRateAsync(new SetDollarRateRequest(0), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.ExchangeRateRequired, invalidRate.Code);
+
+    (await db.Currencies.FindAsync(data.ForeignCurrencyId))!.IsActive = false;
+    await db.SaveChangesAsync();
+    var missingDollar = await Assert.ThrowsAsync<BadRequestException>(() =>
+      service.GetCurrentDollarRateAsync(default));
+    Assert.Equal(ErrorCodes.Finance.DollarCurrencyNotConfigured, missingDollar.Code);
+
+    (await db.Currencies.FindAsync(data.ForeignCurrencyId))!.IsActive = true;
+    var business = await db.Businesses.SingleAsync();
+    business.BaseCurrencyId = data.ForeignCurrencyId;
+    await db.SaveChangesAsync();
+
+    var baseDollar = await service.GetCurrentDollarRateAsync(default);
+    Assert.True(baseDollar.IsBaseCurrency);
+    Assert.Equal(1, baseDollar.Rate);
+    var noRateRequired = await Assert.ThrowsAsync<BadRequestException>(() =>
+      service.SetDollarRateAsync(new SetDollarRateRequest(1310), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.ExchangeRatePairInvalid, noRateRequired.Code);
   }
 
   [Fact]

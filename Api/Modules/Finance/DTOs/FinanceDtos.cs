@@ -154,6 +154,20 @@ public sealed record EffectiveExchangeRateResponse(
   DateOnly Date,
   decimal Rate);
 
+public sealed record SetDollarRateRequest(
+  [Range(typeof(decimal), "0.000001", "9999999999999")] decimal Rate);
+
+public sealed record DollarRateResponse(
+  Guid DollarCurrencyId,
+  string DollarCurrencyCode,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  decimal? Rate,
+  DateTime? EffectiveAtUtc,
+  Guid? CreatedByUserId,
+  string? CreatedByUsername,
+  bool IsBaseCurrency);
+
 public sealed class MoneyTransferListQuery : PaginationRequest
 {
   public string? Search { get; init; }
