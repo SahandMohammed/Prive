@@ -45,7 +45,16 @@ export function PosSessionsPage() {
     })
   })
 
-  const enterWorkspace = () => navigate('/pos/workspace')
+  const enterWorkspace = () => {
+    const workspace = window.open('/pos/workspace', '_blank')
+    if (workspace) {
+      // Opening from this tab preserves the current sessionStorage branch selection.
+      // Drop the opener reference after creation so the POS tab cannot control the ERP tab.
+      workspace.opener = null
+      return
+    }
+    navigate('/pos/workspace')
+  }
 
   return (
     <div className="min-h-screen bg-muted/20 p-4 sm:p-6">
