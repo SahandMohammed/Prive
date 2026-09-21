@@ -181,7 +181,8 @@ public sealed record PosRegisterResponse(
   string Code,
   string Name,
   Guid BranchId,
-  bool IsActive);
+  bool IsActive,
+  bool HasOpenSession);
 
 public sealed record PosSessionCountResponse(
   Guid CurrencyId,
