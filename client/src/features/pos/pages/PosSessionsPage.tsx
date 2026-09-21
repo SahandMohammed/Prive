@@ -4,17 +4,21 @@ import { Play, Plus } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { useCurrentUser } from '@/features/auth'
+import { useBranchSelectionStore } from '@/features/business'
 import {
   useActivePosSession,
   useCreatePosRegister,
   usePosRegisters,
   usePosSessions,
+  usePosSetup,
   usePosZReports,
   useUpdatePosRegister,
 } from '../hooks/usePos'
+import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { posRegisterSchema } from '../schemas/pos.schema'
 import type { PosRegisterValues } from '../schemas/pos.schema'
 import { PosSessionStatus } from '../types/pos.types'
@@ -27,13 +31,19 @@ export function PosSessionsPage() {
   const [sessionPageSize, setSessionPageSize] = useState(20)
   const [reportPage, setReportPage] = useState(1)
   const [reportPageSize, setReportPageSize] = useState(20)
+  const [openSessionDialog, setOpenSessionDialog] = useState(false)
+  const selectedBranchId = useBranchSelectionStore((state) => state.branchId)
   const activeSession = useActivePosSession()
+  const setup = usePosSetup()
   const registers = usePosRegisters(true)
   const sessions = usePosSessions({ page: sessionPage, pageSize: sessionPageSize, status: status === '' ? undefined : status })
   const reports = usePosZReports({ page: reportPage, pageSize: reportPageSize })
   const createRegister = useCreatePosRegister()
   const updateRegister = useUpdatePosRegister()
   const canManageRegisters = user?.role === 'SuperAdmin' || user?.role === 'Owner' || user?.role === 'Manager'
+  const selectedBranch = setup.data?.branches.find((branch) => branch.id === selectedBranchId)
+    ?? setup.data?.branches[0]
+
   const registerForm = useForm<PosRegisterValues>({
     resolver: zodResolver(posRegisterSchema),
     defaultValues: { code: '', name: '' },
@@ -45,11 +55,21 @@ export function PosSessionsPage() {
     })
   })
 
-  const enterWorkspace = () => {
+  const openWorkspace = () => {
     const workspace = window.open('/pos/workspace', '_blank')
     if (workspace) {
-      // Opening from this tab preserves the current sessionStorage branch selection.
-      // Drop the opener reference after creation so the POS tab cannot control the ERP tab.
+      workspace.opener = null
+      return
+    }
+    navigate('/pos/workspace')
+  }
+
+  const prepareWorkspaceWindow = () => window.open('', '_blank')
+
+  const completeSessionOpen = (_session: unknown, workspace: Window | null) => {
+    setOpenSessionDialog(false)
+    if (workspace) {
+      workspace.location.href = '/pos/workspace'
       workspace.opener = null
       return
     }
@@ -72,8 +92,12 @@ export function PosSessionsPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={enterWorkspace}
-              disabled={activeSession.isPending || activeSession.isError}
+              onClick={activeSession.data ? openWorkspace : () => setOpenSessionDialog(true)}
+              disabled={
+                activeSession.isPending
+                || activeSession.isError
+                || (!activeSession.data && (setup.isPending || setup.isError || registers.isPending || registers.isError))
+              }
             >
               {activeSession.data ? <Play className="size-4" /> : <Plus className="size-4" />}
               {activeSession.isPending
@@ -156,7 +180,7 @@ export function PosSessionsPage() {
                       <td>{signed(row.varianceBase)} {row.baseCurrencyCode}</td>
                       <td className="text-right">
                         {isCurrentSession ? (
-                          <Button size="sm" variant="outline" onClick={enterWorkspace}>
+                          <Button size="sm" variant="outline" onClick={openWorkspace}>
                             <Play className="size-3.5" /> Continue
                           </Button>
                         ) : (
@@ -246,6 +270,25 @@ export function PosSessionsPage() {
             </div>
           </section>
         )}
+
+        <Dialog open={openSessionDialog} onOpenChange={setOpenSessionDialog}>
+          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto p-0">
+            {setup.data ? (
+              <OpenSessionScreen
+                embedded
+                setup={setup.data}
+                branch={selectedBranch}
+                registers={registers.data ?? []}
+                cashier={user?.username ?? 'Cashier'}
+                onExit={() => setOpenSessionDialog(false)}
+                prepareWorkspaceWindow={prepareWorkspaceWindow}
+                onOpened={completeSessionOpen}
+              />
+            ) : (
+              <p className="p-6 text-sm text-muted-foreground">Loading POS setup…</p>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <section aria-label="Z reports" className="rounded-2xl border bg-card p-5">
           <h2 className="font-semibold">Z Reports</h2>
