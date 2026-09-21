@@ -32,17 +32,30 @@ public sealed class PosSessionService
       query = query.Where(register => register.Code.ToLower().Contains(search) || register.Name.ToLower().Contains(search));
     }
     return await query.OrderBy(register => register.Code).ThenBy(register => register.Id)
-      .Select(register => new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive))
+      .Select(register => new PosRegisterResponse(
+        register.Id,
+        register.Code,
+        register.Name,
+        register.BranchId,
+        register.IsActive,
+        register.Sessions.Any(session => session.Status == PosSessionStatus.Open)))
       .ToPagedResultAsync(request, ct);
   }
 
   public async Task<PosRegisterResponse> GetRegisterAsync(Guid id, CancellationToken ct)
   {
     var branchId = RequireBranch();
-    var register = await _db.PosRegisters.AsNoTracking()
-      .SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
+    return await _db.PosRegisters.AsNoTracking()
+      .Where(register => register.Id == id && register.BranchId == branchId)
+      .Select(register => new PosRegisterResponse(
+        register.Id,
+        register.Code,
+        register.Name,
+        register.BranchId,
+        register.IsActive,
+        register.Sessions.Any(session => session.Status == PosSessionStatus.Open)))
+      .SingleOrDefaultAsync(ct)
       ?? throw RegisterNotFound();
-    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
   }
 
   public async Task<PosRegisterResponse> CreateRegisterAsync(CreatePosRegisterRequest request, CancellationToken ct)
@@ -62,7 +75,7 @@ public sealed class PosSessionService
     _db.PosRegisters.Add(register);
     await SaveConflictAsync(ErrorCodes.Pos.RegisterCodeTaken,
       "Another POS Register used this code first. Choose a different code.", ct);
-    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
+    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive, false);
   }
 
   public async Task<PosRegisterResponse> UpdateRegisterAsync(Guid id, UpdatePosRegisterRequest request, CancellationToken ct)
@@ -82,7 +95,9 @@ public sealed class PosSessionService
     register.IsActive = request.IsActive;
     await SaveConflictAsync(ErrorCodes.Pos.RegisterCodeTaken,
       "Another POS Register used this code first. Choose a different code.", ct);
-    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive);
+    var hasOpenSession = await _db.PosSessions.AsNoTracking()
+      .AnyAsync(session => session.RegisterId == register.Id && session.Status == PosSessionStatus.Open, ct);
+    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive, hasOpenSession);
   }
 
   public async Task<PosSessionResponse?> GetActiveSessionAsync(Guid userId, CancellationToken ct)
