@@ -28,6 +28,10 @@ export function OpenSessionScreen({
     () => registers.filter((register) => register.isActive),
     [registers]
   )
+  const availableRegisters = useMemo(
+    () => activeRegisters.filter((register) => !register.hasOpenSession),
+    [activeRegisters]
+  )
   const cashCurrencies = useMemo(() => {
     const rows = setup.moneyAccounts
       .filter((account) => account.type === MoneyAccountType.Cashbox
@@ -48,7 +52,7 @@ export function OpenSessionScreen({
   const form = useForm<PosOpenSessionValues>({
     resolver: zodResolver(posOpenSessionSchema),
     defaultValues: {
-      registerId: activeRegisters[0]?.id ?? '',
+      registerId: availableRegisters[0]?.id ?? '',
       openingCounts: cashCurrencies.map((currency) => ({ currencyId: currency.id, amount: 0 })),
       notes: '',
     },
@@ -88,7 +92,7 @@ export function OpenSessionScreen({
               className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Select register</option>
-              {activeRegisters.map((register) => (
+              {availableRegisters.map((register) => (
                 <option key={register.id} value={register.id}>{register.code} — {register.name}</option>
               ))}
             </select>
@@ -97,9 +101,11 @@ export function OpenSessionScreen({
             )}
           </label>
 
-          {activeRegisters.length === 0 && (
+          {availableRegisters.length === 0 && (
             <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
-              No active POS Register exists for this branch. A Manager, Owner, or SuperAdmin must create one first.
+              {activeRegisters.length === 0
+                ? 'No active POS Register exists for this branch. A Manager, Owner, or SuperAdmin must create one first.'
+                : 'All active POS Registers are currently in use. Close an open session before starting another one on those registers.'}
             </p>
           )}
 
@@ -161,7 +167,7 @@ export function OpenSessionScreen({
             <Button type="button" variant="outline" onClick={onExit}>
               <ArrowLeft className="size-4" /> Exit POS
             </Button>
-            <Button type="submit" disabled={activeRegisters.length === 0 || openSession.isPending}>
+            <Button type="submit" disabled={availableRegisters.length === 0 || openSession.isPending}>
               {openSession.isPending ? 'Opening…' : 'Open Session'}
             </Button>
           </div>
