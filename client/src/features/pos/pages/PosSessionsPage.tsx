@@ -75,7 +75,7 @@ export function PosSessionsPage() {
                 ? 'Checking Session…'
                 : activeSession.data
                   ? 'Continue Session'
-                  : 'New Session'}
+                  : 'Create New Session'}
             </Button>
           </div>
         </header>
@@ -168,7 +168,7 @@ export function PosSessionsPage() {
           {sessions.isError && <p role="alert" className="py-4 text-sm text-destructive">{sessions.error.message}</p>}
           {sessions.data?.data.length === 0 && (
             <p className="py-4 text-sm text-muted-foreground">
-              No sessions found. Use New Session to start the first session available to you.
+              No sessions found. Use Create New Session to start the first session available to you.
             </p>
           )}
           {sessions.data && (
