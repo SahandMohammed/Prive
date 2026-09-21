@@ -39,9 +39,9 @@ export function AppLayout() {
   const userInitials = user?.username
     ? user.username.slice(0, 2).toUpperCase()
     : 'AS'
-  const isPosWorkspace = pathname === '/pos' || pathname.startsWith('/pos/')
+  const isPosSessionWorkspace = pathname === '/pos/workspace' || pathname.startsWith('/pos/workspace/')
 
-  if (isPosWorkspace) {
+  if (isPosSessionWorkspace) {
     return (
       <div className="h-screen w-screen overflow-auto bg-background text-foreground">
         <BranchWorkspace>
