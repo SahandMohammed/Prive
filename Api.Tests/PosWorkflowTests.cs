@@ -211,30 +211,11 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
-  public async Task Missing_usd_rate_disables_usd_without_blocking_session_or_iqd_sale()
+  public async Task Missing_usd_rate_blocks_opening_a_multi_currency_session()
   {
     await using var db = CreateDb();
-    var data = await SeedAsync(db, includeUsdRate: false);
-    var service = CreateService(db);
-
-    var setup = await service.GetSetupAsync(data.CashierId, default);
-    Assert.Equal(1, setup.MoneyAccounts.Single(account =>
-      account.CurrencyId == data.IqdCurrencyId).CurrentExchangeRate);
-    Assert.Null(setup.MoneyAccounts.Single(account =>
-      account.CurrencyId == data.UsdCurrencyId).CurrentExchangeRate);
-
-    var missingRate = await Assert.ThrowsAsync<BadRequestException>(() => service.CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.UsdMoneyAccountId, 20)]),
-      data.CashierId,
-      default));
-    Assert.Equal(ErrorCodes.Finance.ExchangeRateRequired, missingRate.Code);
-    Assert.Empty(await db.PosSales.ToListAsync());
-
-    var iqdSale = await service.CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
-      data.CashierId,
-      default);
-    Assert.Equal(25_000, iqdSale.SettledBaseAmount);
+    var missingRate = await Assert.ThrowsAsync<BadRequestException>(() => SeedAsync(db, includeUsdRate: false));
+    Assert.Equal(ErrorCodes.Pos.OpeningCountInvalid, missingRate.Code);
   }
 
   [Fact]
@@ -431,7 +412,8 @@ public sealed partial class PosWorkflowTests
       customerId,
       lines,
       tenders,
-      change);
+      change,
+      ClientRequestId: Guid.NewGuid());
 
   private static PosSaleLineRequest ServiceLine(TestData data) =>
     new(SalesLineType.Service, data.ServiceId, null, null, 1, data.ProfessionalId);
@@ -511,6 +493,7 @@ public sealed partial class PosWorkflowTests
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = cashier.Id, AccessLevel = MoneyAccountAccessLevel.Operate },
       new MoneyAccountAccessEntity { MoneyAccountId = iqdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View },
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View });
+    db.UserBranchAccess.Add(new UserBranchAccessEntity { UserId = professional.Id, BranchId = branch.Id });
     if (includeUsdRate) db.ExchangeRates.Add(new ExchangeRateEntity
     {
       FromCurrencyId = usd.Id,

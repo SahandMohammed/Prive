@@ -242,12 +242,14 @@ export function CheckoutDialog({
               active={paymentMode === PosPaymentMode.Paid}
               title="Paid"
               description="Fully settle now"
+              disabled={availableAccounts.length === 0}
               onClick={() => selectPaymentMode(PosPaymentMode.Paid)}
             />
             <PaymentModeButton
               active={paymentMode === PosPaymentMode.Partial}
               title="Partial"
               description="Pay some, owe rest"
+              disabled={availableAccounts.length === 0}
               onClick={() => selectPaymentMode(PosPaymentMode.Partial)}
             />
             <PaymentModeButton
@@ -418,11 +420,13 @@ function PaymentModeButton({
   active,
   title,
   description,
+  disabled = false,
   onClick,
 }: {
   active: boolean
   title: string
   description: string
+  disabled?: boolean
   onClick: () => void
 }) {
   return (
@@ -430,8 +434,10 @@ function PaymentModeButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
+      disabled={disabled}
       className={`rounded-lg px-3 py-2.5 text-left transition-colors ${
         active ? 'bg-background shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
+      } ${disabled ? 'cursor-not-allowed opacity-50 hover:text-muted-foreground' : ''
       }`}
     >
       <span className="block text-sm font-semibold">{title}</span>

@@ -1,4 +1,7 @@
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Finance;
@@ -7,6 +10,7 @@ using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Pos;
@@ -49,8 +53,10 @@ public sealed class PosService
       .ToListAsync(ct);
     var categories = serviceCategories.Concat(productCategories)
       .OrderBy(category => category.ItemType).ThenBy(category => category.Name).ToList();
+    var selectedBranchId = _db.SelectedBranchId;
     var professionals = await _db.Users.AsNoTracking()
-      .Where(user => user.IsActive && user.Role == UserRole.Professional)
+      .Where(user => user.IsActive && user.Role == UserRole.Professional
+        && (selectedBranchId == null || _db.UserBranchAccess.Any(access => access.UserId == user.Id && access.BranchId == selectedBranchId)))
       .OrderBy(user => user.Username)
       .Select(user => new PosProfessionalResponse(user.Id, user.Username))
       .ToListAsync(ct);
@@ -224,6 +230,8 @@ public sealed class PosService
 
   public async Task<PagedResult<PosSaleListResponse>> GetSalesAsync(PosSaleListQuery request, CancellationToken ct)
   {
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw BusinessNotConfigured();
     var query = _db.PosSales.AsNoTracking().AsQueryable();
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
@@ -233,15 +241,36 @@ public sealed class PosService
     }
     if (request.CustomerId is not null) query = query.Where(sale => sale.SalesInvoice.CustomerId == request.CustomerId);
     if (request.BranchId is not null) query = query.Where(sale => sale.SalesInvoice.BranchId == request.BranchId);
+    if (request.PosSessionId is not null) query = query.Where(sale => sale.PosSessionId == request.PosSessionId);
     if (request.FromDate is not null)
     {
-      var from = DateTime.SpecifyKind(request.FromDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+      var from = BusinessTime.UtcRange(business, request.FromDate.Value, request.FromDate.Value).FromUtc;
       query = query.Where(sale => sale.CompletedAtUtc >= from);
     }
     if (request.ToDate is not null)
     {
-      var to = DateTime.SpecifyKind(request.ToDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+      var to = BusinessTime.UtcRange(business, request.ToDate.Value, request.ToDate.Value).ToUtc;
       query = query.Where(sale => sale.CompletedAtUtc < to);
+    }
+    if (request.PaymentMode is not null)
+    {
+      query = request.PaymentMode switch
+      {
+        PosPaymentMode.Credit => query.Where(sale => (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) <= 0m),
+        PosPaymentMode.Partial => query.Where(sale => (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) > 0m
+          && (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) < sale.SalesInvoice.BaseTotal),
+        _ => query.Where(sale => (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) >= sale.SalesInvoice.BaseTotal)
+      };
+    }
+    if (request.RefundState is not null)
+    {
+      query = request.RefundState switch
+      {
+        PosRefundState.NotRefunded => query.Where(sale => !sale.Refunds.Any(refund => refund.Status == PosRefundStatus.Posted)),
+        PosRefundState.FullyRefunded => query.Where(sale => (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) >= sale.SalesInvoice.BaseTotal),
+        _ => query.Where(sale => (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) > 0m
+          && (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) < sale.SalesInvoice.BaseTotal)
+      };
     }
 
     return await query.OrderByDescending(sale => sale.CompletedAtUtc).ThenByDescending(sale => sale.DocumentNumber)
@@ -253,7 +282,13 @@ public sealed class PosService
         sale.SalesInvoice.Branch.Name,
         sale.SalesInvoice.CustomerId,
         sale.SalesInvoice.Customer == null ? null : sale.SalesInvoice.Customer.Name,
+        sale.PosSessionId,
+        sale.PosSession == null ? null : sale.PosSession.SessionNumber,
         sale.SalesInvoice.Total,
+        (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount),
+        sale.SalesInvoice.BaseTotal - ((sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount))
+          - (sale.SalesInvoice.ReceiptAllocations.Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted).Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
+          - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m),
         sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
           .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m,
         sale.SalesInvoice.BaseTotal - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
@@ -264,6 +299,10 @@ public sealed class PosService
               .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) >= sale.SalesInvoice.BaseTotal
             ? PosRefundState.FullyRefunded
             : PosRefundState.PartiallyRefunded,
+        (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) <= 0m
+          ? PosPaymentMode.Credit
+          : (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) < sale.SalesInvoice.BaseTotal
+            ? PosPaymentMode.Partial : PosPaymentMode.Paid,
         sale.SalesInvoice.BaseCurrency.Code,
         sale.CashierUser.Username))
       .ToPagedResultAsync(request, ct);
@@ -281,9 +320,24 @@ public sealed class PosService
     Guid userId,
     CancellationToken ct)
   {
+    // Internal callers predate the HTTP idempotency contract. The controller enforces it for public requests.
+    if (request.ClientRequestId == Guid.Empty) request = request with { ClientRequestId = Guid.NewGuid() };
+    ValidateRequestShape(request);
+    var fingerprint = Fingerprint(request);
+    PosSaleResponse? existing;
     try
     {
-      return await CompleteSaleCoreAsync(request, userId, ct);
+      existing = await FindIdempotentSaleAsync(request.ClientRequestId, fingerprint, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
+        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
+    }
+    if (existing is not null) return existing;
+    try
+    {
+      return await CompleteSaleCoreAsync(request, userId, fingerprint, ct);
     }
     catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
@@ -295,9 +349,9 @@ public sealed class PosService
   private async Task<PosSaleResponse> CompleteSaleCoreAsync(
     CompletePosSaleRequest request,
     Guid userId,
+    string fingerprint,
     CancellationToken ct)
   {
-    ValidateRequestShape(request);
     await using var transaction = _db.Database.IsRelational()
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
@@ -307,7 +361,9 @@ public sealed class PosService
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
-    var date = DateOnly.FromDateTime(DateTime.UtcNow);
+    var existing = await FindIdempotentSaleAsync(request.ClientRequestId, fingerprint, ct);
+    if (existing is not null) return existing;
+    var date = BusinessTime.DateAt(business, DateTime.UtcNow);
     var rateAtUtc = DateTime.UtcNow;
 
     var serviceIds = request.Lines.Where(line => line.LineType == SalesLineType.Service)
@@ -323,6 +379,17 @@ public sealed class PosService
       .ToDictionaryAsync(product => product.Id, ct);
     if (services.Count != serviceIds.Count || products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "Every POS line must reference an existing Service or Product.");
+    var professionalIds = request.Lines.Where(line => line.ProfessionalUserId is not null)
+      .Select(line => line.ProfessionalUserId!.Value).Distinct().ToList();
+    if (professionalIds.Count > 0)
+    {
+      var validProfessionals = await _db.Users.AsNoTracking().CountAsync(user =>
+        professionalIds.Contains(user.Id) && user.IsActive && user.Role == UserRole.Professional
+        && _db.UserBranchAccess.Any(access => access.UserId == user.Id && access.BranchId == request.BranchId), ct);
+      if (validProfessionals != professionalIds.Count)
+        throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
+          "Every selected Professional must be active and assigned to the selected branch.");
+    }
 
     var salesLines = request.Lines.Select(line => line.LineType == SalesLineType.Service
       ? new SalesInvoiceLineRequest(
@@ -366,6 +433,10 @@ public sealed class PosService
       if (account.BranchId != request.BranchId)
         throw new BadRequestException(ErrorCodes.Pos.MoneyAccountBranchMismatch,
           $"Money Account '{account.Code}' does not belong to the selected POS branch.");
+      if (account.Type == MoneyAccountType.Cashbox
+        && !session.OpeningCounts.Any(count => count.CurrencyId == account.CurrencyId))
+        throw new BadRequestException(ErrorCodes.Pos.SessionCurrencyNotAllowed,
+          $"Cashbox currency '{account.Currency.Code}' was not part of this POS Session opening snapshot.");
     }
 
     var rates = new Dictionary<Guid, decimal>();
@@ -472,7 +543,9 @@ public sealed class PosService
       PosSessionId = session.Id,
       Status = PosSaleStatus.Completed,
       CashierUserId = userId,
-      CompletedAtUtc = completedAt
+      CompletedAtUtc = completedAt,
+      ClientRequestId = request.ClientRequestId,
+      RequestFingerprint = fingerprint
     };
 
     foreach (var tender in tenders)
@@ -719,6 +792,34 @@ public sealed class PosService
   }
 
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
+
+  private async Task<PosSaleResponse?> FindIdempotentSaleAsync(Guid clientRequestId, string fingerprint, CancellationToken ct)
+  {
+    var existing = await _db.PosSales.AsNoTracking().SingleOrDefaultAsync(sale => sale.ClientRequestId == clientRequestId, ct);
+    if (existing is null) return null;
+    if (!string.Equals(existing.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+      throw new ConflictException(ErrorCodes.Pos.IdempotencyKeyReused,
+        "This client request ID was already used with different checkout data.");
+    return await GetSaleAsync(existing.Id, ct);
+  }
+
+  private static string Fingerprint(CompletePosSaleRequest request) => Hash(new
+  {
+    request.BranchId,
+    request.PosSessionId,
+    request.WarehouseId,
+    request.CustomerId,
+    request.PaymentMode,
+    Lines = request.Lines
+      .OrderBy(line => line.LineType).ThenBy(line => line.ServiceId).ThenBy(line => line.ProductId)
+      .Select(line => new { line.LineType, line.ServiceId, line.ProductId, line.UnitOfMeasureId, line.Quantity, line.ProfessionalUserId }),
+    Tenders = request.Tenders.OrderBy(tender => tender.MoneyAccountId).ThenBy(tender => tender.Amount)
+      .Select(tender => new { tender.MoneyAccountId, tender.Amount }),
+    Change = request.Change is null ? null : new { request.Change.MoneyAccountId, request.Change.Amount }
+  });
+
+  private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(
+    Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
 
   private static decimal SelectedProductPrice(ProductEntity product, Guid? unitOfMeasureId)
   {

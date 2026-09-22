@@ -64,6 +64,8 @@ function SourceLink({ entry }: { entry: MoneyLedgerEntry }) {
     return <Link className="font-mono text-xs text-primary" to={`/pos/sales/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
   if (entry.sourceType === MoneyLedgerSourceType.PosRefund)
     return <Link className="font-mono text-xs text-primary" to={`/pos/refunds/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
+  if (entry.sourceType === MoneyLedgerSourceType.PosDrawerMovement)
+    return <Link className="font-mono text-xs text-primary" to="/pos/sessions">{entry.documentNumber}</Link>
   return <p className="font-mono text-xs text-primary">{entry.documentNumber}</p>
 }
 
@@ -75,6 +77,7 @@ const sourceLabel: Record<MoneyLedgerSourceType, string> = {
   [MoneyLedgerSourceType.PosSale]: 'POS Sale',
   [MoneyLedgerSourceType.Expense]: 'Expense',
   [MoneyLedgerSourceType.PosRefund]: 'POS Refund',
+  [MoneyLedgerSourceType.PosDrawerMovement]: 'POS Drawer movement',
 }
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className="h-9 rounded-md border bg-background px-3 text-sm" {...props} /> }
 function Message({ text }: { text: string }) { return <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">{text}</TableCell></TableRow> }

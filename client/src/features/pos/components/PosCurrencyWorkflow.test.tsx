@@ -25,7 +25,14 @@ vi.mock('../hooks/usePos', () => ({
   usePosSetup: () => ({ data: hooks.setup }),
 }))
 
-vi.mock('@/features/auth', () => ({ useCurrentUser: () => ({ data: { role: hooks.role } }) }))
+vi.mock('@/features/auth', () => ({
+  useCurrentUser: () => ({ data: { role: hooks.role } }),
+  hasCapability: (role: string, capability: string) =>
+    ['SuperAdmin', 'Owner', 'Manager'].includes(role)
+    && ['salesTrace', 'inventoryTrace', 'financeTrace', 'accountingTrace', 'managePos', 'manageDollarRate'].includes(capability),
+}))
+
+vi.mock('@/features/business', () => ({ useCurrentBusiness: () => ({ data: undefined }), useBranches: () => ({ data: undefined }) }))
 
 const ids = {
   branch: '11111111-1111-4111-8111-111111111111',

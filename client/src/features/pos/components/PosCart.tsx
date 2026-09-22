@@ -30,11 +30,9 @@ export function PosCart({
 }) {
   const total = posCartTotal(cart)
   const hasProduct = cart.some((line) => line.item.itemType === PosCatalogItemType.Product)
-  const hasUsableMoneyAccount = setup.moneyAccounts.some((account) => account.currentExchangeRate !== null)
   const canCheckout =
     cart.length > 0 &&
-    (!hasProduct || warehouseSelected) &&
-    hasUsableMoneyAccount
+    (!hasProduct || warehouseSelected)
 
   const updateQuantity = (index: number, quantity: number) => {
     if (quantity <= 0) {
@@ -179,12 +177,10 @@ export function PosCart({
           <Banknote className="size-4" />
           Checkout · {amount(total)} {setup.baseCurrencyCode}
         </Button>
-        {!hasUsableMoneyAccount ? (
-          <p className="mt-2 text-center text-[11px] text-destructive">No operable Money Account with a valid exchange rate is available for this branch.</p>
-        ) : hasProduct && !warehouseSelected ? (
+        {hasProduct && !warehouseSelected ? (
           <p className="mt-2 text-center text-[11px] text-destructive">Select a warehouse before selling products.</p>
         ) : (
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">Stock, rates, permissions and balances are revalidated on completion.</p>
+          <p className="mt-2 text-center text-[10px] text-muted-foreground">Credit sales are available for a selected customer; payment accounts are required for paid or partial sales.</p>
         )}
       </div>
     </aside>

@@ -10,7 +10,7 @@ interface MonthlyGoalsCardProps {
   isLoading?: boolean
 }
 
-export function MonthlyGoalsCard({ isLoading: _isLoading }: MonthlyGoalsCardProps) {
+export function MonthlyGoalsCard({ isLoading }: MonthlyGoalsCardProps) {
   const goals: GoalItem[] = [
     {
       name: 'Monthly Revenue',
@@ -33,7 +33,7 @@ export function MonthlyGoalsCard({ isLoading: _isLoading }: MonthlyGoalsCardProp
   ]
 
   return (
-    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
+    <div aria-busy={isLoading || undefined} className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
       <div className="mb-4">
         <h2 className="text-base font-bold font-heading text-foreground">Monthly Goals</h2>
         <p className="text-xs text-muted-foreground mt-0.5">Track progress toward targets</p>

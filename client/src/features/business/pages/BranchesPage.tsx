@@ -43,9 +43,8 @@ export function BranchesPage() {
     setIsDialogOpen(true)
   }
 
-  const branches = branchesQuery.data?.data ?? []
-
   const filteredBranches = useMemo(() => {
+    const branches = branchesQuery.data?.data ?? []
     const term = search.trim().toLowerCase()
     if (!term) return branches
     return branches.filter((branch) =>
@@ -56,7 +55,7 @@ export function BranchesPage() {
       (branch.phoneNumber && branch.phoneNumber.toLowerCase().includes(term)) ||
       (branch.email && branch.email.toLowerCase().includes(term))
     )
-  }, [branches, search])
+  }, [branchesQuery.data, search])
 
   const totalBranches = filteredBranches.length
   const paginatedBranches = useMemo(() => {

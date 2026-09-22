@@ -74,7 +74,7 @@ export function GeneralLedgerPage() {
         line.branchCode.toLowerCase().includes(term) ||
         line.currencyCode.toLowerCase().includes(term)
     )
-  }, [ledger?.lines, lineSearch])
+  }, [ledger, lineSearch])
 
   // Summary Metrics calculations
   const totalDebits = useMemo(

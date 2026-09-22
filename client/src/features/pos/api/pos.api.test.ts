@@ -36,8 +36,8 @@ describe('POS refund endpoints', () => {
 
   it('posts refund and void requests to distinct routes', async () => {
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue({})
-    const refund = { posSessionId: 'session', reason: PosRefundReason.CustomerComplaint, notes: null, lines: [], refundTenders: [] }
-    const voidRequest = { posSessionId: 'session', reason: PosRefundReason.DuplicateSale, notes: 'Duplicate', restockSalesInvoiceLineIds: ['line-1'], refundTenders: [] }
+    const refund = { posSessionId: 'session', reason: PosRefundReason.CustomerComplaint, notes: null, lines: [], refundTenders: [], clientRequestId: '00000000-0000-4000-8000-000000000001' }
+    const voidRequest = { posSessionId: 'session', reason: PosRefundReason.DuplicateSale, notes: 'Duplicate', restockSalesInvoiceLineIds: ['line-1'], refundTenders: [], clientRequestId: '00000000-0000-4000-8000-000000000002' }
     await posApi.postRefund('sale-1', refund)
     await posApi.voidSale('sale-1', voidRequest)
     expect(post).toHaveBeenNthCalledWith(1, '/pos/sales/sale-1/refunds', refund)

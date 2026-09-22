@@ -16,8 +16,18 @@ public sealed class BusinessEntity
   public string Region { get; set; } = string.Empty;
   public string Country { get; set; } = string.Empty;
   public string? LogoReference { get; set; }
+  public string TimeZoneId { get; set; } = "Asia/Baghdad";
+  public string? ReceiptFooter { get; set; }
+  public ReceiptPaperWidth ReceiptPaperWidth { get; set; } = ReceiptPaperWidth.Mm80;
   public Guid BaseCurrencyId { get; set; }
   public CurrencyEntity BaseCurrency { get; set; } = null!;
   public bool IsSetupCompleted { get; set; }
   public bool IsActive { get; set; } = true;
+}
+
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+public enum ReceiptPaperWidth
+{
+  Mm58,
+  Mm80
 }

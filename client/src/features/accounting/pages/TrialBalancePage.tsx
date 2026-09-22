@@ -84,7 +84,7 @@ export function TrialBalancePage() {
       }
       return true
     })
-  }, [data?.lines, search, classificationFilter, hideZeroBalances])
+  }, [data, search, classificationFilter, hideZeroBalances])
 
   const totalClosingDr = data?.totalClosingDebit ?? 0
   const totalClosingCr = data?.totalClosingCredit ?? 0

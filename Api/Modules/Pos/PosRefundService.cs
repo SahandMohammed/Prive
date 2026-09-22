@@ -1,4 +1,7 @@
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Finance;
@@ -7,6 +10,7 @@ using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Pos;
@@ -58,7 +62,7 @@ public sealed class PosRefundService
     Guid userId,
     CancellationToken ct) => PostWithConflictHandlingAsync(
       saleId, request.PosSessionId, request.Reason, request.Notes,
-      request.Lines, request.RefundTenders, isVoid: false, null, userId, ct);
+      request.Lines, request.RefundTenders, isVoid: false, null, request.ClientRequestId, userId, ct);
 
   public Task<PosRefundResponse> VoidRemainingAsync(
     Guid saleId,
@@ -66,7 +70,7 @@ public sealed class PosRefundService
     Guid userId,
     CancellationToken ct) => PostWithConflictHandlingAsync(
       saleId, request.PosSessionId, request.Reason, request.Notes,
-      null, request.RefundTenders, isVoid: true, request.RestockSalesInvoiceLineIds.ToHashSet(), userId, ct);
+      null, request.RefundTenders, isVoid: true, request.RestockSalesInvoiceLineIds.ToHashSet(), request.ClientRequestId, userId, ct);
 
   private async Task<PosRefundResponse> PostWithConflictHandlingAsync(
     Guid saleId,
@@ -77,17 +81,34 @@ public sealed class PosRefundService
     List<PosRefundTenderRequest> tenderRequests,
     bool isVoid,
     HashSet<Guid>? restockLineIds,
+    Guid clientRequestId,
     Guid userId,
     CancellationToken ct)
   {
+    // Internal callers predate the HTTP idempotency contract. The controller enforces it for public requests.
+    if (clientRequestId == Guid.Empty) clientRequestId = Guid.NewGuid();
+    var fingerprint = Fingerprint(saleId, sessionId, reason, notes, requestedLines, tenderRequests, isVoid, restockLineIds);
+    PosRefundResponse? existing;
+    try
+    {
+      existing = await FindIdempotentRefundAsync(clientRequestId, fingerprint, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      throw new ConflictException(ErrorCodes.Pos.RefundConcurrencyConflict,
+        "Another refund changed the remaining refundable quantity. Refresh the sale and try again.");
+    }
+    if (existing is not null) return existing;
     try
     {
       return await PostCoreAsync(
         saleId, sessionId, reason, notes, requestedLines, tenderRequests,
-        isVoid, restockLineIds, userId, ct);
+        isVoid, restockLineIds, clientRequestId, fingerprint, userId, ct);
     }
     catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
+      existing = await FindIdempotentRefundAsync(clientRequestId, fingerprint, ct);
+      if (existing is not null) return existing;
       throw new ConflictException(ErrorCodes.Pos.RefundConcurrencyConflict,
         "Another refund changed the remaining refundable quantity. Refresh the sale and try again.");
     }
@@ -102,6 +123,8 @@ public sealed class PosRefundService
     List<PosRefundTenderRequest> tenderRequests,
     bool isVoid,
     HashSet<Guid>? restockLineIds,
+    Guid clientRequestId,
+    string fingerprint,
     Guid userId,
     CancellationToken ct)
   {
@@ -115,7 +138,9 @@ public sealed class PosRefundService
     await using var transaction = _db.Database.IsRelational()
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
-    await _sessions.RequireOpenSessionAsync(userId, sessionId, branchId, ct);
+    var session = await _sessions.RequireOpenSessionForManagementAsync(userId, sessionId, branchId, ct);
+    var existing = await FindIdempotentRefundAsync(clientRequestId, fingerprint, ct);
+    if (existing is not null) return existing;
     if (_db.Database.IsRelational())
       await _db.Database.ExecuteSqlInterpolatedAsync(
         $"SELECT \"Id\" FROM pos_sales WHERE \"Id\" = {saleId} FOR UPDATE", ct);
@@ -201,9 +226,11 @@ public sealed class PosRefundService
         "The original receivable account snapshot is unavailable for this Sale.");
 
     var tenderPostings = await ValidateTendersAsync(
-      tenderRequests, cashRefundBase, branchId, sale.SalesInvoice.BaseCurrencyId, userId, ct);
+      tenderRequests, cashRefundBase, branchId, sale.SalesInvoice.BaseCurrencyId, session, userId, ct);
     var now = DateTime.UtcNow;
-    var date = DateOnly.FromDateTime(now);
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw new BadRequestException(ErrorCodes.Pos.BusinessNotConfigured, "Complete Business Setup before using POS.");
+    var date = BusinessTime.DateAt(business, now);
     var documentNumber = await NextDocumentNumberAsync(ct);
 
     var journalLines = postings.GroupBy(posting => posting.Original.RevenueAccountId!.Value)
@@ -282,7 +309,9 @@ public sealed class PosRefundService
       ApprovedByUserId = userId,
       CreatedAtUtc = now,
       PostedAtUtc = now,
-      JournalEntry = journal
+      JournalEntry = journal,
+      ClientRequestId = clientRequestId,
+      RequestFingerprint = fingerprint
     };
 
     foreach (var posting in postings)
@@ -365,6 +394,7 @@ public sealed class PosRefundService
     decimal requiredBase,
     Guid branchId,
     Guid baseCurrencyId,
+    PosSessionEntity session,
     Guid userId,
     CancellationToken ct)
   {
@@ -407,6 +437,10 @@ public sealed class PosRefundService
       if (account.BranchId != branchId || !account.Currency.IsActive)
         throw new BadRequestException(ErrorCodes.Pos.RefundMoneyAccountInvalid,
           $"Money Account '{account.Code}' is not available in this POS branch.");
+      if (account.Type == MoneyAccountType.Cashbox
+        && !session.OpeningCounts.Any(count => count.CurrencyId == account.CurrencyId))
+        throw new BadRequestException(ErrorCodes.Pos.SessionCurrencyNotAllowed,
+          $"Cashbox currency '{account.Currency.Code}' was not part of this POS Session opening snapshot.");
       var rate = await _finance.ResolveCurrentRateAsync(account.CurrencyId, baseCurrencyId, now, ct);
       var baseAmount = Money(request.Amount * rate);
       var balance = await _finance.BalanceAsync(account.Id, ct);
@@ -591,6 +625,32 @@ public sealed class PosRefundService
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
   private static decimal Quantity(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
+
+  private async Task<PosRefundResponse?> FindIdempotentRefundAsync(Guid clientRequestId, string fingerprint, CancellationToken ct)
+  {
+    var existing = await _db.PosRefunds.AsNoTracking().SingleOrDefaultAsync(refund => refund.ClientRequestId == clientRequestId, ct);
+    if (existing is null) return null;
+    if (!string.Equals(existing.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+      throw new ConflictException(ErrorCodes.Pos.IdempotencyKeyReused,
+        "This client request ID was already used with different refund or void data.");
+    return await GetRefundAsync(existing.Id, ct);
+  }
+
+  private static string Fingerprint(Guid saleId, Guid sessionId, PosRefundReason reason, string? notes,
+    List<PosRefundLineRequest>? lines, List<PosRefundTenderRequest> tenders, bool isVoid, HashSet<Guid>? restockLines) =>
+    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+    {
+      saleId,
+      sessionId,
+      reason,
+      notes = Trim(notes),
+      Lines = lines?.OrderBy(line => line.SalesInvoiceLineId)
+        .Select(line => new { line.SalesInvoiceLineId, line.Quantity, line.RestockProduct }),
+      Tenders = tenders.OrderBy(tender => tender.MoneyAccountId).ThenBy(tender => tender.Amount)
+        .Select(tender => new { tender.MoneyAccountId, tender.Amount }),
+      isVoid,
+      RestockLineIds = restockLines?.Order().ToList()
+    }))));
 
   private sealed record RefundLinePosting(
     SalesInvoiceLineEntity Original,

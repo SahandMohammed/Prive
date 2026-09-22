@@ -25,6 +25,11 @@ public sealed class PosSaleListQuery : PaginationRequest
   public string? Search { get; init; }
   public Guid? CustomerId { get; init; }
   public Guid? BranchId { get; init; }
+  public Guid? PosSessionId { get; init; }
+  [EnumDataType(typeof(PosPaymentMode))]
+  public PosPaymentMode? PaymentMode { get; init; }
+  [EnumDataType(typeof(PosRefundState))]
+  public PosRefundState? RefundState { get; init; }
   public DateOnly? FromDate { get; init; }
   public DateOnly? ToDate { get; init; }
 }
@@ -79,7 +84,8 @@ public sealed record CompletePosSaleRequest(
   [Required, MinLength(1)] List<PosSaleLineRequest> Lines,
   [Required] List<PosTenderRequest> Tenders,
   PosChangeRequest? Change,
-  [EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode = PosPaymentMode.Paid);
+  [EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode = PosPaymentMode.Paid,
+  [Required] Guid ClientRequestId = default);
 
 public sealed record PosRefundLineRequest(
   [Required] Guid SalesInvoiceLineId,
@@ -95,14 +101,33 @@ public sealed record CreatePosRefundRequest(
   [Required, EnumDataType(typeof(PosRefundReason))] PosRefundReason Reason,
   [MaxLength(1000)] string? Notes,
   [Required, MinLength(1)] List<PosRefundLineRequest> Lines,
-  [Required] List<PosRefundTenderRequest> RefundTenders);
+  [Required] List<PosRefundTenderRequest> RefundTenders,
+  [Required] Guid ClientRequestId = default);
 
 public sealed record VoidPosSaleRequest(
   [Required] Guid PosSessionId,
   [Required, EnumDataType(typeof(PosRefundReason))] PosRefundReason Reason,
   [MaxLength(1000)] string? Notes,
   [Required] List<Guid> RestockSalesInvoiceLineIds,
-  [Required] List<PosRefundTenderRequest> RefundTenders);
+  [Required] List<PosRefundTenderRequest> RefundTenders,
+  [Required] Guid ClientRequestId = default);
+
+public sealed class PosDrawerMovementListQuery : PaginationRequest
+{
+  public Guid? CurrencyId { get; init; }
+  [EnumDataType(typeof(PosDrawerMovementType))]
+  public PosDrawerMovementType? Type { get; init; }
+}
+
+public sealed record CreatePosDrawerMovementRequest(
+  [Required, EnumDataType(typeof(PosDrawerMovementType))] PosDrawerMovementType Type,
+  [EnumDataType(typeof(PosDrawerAdjustmentDirection))] PosDrawerAdjustmentDirection? AdjustmentDirection,
+  [Required] Guid CashboxMoneyAccountId,
+  Guid? DestinationMoneyAccountId,
+  Guid? OffsetAccountId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount,
+  [Required, MaxLength(200)] string Reason,
+  [MaxLength(1000)] string? Notes);
 
 public sealed record CreatePosRegisterRequest(
   [Required, MaxLength(32)] string Code,
@@ -259,7 +284,16 @@ public sealed record PosDrawerSummaryResponse(
   decimal RefundBaseAmount,
   decimal ExpectedBaseAmount,
   decimal? CountedBaseAmount,
-  decimal? VarianceBaseAmount);
+  decimal? VarianceBaseAmount,
+  decimal CashInAmount,
+  decimal CashOutAmount,
+  decimal CashDropAmount,
+  decimal AdjustmentAmount,
+  decimal CashInBaseAmount,
+  decimal CashOutBaseAmount,
+  decimal CashDropBaseAmount,
+  decimal AdjustmentBaseAmount,
+  decimal? ClosingExchangeRate);
 
 public sealed record PosXReportResponse(
   PosSessionResponse Session,
@@ -338,12 +372,44 @@ public sealed record PosSaleListResponse(
   string BranchName,
   Guid? CustomerId,
   string? CustomerName,
+  Guid? PosSessionId,
+  string? PosSessionNumber,
   decimal Total,
+  decimal SettledBaseAmount,
+  decimal OutstandingBaseAmount,
   decimal RefundedBaseAmount,
   decimal NetSaleBaseAmount,
   PosRefundState RefundStatus,
+  PosPaymentMode PaymentMode,
   string BaseCurrencyCode,
   string CashierUsername);
+
+public sealed record PosDrawerMovementResponse(
+  Guid Id,
+  string DocumentNumber,
+  Guid PosSessionId,
+  string PosSessionNumber,
+  PosDrawerMovementType Type,
+  PosDrawerAdjustmentDirection? AdjustmentDirection,
+  Guid CashboxMoneyAccountId,
+  string CashboxMoneyAccountCode,
+  Guid? DestinationMoneyAccountId,
+  string? DestinationMoneyAccountCode,
+  Guid? OffsetAccountId,
+  string? OffsetAccountCode,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Amount,
+  decimal ExchangeRate,
+  decimal BaseAmount,
+  string Reason,
+  string? Notes,
+  Guid CreatedByUserId,
+  string CreatedByUsername,
+  DateTime CreatedAtUtc,
+  Guid JournalEntryId,
+  Guid CashboxLedgerEntryId,
+  Guid? DestinationLedgerEntryId);
 
 public sealed record PosSaleLineResponse(
   Guid Id,

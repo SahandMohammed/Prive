@@ -7,6 +7,7 @@ public static class PosModule
     services.AddScoped<PosService>();
     services.AddScoped<PosRefundService>();
     services.AddScoped<PosSessionService>();
+    services.AddScoped<PosDrawerMovementService>();
     return services;
   }
 }

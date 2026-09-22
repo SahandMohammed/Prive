@@ -31,6 +31,7 @@ public static class ErrorCodes
     public const string NotConfigured = "BUSINESS_NOT_CONFIGURED";
     public const string AlreadyConfigured = "BUSINESS_ALREADY_CONFIGURED";
     public const string BaseCurrencyInvalid = "BUSINESS_BASE_CURRENCY_INVALID";
+    public const string TimeZoneInvalid = "BUSINESS_TIME_ZONE_INVALID";
   }
 
   public static class Branch
@@ -254,6 +255,12 @@ public static class ErrorCodes
     public const string RefundNotesRequired = "POS_REFUND_NOTES_REQUIRED";
     public const string RefundAccountMappingInvalid = "POS_REFUND_ACCOUNT_MAPPING_INVALID";
     public const string RefundLinesInvalid = "POS_REFUND_LINES_INVALID";
+    public const string IdempotencyKeyReused = "POS_IDEMPOTENCY_KEY_REUSED";
+    public const string IdempotencyKeyRequired = "POS_IDEMPOTENCY_KEY_REQUIRED";
+    public const string DrawerMovementNotFound = "POS_DRAWER_MOVEMENT_NOT_FOUND";
+    public const string DrawerMovementInvalid = "POS_DRAWER_MOVEMENT_INVALID";
+    public const string DrawerMovementAccessDenied = "POS_DRAWER_MOVEMENT_ACCESS_DENIED";
+    public const string SessionCurrencyNotAllowed = "POS_SESSION_CURRENCY_NOT_ALLOWED";
   }
 
   public static class Expenses

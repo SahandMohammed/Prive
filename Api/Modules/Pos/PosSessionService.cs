@@ -5,6 +5,7 @@ using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -128,7 +129,10 @@ public sealed class PosSessionService
     {
       var rate = await ExchangeRateResolver.FindAsync(
         _db, currencyId, business.BaseCurrencyId, openedAt.UtcDateTime, ct);
-      if (rate is not null) ratesByCurrency[currencyId] = rate.Value;
+      if (rate is null)
+        throw new BadRequestException(ErrorCodes.Pos.OpeningCountInvalid,
+          "Every operable Cashbox currency needs an effective exchange rate before a POS Session can open.");
+      ratesByCurrency[currencyId] = rate.Value;
     }
     ValidateOpeningCounts(request.OpeningCounts, ratesByCurrency.Keys);
 
@@ -183,6 +187,7 @@ public sealed class PosSessionService
   {
     var branchId = RequireBranch();
     var management = await CanManageOthersAsync(userId, ct);
+    var business = await GetBusinessAsync(ct);
     var query = _db.PosSessions.AsNoTracking().Where(session => session.BranchId == branchId);
     if (!management) query = query.Where(session => session.CashierUserId == userId);
     if (request.Status is not null) query = query.Where(session => session.Status == request.Status);
@@ -190,16 +195,15 @@ public sealed class PosSessionService
     if (request.CashierUserId is not null && management) query = query.Where(session => session.CashierUserId == request.CashierUserId);
     if (request.FromDate is not null)
     {
-      var from = request.FromDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+      var from = BusinessTime.UtcRange(business, request.FromDate.Value, request.FromDate.Value).FromUtc;
       query = query.Where(session => session.OpenedAtUtc >= from);
     }
     if (request.ToDate is not null)
     {
-      var to = request.ToDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+      var to = BusinessTime.UtcRange(business, request.ToDate.Value, request.ToDate.Value).ToUtc;
       query = query.Where(session => session.OpenedAtUtc < to);
     }
 
-    var business = await GetBusinessAsync(ct);
     return await query.OrderByDescending(session => session.OpenedAtUtc)
       .ThenByDescending(session => session.SessionNumber)
       .Select(session => new PosSessionListResponse(
@@ -279,7 +283,7 @@ public sealed class PosSessionService
         ExchangeRate = rate,
         ExpectedBaseAmount = drawer.ExpectedBaseAmount,
         CountedBaseAmount = countedBase,
-        VarianceBaseAmount = Money(countedBase - drawer.ExpectedBaseAmount)
+        VarianceBaseAmount = Money((counted - drawer.ExpectedAmount) * rate)
       });
     }
 
@@ -362,7 +366,15 @@ public sealed class PosSessionService
         RefundBaseAmount = drawer.RefundBaseAmount,
         ExpectedBaseAmount = drawer.ExpectedBaseAmount,
         CountedBaseAmount = close.CountedBaseAmount,
-        VarianceBaseAmount = close.VarianceBaseAmount
+        VarianceBaseAmount = close.VarianceBaseAmount,
+        CashInAmount = drawer.CashInAmount,
+        CashOutAmount = drawer.CashOutAmount,
+        CashDropAmount = drawer.CashDropAmount,
+        AdjustmentAmount = drawer.AdjustmentAmount,
+        CashInBaseAmount = drawer.CashInBaseAmount,
+        CashOutBaseAmount = drawer.CashOutBaseAmount,
+        CashDropBaseAmount = drawer.CashDropBaseAmount,
+        AdjustmentBaseAmount = drawer.AdjustmentBaseAmount
       });
     }
 
@@ -380,18 +392,19 @@ public sealed class PosSessionService
   {
     var branchId = RequireBranch();
     var management = await CanManageOthersAsync(userId, ct);
+    var business = await GetBusinessAsync(ct);
     var query = _db.PosZReports.AsNoTracking().Where(report => report.BranchId == branchId);
     if (!management) query = query.Where(report => report.CashierUserId == userId);
     if (request.RegisterId is not null) query = query.Where(report => report.RegisterId == request.RegisterId);
     if (request.CashierUserId is not null && management) query = query.Where(report => report.CashierUserId == request.CashierUserId);
     if (request.FromDate is not null)
     {
-      var from = request.FromDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+      var from = BusinessTime.UtcRange(business, request.FromDate.Value, request.FromDate.Value).FromUtc;
       query = query.Where(report => report.ClosedAtUtc >= from);
     }
     if (request.ToDate is not null)
     {
-      var to = request.ToDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+      var to = BusinessTime.UtcRange(business, request.ToDate.Value, request.ToDate.Value).ToUtc;
       query = query.Where(report => report.ClosedAtUtc < to);
     }
 
@@ -435,13 +448,38 @@ public sealed class PosSessionService
     if (_db.Database.IsRelational())
       await _db.Database.ExecuteSqlInterpolatedAsync(
         $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
-    var session = await _db.PosSessions.SingleOrDefaultAsync(item => item.Id == sessionId && item.BranchId == branchId, ct)
+    var session = await _db.PosSessions.Include(item => item.OpeningCounts)
+      .SingleOrDefaultAsync(item => item.Id == sessionId && item.BranchId == branchId, ct)
       ?? throw new BadRequestException(ErrorCodes.Pos.SessionRequired, "Open a POS Session before completing a checkout.");
     if (session.Status != PosSessionStatus.Open)
       throw new ConflictException(ErrorCodes.Pos.SessionClosed, "This POS Session is already closed. Open a new session.");
     if (session.CashierUserId != userId)
       throw new ForbiddenException(ErrorCodes.Pos.SessionAccessDenied,
         "A cashier can only complete sales in their own open POS Session.");
+    return session;
+  }
+
+  internal async Task<PosSessionEntity> RequireOpenSessionForManagementAsync(
+    Guid userId,
+    Guid sessionId,
+    Guid branchId,
+    CancellationToken ct)
+  {
+    var selectedBranchId = RequireBranch();
+    if (branchId != selectedBranchId)
+      throw new BadRequestException(ErrorCodes.Pos.SessionAccessDenied,
+        "The POS Session must belong to the active branch workspace.");
+    if (_db.Database.IsRelational())
+      await _db.Database.ExecuteSqlInterpolatedAsync(
+        $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
+    var session = await _db.PosSessions.Include(item => item.OpeningCounts)
+      .SingleOrDefaultAsync(item => item.Id == sessionId && item.BranchId == branchId, ct)
+      ?? throw SessionNotFound();
+    if (session.Status != PosSessionStatus.Open)
+      throw new ConflictException(ErrorCodes.Pos.SessionClosed, "This POS Session is already closed.");
+    if (!await CanManageOthersAsync(userId, ct))
+      throw new ForbiddenException(ErrorCodes.Pos.SessionAccessDenied,
+        "Only a Manager, Owner, or SuperAdmin may manage POS drawer movements.");
     return session;
   }
 
@@ -499,9 +537,7 @@ public sealed class PosSessionService
     payments = payments.OrderBy(payment => payment.CurrencyCode).ThenBy(payment => payment.MoneyAccountCode).ToList();
 
     var drawerCurrencies = session.OpeningCounts.Select(count => new { count.CurrencyId, count.Currency.Code })
-      .Concat(payments.Where(payment => payment.MoneyAccountType == MoneyAccountType.Cashbox)
-        .Select(payment => new { payment.CurrencyId, Code = payment.CurrencyCode }))
-      .GroupBy(item => item.CurrencyId).Select(group => group.First()).OrderBy(item => item.Code).ToList();
+      .OrderBy(item => item.Code).ToList();
     var drawers = new List<PosDrawerSummaryResponse>();
     foreach (var currency in drawerCurrencies)
     {
@@ -516,11 +552,23 @@ public sealed class PosSessionService
       var tenderedBase = Money(cashPayments.Sum(payment => payment.TenderedBaseAmount));
       var changeBase = Money(cashPayments.Sum(payment => payment.ChangeBaseAmount));
       var refundBase = Money(cashPayments.Sum(payment => payment.RefundBaseAmount));
+      var movements = session.DrawerMovements.Where(movement => movement.CurrencyId == currency.CurrencyId).ToList();
+      var cashIn = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashIn).Sum(movement => movement.Amount));
+      var cashOut = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashOut).Sum(movement => movement.Amount));
+      var cashDrop = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashDrop).Sum(movement => movement.Amount));
+      var adjustment = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.Adjustment)
+        .Sum(movement => movement.AdjustmentDirection == PosDrawerAdjustmentDirection.In ? movement.Amount : -movement.Amount));
+      var cashInBase = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashIn).Sum(movement => movement.BaseAmount));
+      var cashOutBase = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashOut).Sum(movement => movement.BaseAmount));
+      var cashDropBase = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashDrop).Sum(movement => movement.BaseAmount));
+      var adjustmentBase = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.Adjustment)
+        .Sum(movement => movement.AdjustmentDirection == PosDrawerAdjustmentDirection.In ? movement.BaseAmount : -movement.BaseAmount));
       drawers.Add(new PosDrawerSummaryResponse(
         currency.CurrencyId, currency.Code, openingAmount, tenderedAmount, changeAmount,
-        refundAmount, Money(openingAmount + tenderedAmount - changeAmount - refundAmount), null, null,
+        refundAmount, Money(openingAmount + tenderedAmount - changeAmount - refundAmount + cashIn - cashOut - cashDrop + adjustment), null, null,
         openingBase, tenderedBase, changeBase, refundBase,
-        Money(openingBase + tenderedBase - changeBase - refundBase), null, null));
+        Money(openingBase + tenderedBase - changeBase - refundBase + cashInBase - cashOutBase - cashDropBase + adjustmentBase), null, null,
+        cashIn, cashOut, cashDrop, adjustment, cashInBase, cashOutBase, cashDropBase, adjustmentBase, null));
     }
 
     return new PosXReportResponse(
@@ -542,6 +590,7 @@ public sealed class PosSessionService
     .Include(session => session.Sales).ThenInclude(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(session => session.Refunds).ThenInclude(refund => refund.Lines)
     .Include(session => session.Refunds).ThenInclude(refund => refund.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(session => session.DrawerMovements)
     .Include(session => session.ClosingCounts).ThenInclude(count => count.Currency);
 
   private static PosSessionResponse ToSessionResponse(PosSessionEntity session) => new(
@@ -575,7 +624,10 @@ public sealed class PosSessionService
         summary.CurrencyId, summary.CurrencyCode, summary.OpeningAmount, summary.TenderedAmount,
         summary.ChangeAmount, summary.RefundAmount, summary.ExpectedAmount, summary.CountedAmount, summary.VarianceAmount,
         summary.OpeningBaseAmount, summary.TenderedBaseAmount, summary.ChangeBaseAmount, summary.RefundBaseAmount,
-        summary.ExpectedBaseAmount, summary.CountedBaseAmount, summary.VarianceBaseAmount)).ToList());
+        summary.ExpectedBaseAmount, summary.CountedBaseAmount, summary.VarianceBaseAmount,
+        summary.CashInAmount, summary.CashOutAmount, summary.CashDropAmount, summary.AdjustmentAmount,
+        summary.CashInBaseAmount, summary.CashOutBaseAmount, summary.CashDropBaseAmount, summary.AdjustmentBaseAmount,
+        summary.ExchangeRate)).ToList());
 
   private async Task<List<Guid>> GetOperableCashboxCurrenciesAsync(Guid userId, CancellationToken ct)
   {

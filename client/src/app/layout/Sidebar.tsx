@@ -17,7 +17,7 @@ import {
   Moon,
   X,
 } from 'lucide-react'
-import { useCurrentUser, useLogout } from '@/features/auth'
+import { hasCapability, useCurrentUser, useLogout } from '@/features/auth'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useThemeStore } from '@/lib/theme'
 import { useTranslation } from 'react-i18next'
@@ -117,14 +117,14 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
             >
               {t('nav.analytics')}
             </NavItem>
-            <NavItem
+            {hasCapability(role, 'pos') && <NavItem
               to="/pos"
               icon={<Store className="size-4" />}
               isCollapsed={isCollapsed}
               onClick={onCloseMobile}
             >
               {t('nav.pos')}
-            </NavItem>
+            </NavItem>}
             <NavItem
               to="/contacts"
               icon={<Users className="size-4" />}
@@ -145,7 +145,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
             </p>
           )}
           <div className="space-y-1">
-            <NavGroup
+            {hasCapability(role, 'salesTrace') && <NavGroup
               label={t('nav.sales')}
               icon={<ShoppingBag className="size-4" />}
               badge="12"
@@ -154,19 +154,19 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
             >
               <SubNavItem to="/sales/invoices" onClick={onCloseMobile}>{t('nav.salesInvoices')}</SubNavItem>
               <SubNavItem to="/sales/services" onClick={onCloseMobile}>{t('nav.services')}</SubNavItem>
-              <SubNavItem to="/pos" onClick={onCloseMobile}>{t('nav.pos')}</SubNavItem>
-            </NavGroup>
+              {hasCapability(role, 'pos') && <SubNavItem to="/pos" onClick={onCloseMobile}>{t('nav.pos')}</SubNavItem>}
+            </NavGroup>}
 
-            <NavGroup
+            {hasCapability(role, 'salesTrace') && <NavGroup
               label={t('nav.purchases')}
               icon={<ShoppingCart className="size-4" />}
               isCollapsed={isCollapsed}
               activePrefixes={['/purchases']}
             >
               <SubNavItem to="/purchases/invoices" onClick={onCloseMobile}>{t('nav.purchaseBills')}</SubNavItem>
-            </NavGroup>
+            </NavGroup>}
 
-            <NavGroup
+            {hasCapability(role, 'inventoryTrace') && <NavGroup
               label={t('nav.inventory')}
               icon={<Package className="size-4" />}
               isCollapsed={isCollapsed}
@@ -181,7 +181,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
               <SubNavItem to="/inventory/adjustments" onClick={onCloseMobile}>{t('nav.adjustments')}</SubNavItem>
               <SubNavItem to="/inventory/transfers" onClick={onCloseMobile}>{t('nav.transfers')}</SubNavItem>
               <SubNavItem to="/inventory/ledger" onClick={onCloseMobile}>{t('nav.stockLedger')}</SubNavItem>
-            </NavGroup>
+            </NavGroup>}
           </div>
         </div>
 
@@ -194,7 +194,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
             </p>
           )}
           <div className="space-y-1">
-            <NavGroup
+            {hasCapability(role, 'accountingTrace') && <NavGroup
               label={t('nav.accounting')}
               icon={<BookOpen className="size-4" />}
               isCollapsed={isCollapsed}
@@ -205,9 +205,9 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
               <SubNavItem to="/accounting/ledger" onClick={onCloseMobile}>{t('nav.generalLedger')}</SubNavItem>
               <SubNavItem to="/accounting/trial-balance" onClick={onCloseMobile}>{t('nav.trialBalance')}</SubNavItem>
               <SubNavItem to="/accounting/currencies" onClick={onCloseMobile}>{t('nav.currencies')}</SubNavItem>
-            </NavGroup>
+            </NavGroup>}
 
-            <NavGroup
+            {hasCapability(role, 'financeTrace') && <NavGroup
               label={t('nav.finance')}
               icon={<Banknote className="size-4" />}
               isCollapsed={isCollapsed}
@@ -221,7 +221,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
               <SubNavItem to="/finance/transfers" onClick={onCloseMobile}>{t('nav.transfers')}</SubNavItem>
               <SubNavItem to="/finance/supplier-payments" onClick={onCloseMobile}>{t('nav.supplierPayments')}</SubNavItem>
               <SubNavItem to="/finance/customer-receipts" onClick={onCloseMobile}>{t('nav.customerReceipts')}</SubNavItem>
-            </NavGroup>
+            </NavGroup>}
           </div>
         </div>
 

@@ -35,6 +35,15 @@ vi.mock('../hooks/useFinance', () => ({
   useSetDollarRate: () => state.mutation,
 }))
 
+vi.mock('@/features/auth', () => ({
+  useCurrentUser: () => ({ data: { role: 'Manager' } }),
+  hasCapability: () => true,
+}))
+
+vi.mock('@/features/business', () => ({
+  useCurrentBusiness: () => ({ data: undefined }),
+}))
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { currency?: string }) => ({

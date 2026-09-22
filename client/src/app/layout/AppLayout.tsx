@@ -13,7 +13,7 @@ import {
   Languages,
 } from 'lucide-react'
 import { BranchWorkspace, resetBranchSelection, BranchSelector } from '@/features/business'
-import { useCurrentUser } from '@/features/auth'
+import { hasCapability, useCurrentUser } from '@/features/auth'
 import { DollarRatePopover } from '@/features/finance'
 import { useThemeStore } from '@/lib/theme'
 import { useTranslation } from 'react-i18next'
@@ -140,14 +140,14 @@ export function AppLayout() {
             </button>
 
             {/* + New Order / Sale Button */}
-            <button
+            {hasCapability(user?.role, 'pos') && <button
               type="button"
               onClick={() => navigate('/pos')}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-950 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="size-3.5 stroke-[2.5]" />
               <span>{t('common.newOrder')}</span>
-            </button>
+            </button>}
 
             {/* Theme Toggle (Moon) */}
             <button

@@ -1,5 +1,5 @@
 import { getSelectedBranchId } from '@/features/business'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -95,7 +95,8 @@ export function CreateJournalEntryPage() {
   })
 
   const lines = useFieldArray({ control: form.control, name: 'lines' })
-  const watchedLines = useWatch({ control: form.control, name: 'lines' }) ?? []
+  const watchedLineValues = useWatch({ control: form.control, name: 'lines' })
+  const watchedLines = useMemo(() => watchedLineValues ?? [], [watchedLineValues])
   const branchId = useWatch({ control: form.control, name: 'branchId' })
   const entryDate = useWatch({ control: form.control, name: 'entryDate' })
 
@@ -133,7 +134,7 @@ export function CreateJournalEntryPage() {
         }
       }
     })
-  }, [entryDate, baseCurrencyId, form])
+  }, [entryDate, baseCurrencyId, form, watchedLines])
 
   // Populate when editing existing draft
   useEffect(() => {
@@ -157,24 +158,24 @@ export function CreateJournalEntryPage() {
     }
   }, [journalQuery.data, editId, form])
 
-  const calculateBase = (amount: number, currId: string, rate: number) => {
+  const calculateBase = useCallback((amount: number, currId: string, rate: number) => {
     const isBase = currId === baseCurrencyId || !currId
     return isBase ? amount : amount * (rate || 1)
-  }
+  }, [baseCurrencyId])
 
   const debitTotal = useMemo(() => {
     return watchedLines.reduce((total, line) => {
       const amt = Number(line?.originalDebitAmount) || 0
       return total + calculateBase(amt, line?.currencyId, Number(line?.exchangeRate) || 1)
     }, 0)
-  }, [watchedLines, baseCurrencyId])
+  }, [watchedLines, calculateBase])
 
   const creditTotal = useMemo(() => {
     return watchedLines.reduce((total, line) => {
       const amt = Number(line?.originalCreditAmount) || 0
       return total + calculateBase(amt, line?.currencyId, Number(line?.exchangeRate) || 1)
     }, 0)
-  }, [watchedLines, baseCurrencyId])
+  }, [watchedLines, calculateBase])
 
   const difference = Math.abs(debitTotal - creditTotal)
   const isBalanced =

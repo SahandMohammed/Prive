@@ -43,6 +43,7 @@ public sealed class PosSessionEntity
   public ICollection<PosSessionClosingCountEntity> ClosingCounts { get; set; } = new List<PosSessionClosingCountEntity>();
   public ICollection<PosSaleEntity> Sales { get; set; } = new List<PosSaleEntity>();
   public ICollection<PosRefundEntity> Refunds { get; set; } = new List<PosRefundEntity>();
+  public ICollection<PosDrawerMovementEntity> DrawerMovements { get; set; } = new List<PosDrawerMovementEntity>();
   public PosZReportEntity? ZReport { get; set; }
 }
 
@@ -153,6 +154,14 @@ public sealed class PosZDrawerSummaryEntity
   public decimal ExpectedBaseAmount { get; set; }
   public decimal CountedBaseAmount { get; set; }
   public decimal VarianceBaseAmount { get; set; }
+  public decimal CashInAmount { get; set; }
+  public decimal CashOutAmount { get; set; }
+  public decimal CashDropAmount { get; set; }
+  public decimal AdjustmentAmount { get; set; }
+  public decimal CashInBaseAmount { get; set; }
+  public decimal CashOutBaseAmount { get; set; }
+  public decimal CashDropBaseAmount { get; set; }
+  public decimal AdjustmentBaseAmount { get; set; }
 }
 
 public sealed class PosSaleEntity
@@ -167,6 +176,8 @@ public sealed class PosSaleEntity
   public Guid CashierUserId { get; set; }
   public UserEntity CashierUser { get; set; } = null!;
   public DateTime CompletedAtUtc { get; set; } = DateTime.UtcNow;
+  public Guid? ClientRequestId { get; set; }
+  public string? RequestFingerprint { get; set; }
   public ICollection<PosTenderEntity> Tenders { get; set; } = new List<PosTenderEntity>();
   public PosChangeEntity? Change { get; set; }
   public ICollection<PosRefundEntity> Refunds { get; set; } = new List<PosRefundEntity>();
@@ -230,8 +241,43 @@ public sealed class PosRefundEntity
   public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
   public Guid JournalEntryId { get; set; }
   public JournalEntryEntity JournalEntry { get; set; } = null!;
+  public Guid? ClientRequestId { get; set; }
+  public string? RequestFingerprint { get; set; }
   public ICollection<PosRefundLineEntity> Lines { get; set; } = new List<PosRefundLineEntity>();
   public ICollection<PosRefundTenderEntity> Tenders { get; set; } = new List<PosRefundTenderEntity>();
+}
+
+public sealed class PosDrawerMovementEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public string DocumentNumber { get; set; } = string.Empty;
+  public Guid PosSessionId { get; set; }
+  public PosSessionEntity PosSession { get; set; } = null!;
+  public Guid BranchId { get; set; }
+  public Guid CashboxMoneyAccountId { get; set; }
+  public MoneyAccountEntity CashboxMoneyAccount { get; set; } = null!;
+  public Guid? DestinationMoneyAccountId { get; set; }
+  public MoneyAccountEntity? DestinationMoneyAccount { get; set; }
+  public Guid? OffsetAccountId { get; set; }
+  public AccountEntity? OffsetAccount { get; set; }
+  public PosDrawerMovementType Type { get; set; }
+  public PosDrawerAdjustmentDirection? AdjustmentDirection { get; set; }
+  public Guid CurrencyId { get; set; }
+  public CurrencyEntity Currency { get; set; } = null!;
+  public decimal Amount { get; set; }
+  public decimal ExchangeRate { get; set; } = 1m;
+  public decimal BaseAmount { get; set; }
+  public string Reason { get; set; } = string.Empty;
+  public string? Notes { get; set; }
+  public Guid CreatedByUserId { get; set; }
+  public UserEntity CreatedByUser { get; set; } = null!;
+  public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+  public Guid JournalEntryId { get; set; }
+  public JournalEntryEntity JournalEntry { get; set; } = null!;
+  public Guid CashboxLedgerEntryId { get; set; }
+  public MoneyLedgerEntryEntity CashboxLedgerEntry { get; set; } = null!;
+  public Guid? DestinationLedgerEntryId { get; set; }
+  public MoneyLedgerEntryEntity? DestinationLedgerEntry { get; set; }
 }
 
 public sealed class PosRefundLineEntity
@@ -300,4 +346,18 @@ public enum PosRefundReason
   ServiceIssue,
   CashierMistake,
   Other
+}
+
+public enum PosDrawerMovementType
+{
+  CashIn,
+  CashOut,
+  CashDrop,
+  Adjustment
+}
+
+public enum PosDrawerAdjustmentDirection
+{
+  In,
+  Out
 }

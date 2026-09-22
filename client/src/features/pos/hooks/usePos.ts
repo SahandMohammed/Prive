@@ -3,6 +3,7 @@ import { posApi } from '../api/pos.api'
 import type {
   PosCatalogFilters,
   PosCustomerFilters,
+  PosSaleFilters,
   PosSessionFilters,
   PosZReportFilters,
 } from '../types/pos.types'
@@ -15,6 +16,8 @@ export const usePosCatalog = (filters: PosCatalogFilters) =>
   useQuery({ queryKey: [...POS_KEY, 'catalog', filters], queryFn: () => posApi.catalog(filters) })
 export const usePosCustomers = (filters: PosCustomerFilters) =>
   useQuery({ queryKey: [...POS_KEY, 'customers', filters], queryFn: () => posApi.customers(filters) })
+export const usePosSales = (filters: PosSaleFilters) =>
+  useQuery({ queryKey: [...POS_KEY, 'sales', filters], queryFn: () => posApi.sales(filters) })
 export const usePosSale = (id?: string) =>
   useQuery({ queryKey: [...POS_KEY, 'sales', id], queryFn: () => posApi.sale(id!), enabled: Boolean(id) })
 export const usePosRefundability = (saleId?: string, enabled = true) =>
@@ -40,6 +43,8 @@ export const usePosXReport = (id?: string, enabled = true) =>
     queryFn: () => posApi.xReport(id!),
     enabled: Boolean(id) && enabled,
   })
+export const usePosDrawerMovements = (id?: string) =>
+  useQuery({ queryKey: [...POS_KEY, 'drawer-movements', id], queryFn: () => posApi.drawerMovements(id!), enabled: Boolean(id) })
 export const usePosZReports = (filters: PosZReportFilters) =>
   useQuery({ queryKey: [...POS_KEY, 'z-reports', filters], queryFn: () => posApi.zReports(filters) })
 export const usePosZReport = (id?: string) =>
@@ -72,6 +77,21 @@ export function useClosePosSession() {
       client.invalidateQueries({ queryKey: [...POS_KEY, 'registers'] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] })
     },
+  })
+}
+
+export function useCreatePosDrawerMovement() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sessionId, body }: { sessionId: string; body: Parameters<typeof posApi.createDrawerMovement>[1] }) =>
+      posApi.createDrawerMovement(sessionId, body),
+    onSuccess: (movement) => Promise.all([
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'drawer-movements', movement.posSessionId] }),
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'x-report', movement.posSessionId] }),
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] }),
+      client.invalidateQueries({ queryKey: ['finance'] }),
+      client.invalidateQueries({ queryKey: ['accounting'] }),
+    ]),
   })
 }
 

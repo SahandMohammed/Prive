@@ -38,16 +38,17 @@ public sealed class FinanceWorkflowTests
   }
 
   [Fact]
-  public void Dollar_rate_actions_are_branch_independent_and_authenticated_without_role_constraints()
+  public void Dollar_rate_read_is_authenticated_and_mutation_requires_management_roles()
   {
     Assert.True(typeof(ExchangeRateController).IsDefined(typeof(BranchIndependentAttribute), true));
 
-    foreach (var methodName in new[]
-      { nameof(ExchangeRateController.GetCurrentDollarRate), nameof(ExchangeRateController.SetDollarRate) })
-    {
-      var method = typeof(ExchangeRateController).GetMethod(methodName)!;
-      Assert.Empty(method.GetCustomAttributes<AuthorizeAttribute>());
-    }
+    var getCurrent = typeof(ExchangeRateController).GetMethod(nameof(ExchangeRateController.GetCurrentDollarRate))!;
+    Assert.Empty(getCurrent.GetCustomAttributes<AuthorizeAttribute>());
+
+    var setDollar = typeof(ExchangeRateController).GetMethod(nameof(ExchangeRateController.SetDollarRate))!;
+    var mutationRoles = setDollar.GetCustomAttributes<AuthorizeAttribute>().Single().Roles!
+      .Split(',').ToHashSet(StringComparer.Ordinal);
+    Assert.Equal(new HashSet<string> { "SuperAdmin", "Manager", "Owner" }, mutationRoles);
 
     var controllerAuthorization = typeof(ExchangeRateController).GetCustomAttributes<AuthorizeAttribute>().Single();
     Assert.True(string.IsNullOrEmpty(controllerAuthorization.Roles));

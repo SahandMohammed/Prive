@@ -11,7 +11,7 @@ import type { BusinessInput } from '../types/business.types'
 const emptyValues: BusinessFormValues = {
   name: '', legalName: '', primaryPhoneNumber: '', secondaryPhoneNumber: '',
   email: '', website: '', address: '', city: '', region: '', country: '',
-  logoReference: '', baseCurrencyId: '', isSetupCompleted: true,
+  logoReference: '', timeZoneId: 'Asia/Baghdad', receiptFooter: '', receiptPaperWidth: 'Mm80', baseCurrencyId: '', isSetupCompleted: true,
 }
 
 export function BusinessSettingsPage() {
@@ -22,7 +22,7 @@ export function BusinessSettingsPage() {
   const form = useForm<BusinessFormValues, unknown, BusinessInput>({ resolver: zodResolver(businessSchema), defaultValues: emptyValues })
 
   useEffect(() => {
-    if (business) form.reset({ ...business, legalName: business.legalName ?? '', secondaryPhoneNumber: business.secondaryPhoneNumber ?? '', email: business.email ?? '', website: business.website ?? '', logoReference: business.logoReference ?? '' })
+    if (business) form.reset({ ...business, legalName: business.legalName ?? '', secondaryPhoneNumber: business.secondaryPhoneNumber ?? '', email: business.email ?? '', website: business.website ?? '', logoReference: business.logoReference ?? '', receiptFooter: business.receiptFooter ?? '' })
   }, [business, form])
 
   if (currenciesQuery.isLoading || businessQuery.isLoading) {
@@ -61,6 +61,19 @@ export function BusinessSettingsPage() {
             <Field label="Region / governorate" error={form.formState.errors.region?.message}><Input {...form.register('region')} /></Field>
             <Field label="Country" error={form.formState.errors.country?.message}><Input {...form.register('country')} /></Field>
           </div>
+        </section>
+
+        <section className="space-y-3 border-t pt-6">
+          <h2 className="font-semibold">Time zone and receipts</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="IANA time zone" error={form.formState.errors.timeZoneId?.message}><Input {...form.register('timeZoneId')} placeholder="Asia/Baghdad" /></Field>
+            <Field label="Receipt paper width" error={form.formState.errors.receiptPaperWidth?.message}>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" {...form.register('receiptPaperWidth')}>
+                <option value="Mm80">80 mm</option><option value="Mm58">58 mm</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Receipt footer" error={form.formState.errors.receiptFooter?.message}><textarea className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...form.register('receiptFooter')} /></Field>
         </section>
 
         <section className="space-y-3 border-t pt-6">

@@ -9,6 +9,7 @@ import { PosSessionsPage } from './PosSessionsPage'
 
 vi.mock('@/features/auth', () => ({
   useCurrentUser: () => ({ data: { role: 'Owner', username: 'owner' } }),
+  hasCapability: () => true,
 }))
 
 vi.mock('../api/pos.api', () => ({

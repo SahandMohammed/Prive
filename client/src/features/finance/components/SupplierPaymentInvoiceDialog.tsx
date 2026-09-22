@@ -62,6 +62,7 @@ export function SupplierPaymentInvoiceDialog({
           initialMap[alloc.purchaseInvoiceId] = alloc.amount
         }
       })
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- opening a new dialog initializes its local draft from the parent form.
       setAllocatedMap(initialMap)
       setAutoAmount('')
     }
@@ -146,7 +147,7 @@ export function SupplierPaymentInvoiceDialog({
 
   const handleApply = () => {
     const allocations = Object.entries(allocatedMap)
-      .filter(([_, amount]) => amount > 0)
+      .filter(([, amount]) => amount > 0)
       .map(([purchaseInvoiceId, amount]) => ({
         purchaseInvoiceId,
         amount: Number(amount.toFixed(4)),

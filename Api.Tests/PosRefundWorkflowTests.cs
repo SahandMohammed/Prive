@@ -283,10 +283,12 @@ public sealed partial class PosWorkflowTests
   public async Task Missing_rate_insufficient_balance_inactive_account_and_view_access_are_rejected()
   {
     await using var db = CreateDb();
-    var data = await SeedAsync(db, includeUsdRate: false);
+    var data = await SeedAsync(db);
     var sale = await CreateService(db).CompleteSaleAsync(
       Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]), data.CashierId, default);
     await PromoteAsync(db, data.CashierId);
+    db.ExchangeRates.RemoveRange(await db.ExchangeRates.Where(rate => rate.FromCurrencyId == data.UsdCurrencyId).ToListAsync());
+    await db.SaveChangesAsync();
     var refunds = CreateRefundService(db);
     var missingRate = await Assert.ThrowsAsync<BadRequestException>(() => refunds.PostRefundAsync(sale.Id,
       RefundRequest(data, sale, 1, false, [new(data.UsdMoneyAccountId, 19.2308m)]), data.CashierId, default));
@@ -325,9 +327,9 @@ public sealed partial class PosWorkflowTests
     var missingSession = await Assert.ThrowsAsync<BadRequestException>(() => refunds.PostRefundAsync(sale.Id,
       request with { PosSessionId = Guid.Empty }, data.CashierId, default));
     Assert.Equal(ErrorCodes.Pos.RefundSessionRequired, missingSession.Code);
-    var wrongSession = await Assert.ThrowsAsync<ForbiddenException>(() => refunds.PostRefundAsync(sale.Id,
+    var wrongSession = await Assert.ThrowsAsync<BadRequestException>(() => refunds.PostRefundAsync(sale.Id,
       request with { PosSessionId = data.ViewerSessionId }, data.CashierId, default));
-    Assert.Equal(ErrorCodes.Pos.SessionAccessDenied, wrongSession.Code);
+    Assert.Equal(ErrorCodes.Pos.SessionCurrencyNotAllowed, wrongSession.Code);
 
     var session = await db.PosSessions.SingleAsync(x => x.Id == data.SessionId);
     session.Status = PosSessionStatus.Closed;
@@ -464,7 +466,7 @@ public sealed partial class PosWorkflowTests
     TestData data, PosSaleResponse sale, decimal quantity, bool restock,
     List<PosRefundTenderRequest> tenders) => new(
       data.SessionId, PosRefundReason.CustomerComplaint, "Approved refund",
-      [new(sale.Lines[0].Id, quantity, restock)], tenders);
+      [new(sale.Lines[0].Id, quantity, restock)], tenders, Guid.NewGuid());
 
   private static async Task PromoteAsync(AppDbContext db, Guid userId)
   {

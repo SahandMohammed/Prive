@@ -13,8 +13,13 @@ namespace Api.Modules.Pos;
 public sealed class PosSessionController : ControllerBase
 {
   private readonly PosSessionService _service;
+  private readonly PosDrawerMovementService _drawerMovements;
 
-  public PosSessionController(PosSessionService service) => _service = service;
+  public PosSessionController(PosSessionService service, PosDrawerMovementService drawerMovements)
+  {
+    _service = service;
+    _drawerMovements = drawerMovements;
+  }
 
   [HttpGet("registers")]
   [ProducesResponseType(typeof(ApiResponse<List<PosRegisterResponse>>), StatusCodes.Status200OK)]
@@ -84,6 +89,23 @@ public sealed class PosSessionController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetXReport(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosXReportResponse>.Ok(await _service.GetXReportAsync(GetUserId(), id, ct)));
+
+  [HttpGet("sessions/{id:guid}/drawer-movements")]
+  [ProducesResponseType(typeof(ApiResponse<List<PosDrawerMovementResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetDrawerMovements(Guid id, [FromQuery] PosDrawerMovementListQuery query, CancellationToken ct)
+  {
+    var result = await _drawerMovements.GetAsync(GetUserId(), id, query, ct);
+    return Ok(ApiResponse<List<PosDrawerMovementResponse>>.Ok(result.Items, result.ToMetadata()));
+  }
+
+  [HttpPost("sessions/{id:guid}/drawer-movements")]
+  [Authorize(Roles = "SuperAdmin,Manager,Owner")]
+  [ProducesResponseType(typeof(ApiResponse<PosDrawerMovementResponse>), StatusCodes.Status201Created)]
+  public async Task<IActionResult> CreateDrawerMovement(Guid id, [FromBody] CreatePosDrawerMovementRequest request, CancellationToken ct)
+  {
+    var movement = await _drawerMovements.CreateAsync(GetUserId(), id, request, ct);
+    return StatusCode(StatusCodes.Status201Created, ApiResponse<PosDrawerMovementResponse>.Ok(movement));
+  }
 
   [HttpPost("sessions/{id:guid}/close")]
   [ProducesResponseType(typeof(ApiResponse<PosZReportResponse>), StatusCodes.Status200OK)]

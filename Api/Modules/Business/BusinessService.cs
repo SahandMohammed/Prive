@@ -72,6 +72,9 @@ public sealed class BusinessService
     business.Region = request.Region.Trim();
     business.Country = request.Country.Trim();
     business.LogoReference = TrimOrNull(request.LogoReference);
+    business.TimeZoneId = ValidateTimeZone(request.TimeZoneId);
+    business.ReceiptFooter = TrimOrNull(request.ReceiptFooter);
+    business.ReceiptPaperWidth = request.ReceiptPaperWidth;
     business.IsSetupCompleted = request.IsSetupCompleted;
   }
 
@@ -87,10 +90,24 @@ public sealed class BusinessService
     request.Region,
     request.Country,
     request.LogoReference,
+    request.TimeZoneId,
+    request.ReceiptFooter,
+    request.ReceiptPaperWidth,
     request.BaseCurrencyId,
     request.IsSetupCompleted));
 
   private static string? TrimOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+  private static string ValidateTimeZone(string timeZoneId)
+  {
+    var value = timeZoneId.Trim();
+    try { _ = TimeZoneInfo.FindSystemTimeZoneById(value); }
+    catch (TimeZoneNotFoundException)
+    {
+      throw new BadRequestException(ErrorCodes.Business.TimeZoneInvalid, "Select a valid IANA time zone.");
+    }
+    return value;
+  }
 
   private static BusinessResponse ToResponse(BusinessEntity business) => new(
     business.Id,
@@ -105,6 +122,9 @@ public sealed class BusinessService
     business.Region,
     business.Country,
     business.LogoReference,
+    business.TimeZoneId,
+    business.ReceiptFooter,
+    business.ReceiptPaperWidth,
     business.BaseCurrencyId,
     business.BaseCurrency.Code,
     business.BaseCurrency.Symbol,

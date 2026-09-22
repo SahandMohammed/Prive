@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Loader2, Play, Plus, ReceiptText, Settings2, Store } from 'lucide-react'
+import { AlertCircle, ArrowLeftRight, Loader2, Play, Plus, ReceiptText, Settings2, Store } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -17,9 +17,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useCurrentUser } from '@/features/auth'
+import { hasCapability, useCurrentUser } from '@/features/auth'
 import { useBranchSelectionStore } from '@/features/business'
 import { OpenSessionScreen } from '../components/OpenSessionScreen'
+import { DrawerMovementDialog } from '../components/DrawerMovementDialog'
+import { PosTransactionsTab } from '../components/PosTransactionsTab'
 import {
   useActivePosSession,
   useCreatePosRegister,
@@ -45,6 +47,7 @@ export function PosSessionsPage() {
   const [reportPageSize, setReportPageSize] = useState(20)
   const [openSessionDialog, setOpenSessionDialog] = useState(false)
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false)
+  const [drawerSessionId, setDrawerSessionId] = useState<string | null>(null)
 
   const activeSession = useActivePosSession()
   const setup = usePosSetup()
@@ -58,8 +61,7 @@ export function PosSessionsPage() {
   const createRegister = useCreatePosRegister()
   const updateRegister = useUpdatePosRegister()
 
-  const canManageRegisters =
-    user?.role === 'SuperAdmin' || user?.role === 'Owner' || user?.role === 'Manager'
+  const canManageRegisters = hasCapability(user?.role, 'managePos')
   const selectedBranch =
     setup.data?.branches.find((branch) => branch.id === selectedBranchId) ?? setup.data?.branches[0]
 
@@ -160,6 +162,7 @@ export function PosSessionsPage() {
             <Store data-icon="inline-start" />
             Sessions
           </TabsTrigger>
+          <TabsTrigger value="transactions">Transactions</TabsTrigger>
           {canManageRegisters && (
             <TabsTrigger value="registers">
               <Settings2 data-icon="inline-start" />
@@ -272,6 +275,25 @@ export function PosSessionsPage() {
                               >
                                 <Play className="size-4" />
                               </Button>
+                            ) : canManageRegisters && row.status === PosSessionStatus.Open ? (
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setDrawerSessionId(row.id)}
+                                  aria-label={`Post a drawer movement for ${row.sessionNumber}`}
+                                >
+                                  <ArrowLeftRight className="size-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => navigate(`/pos/sessions/${row.id}/close`)}
+                                  aria-label={`Force close ${row.sessionNumber}`}
+                                >
+                                  Close
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-slate-400">—</span>
                             )}
@@ -298,6 +320,8 @@ export function PosSessionsPage() {
             )}
           </section>
         </TabsContent>
+
+        <TabsContent value="transactions"><PosTransactionsTab /></TabsContent>
 
         {canManageRegisters && (
           <TabsContent value="registers" className="space-y-4">
@@ -543,6 +567,15 @@ export function PosSessionsPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {drawerSessionId && (
+        <DrawerMovementDialog
+          sessionId={drawerSessionId}
+          open={Boolean(drawerSessionId)}
+          onOpenChange={(open) => {
+            if (!open) setDrawerSessionId(null)
+          }}
+        />
+      )}
     </div>
   )
 }

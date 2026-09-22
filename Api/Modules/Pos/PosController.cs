@@ -60,6 +60,7 @@ public sealed class PosController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse<PosSaleResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> CompleteSale([FromBody] CompletePosSaleRequest request, CancellationToken ct)
   {
+    RequireClientRequestId(request.ClientRequestId, "checkout");
     var sale = await _service.CompleteSaleAsync(request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
     return CreatedAtAction(nameof(GetSale), new { id = sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
@@ -94,6 +95,7 @@ public sealed class PosController : ControllerBase
     [FromBody] CreatePosRefundRequest request,
     CancellationToken ct)
   {
+    RequireClientRequestId(request.ClientRequestId, "refund");
     var refund = await _refunds.PostRefundAsync(id, request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
     return CreatedAtAction(nameof(GetRefund), new { id = refund.Id, version }, ApiResponse<PosRefundResponse>.Ok(refund));
@@ -107,6 +109,7 @@ public sealed class PosController : ControllerBase
     [FromBody] VoidPosSaleRequest request,
     CancellationToken ct)
   {
+    RequireClientRequestId(request.ClientRequestId, "void");
     var refund = await _refunds.VoidRemainingAsync(id, request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
     return CreatedAtAction(nameof(GetRefund), new { id = refund.Id, version }, ApiResponse<PosRefundResponse>.Ok(refund));
@@ -118,5 +121,12 @@ public sealed class PosController : ControllerBase
     if (!Guid.TryParse(value, out var userId))
       throw new UnauthorizedException(ErrorCodes.Common.Unauthorized, "Invalid token subject.");
     return userId;
+  }
+
+  private static void RequireClientRequestId(Guid clientRequestId, string operation)
+  {
+    if (clientRequestId == Guid.Empty)
+      throw new BadRequestException(ErrorCodes.Pos.IdempotencyKeyRequired,
+        $"A client request ID is required for POS {operation}.");
   }
 }

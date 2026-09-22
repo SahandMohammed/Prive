@@ -41,6 +41,7 @@ public sealed class ExchangeRateController : ControllerBase
     Ok(ApiResponse<DollarRateResponse>.Ok(await _service.GetCurrentDollarRateAsync(ct)));
 
   [HttpPost("dollar")]
+  [Authorize(Roles = Administrators)]
   [ProducesResponseType(typeof(ApiResponse<DollarRateResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> SetDollarRate([FromBody] SetDollarRateRequest request, CancellationToken ct)
   {

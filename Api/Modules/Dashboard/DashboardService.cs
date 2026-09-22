@@ -5,6 +5,7 @@ using Api.Modules.Pos;
 using Api.Modules.Purchase;
 using Api.Modules.Sales;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Dashboard;
@@ -55,11 +56,12 @@ public sealed class DashboardService
   public async Task<DashboardSummaryResponse> GetSummaryAsync(CancellationToken ct)
   {
     var branchId = RequireBranchId();
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw new BadRequestException(ErrorCodes.Dashboard.BusinessNotConfigured, "Complete Business Setup before viewing the dashboard.");
     var (currencyCode, currencySymbol) = await GetBaseCurrencyAsync(ct);
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessTime.DateAt(business, DateTime.UtcNow);
     var yesterday = today.AddDays(-1);
-    var todayStart = today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-    var tomorrowStart = today.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var (todayStart, tomorrowStart) = BusinessTime.UtcRange(business, today, today);
 
     // 1. Today's Sales (Both POS and regular posted sales invoices via SalesInvoices table)
     var salesToday = await _db.SalesInvoices.AsNoTracking()
@@ -77,7 +79,7 @@ public sealed class DashboardService
     var yesterdaySalesBase = await _db.SalesInvoices.AsNoTracking()
       .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.InvoiceDate == yesterday)
       .SumAsync(s => (decimal?)s.BaseTotal, ct) ?? 0m;
-    var yesterdayStart = yesterday.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var (yesterdayStart, _) = BusinessTime.UtcRange(business, yesterday, yesterday);
     var yesterdayRefundsBase = await _db.PosRefunds.AsNoTracking()
       .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
         && refund.PostedAtUtc >= yesterdayStart && refund.PostedAtUtc < todayStart)
@@ -199,8 +201,10 @@ public sealed class DashboardService
       throw new BadRequestException(ErrorCodes.Dashboard.InvalidTrendRange, "Days must be between 1 and 90.");
     }
 
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw new BadRequestException(ErrorCodes.Dashboard.BusinessNotConfigured, "Complete Business Setup before viewing the dashboard.");
     var (currencyCode, currencySymbol) = await GetBaseCurrencyAsync(ct);
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessTime.DateAt(business, DateTime.UtcNow);
     var startDate = today.AddDays(-days + 1);
 
     var salesMap = await _db.SalesInvoices.AsNoTracking()
@@ -208,14 +212,13 @@ public sealed class DashboardService
       .GroupBy(s => s.InvoiceDate)
       .Select(g => new { Date = g.Key, Total = g.Sum(s => s.BaseTotal) })
       .ToDictionaryAsync(x => x.Date, x => x.Total, ct);
-    var trendStart = startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-    var trendEnd = today.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var (trendStart, trendEnd) = BusinessTime.UtcRange(business, startDate, today);
     var refundRows = await _db.PosRefunds.AsNoTracking()
       .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
         && refund.PostedAtUtc >= trendStart && refund.PostedAtUtc < trendEnd)
       .Select(refund => new { refund.PostedAtUtc, refund.TotalRefundBase })
       .ToListAsync(ct);
-    var refundMap = refundRows.GroupBy(refund => DateOnly.FromDateTime(refund.PostedAtUtc))
+    var refundMap = refundRows.GroupBy(refund => BusinessTime.DateAt(business, refund.PostedAtUtc))
       .ToDictionary(group => group.Key, group => group.Sum(refund => refund.TotalRefundBase));
 
     var expenseMap = await _db.ExpenseDocuments.AsNoTracking()

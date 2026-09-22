@@ -41,6 +41,7 @@ export function AccountCombobox({
   // Sync display text when value changes from outside or reset
   useEffect(() => {
     if (selectedAccount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors an externally controlled value in the input label.
       setQuery(`${selectedAccount.code} — ${selectedAccount.name}`)
     } else if (!value) {
       setQuery('')
@@ -86,6 +87,7 @@ export function AccountCombobox({
 
   // Reset highlight index when results change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keeps keyboard selection valid after the result list changes.
     setHighlightedIndex(0)
   }, [filteredAccounts.length])
 

@@ -82,18 +82,13 @@ export function SalesExpenseTrendChart({
   const maxExpenses = Math.max(...items.map((d) => d.expensesBase), 0)
   const maxNet = Math.max(...items.map((d) => Math.max(0, d.netBase)), 0)
 
-  let highest = 1000
-  if (metricMode === 'all') {
-    highest = Math.max(maxSales, maxExpenses, 1000)
-  } else if (metricMode === 'sales') {
-    highest = Math.max(maxSales, 1000)
-  } else if (metricMode === 'expenses') {
-    highest = Math.max(maxExpenses, 1000)
-  } else {
-    highest = Math.max(maxNet, 1000)
-  }
-
-  const maxVal = highest
+  const maxVal = metricMode === 'all'
+    ? Math.max(maxSales, maxExpenses, 1000)
+    : metricMode === 'sales'
+      ? Math.max(maxSales, 1000)
+      : metricMode === 'expenses'
+        ? Math.max(maxExpenses, 1000)
+        : Math.max(maxNet, 1000)
 
   const getY = (val: number) => {
     const clamped = Math.max(0, val)
@@ -115,9 +110,9 @@ export function SalesExpenseTrendChart({
       const p2 = pts[i + 1]
       const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1]
 
-      let cp1x = p1.x + (p2.x - p0.x) / 6
+      const cp1x = p1.x + (p2.x - p0.x) / 6
       let cp1y = p1.y + (p2.y - p0.y) / 6
-      let cp2x = p2.x - (p3.x - p1.x) / 6
+      const cp2x = p2.x - (p3.x - p1.x) / 6
       let cp2y = p2.y - (p3.y - p1.y) / 6
 
       // Clamping: when endpoints are both on baseline, remain strictly flat at baseline

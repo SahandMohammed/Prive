@@ -6,6 +6,7 @@ import { AppLayout } from './AppLayout'
 
 vi.mock('@/features/auth', () => ({
   useCurrentUser: () => ({ data: { username: 'owner' } }),
+  hasCapability: () => false,
 }))
 
 vi.mock('@/features/business', () => ({

@@ -72,6 +72,13 @@ vi.mock('../hooks/usePos', () => ({
   usePosRefund: () => ({ data: refund, isPending: false, isError: false, error: null }),
 }))
 
+vi.mock('@/features/auth', () => ({
+  useCurrentUser: () => ({ data: { role: 'Manager' } }),
+  hasCapability: () => true,
+}))
+
+vi.mock('@/features/business', () => ({ useCurrentBusiness: () => ({ data: undefined }), useBranches: () => ({ data: undefined }) }))
+
 afterEach(cleanup)
 
 describe('PosRefundReceiptPage', () => {

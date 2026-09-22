@@ -29,6 +29,7 @@ public sealed class JournalEntryEntity
   public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
   public ExpenseDocumentEntity? SourceExpenseDocument { get; set; }
   public PosRefundEntity? SourcePosRefund { get; set; }
+  public PosDrawerMovementEntity? SourcePosDrawerMovement { get; set; }
 }
 
 public enum JournalEntryStatus

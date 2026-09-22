@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SalesLineType } from '@/features/sales'
+import { hasCapability, useCurrentUser } from '@/features/auth'
+import { useBranches, useCurrentBusiness } from '@/features/business'
 import { usePosRefund } from '../hooks/usePos'
 import { PosRefundReason } from '../types/pos.types'
 
@@ -23,6 +25,9 @@ export function PosRefundReceiptPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const query = usePosRefund(id)
+  const user = useCurrentUser().data
+  const business = useCurrentBusiness().data
+  const branches = useBranches().data?.data
   const refund = query.data
 
   useEffect(() => {
@@ -34,6 +39,10 @@ export function PosRefundReceiptPage() {
   if (query.isPending) return <div className="grid h-72 place-items-center text-muted-foreground">Loading refund receipt…</div>
   if (query.isError || !refund) return <p className="text-destructive">{query.error?.message ?? 'Refund receipt was not found.'}</p>
   const hasStock = refund.lines.some((line) => line.stockMovementIds.length > 0)
+  const branch = branches?.find((item) => item.id === refund.branchId)
+  const receiptName = [business?.name, branch?.name ?? refund.branchName].filter(Boolean).join(' · ') || 'Business'
+  const receiptContact = branch?.phoneNumber ?? business?.primaryPhoneNumber
+  const receiptAddress = branch?.address ?? business?.address
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
@@ -45,8 +54,8 @@ export function PosRefundReceiptPage() {
         <Button variant="outline" onClick={() => window.print()}><Printer /> Print refund</Button>
       </header>
 
-      <Card className="print:border-0 print:shadow-none">
-        <CardHeader className="border-b"><div className="flex items-start justify-between gap-4"><div><CardTitle className="flex items-center gap-2"><ReceiptText /> Privé Lounge {refund.isVoid ? 'Void' : 'Refund'} Receipt</CardTitle><p className="mt-1 font-mono text-lg text-primary">{refund.documentNumber}</p></div><div className="text-right text-sm"><p>{new Date(refund.postedAtUtc).toLocaleString()}</p><p className="text-muted-foreground">Approved by {refund.approvedByUsername}</p></div></div></CardHeader>
+      <Card className={`print:border-0 print:shadow-none ${business?.receiptPaperWidth === 'Mm58' ? 'print:max-w-[58mm]' : 'print:max-w-[80mm]'}`}>
+        <CardHeader className="border-b"><div className="flex items-start justify-between gap-4"><div><CardTitle className="flex items-center gap-2"><ReceiptText /> {business?.logoReference && <img src={business.logoReference} alt="" className="size-7 rounded object-contain" />} {receiptName} {refund.isVoid ? 'Void' : 'Refund'} Receipt</CardTitle><p className="mt-1 text-xs text-muted-foreground">{[receiptContact, receiptAddress].filter(Boolean).join(' · ')}</p><p className="mt-1 font-mono text-lg text-primary">{refund.documentNumber}</p></div><div className="text-right text-sm"><p>{new Date(refund.postedAtUtc).toLocaleString()}</p><p className="text-muted-foreground">Approved by {refund.approvedByUsername}</p></div></div></CardHeader>
         <CardContent className="space-y-6 pt-6">
           <div className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
             <Info label="Original sale" value={refund.posSaleDocumentNumber} />
@@ -68,14 +77,15 @@ export function PosRefundReceiptPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">Created by {refund.createdByUsername} · approved by {refund.approvedByUsername} · journal {refund.journalEntryId}</p>
+          {business?.receiptFooter && <p className="border-t pt-3 text-center text-xs text-muted-foreground">{business.receiptFooter}</p>}
         </CardContent>
       </Card>
 
       <Card className="print:hidden"><CardHeader><CardTitle>Traceability</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">
         <Link to={`/pos/sales/${refund.posSaleId}`}><Button variant="outline"><ReceiptText /> Original sale</Button></Link>
-        {hasStock && <Link to={`/inventory/ledger?documentNumber=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><PackageSearch /> Stock Ledger</Button></Link>}
-        {refund.tenders.length > 0 && <Link to={`/finance/money-ledger?documentNumber=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><Landmark /> Money Ledger</Button></Link>}
-        <Link to={`/accounting/journal?search=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><BookOpen /> Accounting journal</Button></Link>
+        {hasCapability(user?.role, 'inventoryTrace') && hasStock && <Link to={`/inventory/ledger?documentNumber=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><PackageSearch /> Stock Ledger</Button></Link>}
+        {hasCapability(user?.role, 'financeTrace') && refund.tenders.length > 0 && <Link to={`/finance/money-ledger?documentNumber=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><Landmark /> Money Ledger</Button></Link>}
+        {hasCapability(user?.role, 'accountingTrace') && <Link to={`/accounting/journal?search=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><BookOpen /> Accounting journal</Button></Link>}
       </CardContent></Card>
     </div>
   )

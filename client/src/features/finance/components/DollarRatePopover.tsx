@@ -15,34 +15,50 @@ import {
 } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { useCurrentDollarRate, useSetDollarRate } from '../hooks/useFinance'
+import { hasCapability, useCurrentUser } from '@/features/auth'
+import { useCurrentBusiness } from '@/features/business'
 import { dollarRateSchema } from '../schemas/finance.schema'
 import type { SetDollarRateInput } from '../types/finance.types'
 
-const localDateKey = (value: Date) => [
-  value.getFullYear(),
-  String(value.getMonth() + 1).padStart(2, '0'),
-  String(value.getDate()).padStart(2, '0'),
-].join('-')
+const localDateKey = (value: Date, timeZone?: string) => new Intl.DateTimeFormat('en-CA', {
+  timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(value)
 
-function isSavedToday(effectiveAtUtc: string | null, todayKey = localDateKey(new Date())) {
-  return effectiveAtUtc !== null && localDateKey(new Date(effectiveAtUtc)) === todayKey
+function isSavedToday(effectiveAtUtc: string | null, todayKey = localDateKey(new Date()), timeZone?: string) {
+  return effectiveAtUtc !== null && localDateKey(new Date(effectiveAtUtc), timeZone) === todayKey
+}
+
+function millisecondsUntilNextBusinessMidnight(now: Date, timeZone?: string) {
+  const today = localDateKey(now, timeZone)
+  let lower = now.getTime()
+  let upper = lower + 36 * 60 * 60 * 1000
+  while (localDateKey(new Date(upper), timeZone) === today) upper += 12 * 60 * 60 * 1000
+  while (upper - lower > 1) {
+    const midpoint = Math.floor((lower + upper) / 2)
+    if (localDateKey(new Date(midpoint), timeZone) === today) lower = midpoint
+    else upper = midpoint
+  }
+  return Math.max(1000, upper - now.getTime())
 }
 
 export function DollarRatePopover() {
   const { t } = useTranslation()
+  const user = useCurrentUser().data
+  const business = useCurrentBusiness().data
   const currentDollarRate = useCurrentDollarRate()
   const refreshDollarRate = currentDollarRate.refetch
   const setDollarRate = useSetDollarRate()
   const resetDollarRate = setDollarRate.reset
   const [open, setOpen] = useState(false)
-  const [todayKey, setTodayKey] = useState(() => localDateKey(new Date()))
+  const [todayKey, setTodayKey] = useState(() => localDateKey(new Date(), business?.timeZoneId))
   const form = useForm<SetDollarRateInput>({
     resolver: zodResolver(dollarRateSchema),
     defaultValues: { rate: undefined },
   })
 
   const dollarRate = currentDollarRate.data
-  const savedToday = isSavedToday(dollarRate?.effectiveAtUtc ?? null, todayKey)
+  const savedToday = isSavedToday(dollarRate?.effectiveAtUtc ?? null, todayKey, business?.timeZoneId)
+  const canEdit = hasCapability(user?.role, 'manageDollarRate')
   const hasTodayRate = !dollarRate?.isBaseCurrency && dollarRate?.rate !== null && savedToday
   const formattedRate = dollarRate?.rate?.toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -51,14 +67,12 @@ export function DollarRatePopover() {
 
   useEffect(() => {
     const now = new Date()
-    const nextMidnight = new Date(now)
-    nextMidnight.setHours(24, 0, 0, 0)
     const timeout = window.setTimeout(() => {
-      setTodayKey(localDateKey(new Date()))
+      setTodayKey(localDateKey(new Date(), business?.timeZoneId))
       void refreshDollarRate()
-    }, nextMidnight.getTime() - now.getTime())
+    }, millisecondsUntilNextBusinessMidnight(now, business?.timeZoneId))
     return () => window.clearTimeout(timeout)
-  }, [refreshDollarRate, todayKey])
+  }, [business?.timeZoneId, refreshDollarRate, todayKey])
 
   useEffect(() => {
     if (!open) return
@@ -84,9 +98,9 @@ export function DollarRatePopover() {
       >
         {currentDollarRate.isPending ? (
           <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-        ) : (
+        ) : canEdit ? (
           <DollarSign className="size-3.5 text-emerald-600" />
-        )}
+        ) : <DollarSign className="size-3.5 text-muted-foreground" />}
         <span className="hidden lg:inline">{triggerLabel}</span>
         <span className="lg:hidden">USD</span>
       </PopoverTrigger>
@@ -117,6 +131,11 @@ export function DollarRatePopover() {
           <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
             {t('common.dollarRateBaseCurrency')}
           </p>
+        ) : !canEdit ? (
+          <div className="space-y-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {hasTodayRate && <p>1 USD = {formattedRate} {dollarRate?.baseCurrencyCode}</p>}
+            <p>Only a Manager, Owner, or SuperAdmin can update the USD rate.</p>
+          </div>
         ) : (
           <form className="space-y-3" onSubmit={submit}>
             {hasTodayRate && (

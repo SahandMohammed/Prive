@@ -28,6 +28,9 @@ export interface Business {
   region: string
   country: string
   logoReference: string | null
+  timeZoneId: string
+  receiptFooter: string | null
+  receiptPaperWidth: 'Mm58' | 'Mm80'
   baseCurrencyId: string
   baseCurrencyCode: string
   baseCurrencySymbol: string
@@ -47,6 +50,9 @@ export interface BusinessInput {
   region: string
   country: string
   logoReference: string | null
+  timeZoneId: string
+  receiptFooter: string | null
+  receiptPaperWidth: 'Mm58' | 'Mm80'
   baseCurrencyId: string
   isSetupCompleted: boolean
 }

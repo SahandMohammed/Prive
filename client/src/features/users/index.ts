@@ -9,6 +9,6 @@ export { UserTable } from './components/UserTable'
 export { CreateUserDialog } from './components/CreateUserDialog'
 export { createUserSchema, resetPasswordSchema } from './schemas/users.schemas'
 export type { CreateUserFormValues, ResetPasswordFormValues } from './schemas/users.schemas'
-export type { User, CreateUserRequest } from './types/users.types'
+export type { User, CreateUserRequest, UserRole } from './types/users.types'
 
 export { UsersPage } from './pages/UsersPage'

@@ -57,6 +57,7 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<PosRefundEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosDrawerMovementEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<ContactEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ProductCategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ProductSubcategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);

@@ -1,6 +1,7 @@
 import { UsersPage } from '@/features/users'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
+import { CapabilityRoute } from './CapabilityRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
 import { AppLayout } from './layout/AppLayout'
 import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
@@ -49,7 +50,7 @@ import {
   CurrenciesPage as BaseCurrenciesPage,
 } from '@/features/business'
 import { ContactsPage } from '@/features/contacts'
-import { PosPage, PosReceiptPage, PosRefundReceiptPage, PosSessionsPage, PosZReportPage } from '@/features/pos'
+import { PosPage, PosReceiptPage, PosRefundReceiptPage, PosSessionClosePage, PosSessionsPage, PosZReportPage } from '@/features/pos'
 import { ExpensesPage, ExpenseDetailPage, ExpenseCategoriesPage } from '@/features/expenses'
 
 export const router = createBrowserRouter([
@@ -70,13 +71,18 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/contacts', element: <ContactsPage /> },
 
-          // POS session dashboard, full-screen selling workspace, and historical reports.
-          { path: '/pos', element: <PosSessionsPage /> },
-          { path: '/pos/workspace', element: <PosPage /> },
-          { path: '/pos/sessions', element: <Navigate to="/pos" replace /> },
-          { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
-          { path: '/pos/sales/:id', element: <PosReceiptPage /> },
-          { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
+          {
+            element: <CapabilityRoute capability="pos" />,
+            children: [
+              { path: '/pos', element: <PosSessionsPage /> },
+              { path: '/pos/workspace', element: <PosPage /> },
+              { path: '/pos/sessions', element: <Navigate to="/pos" replace /> },
+              { path: '/pos/sessions/:id/close', element: <PosSessionClosePage /> },
+              { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
+              { path: '/pos/sales/:id', element: <PosReceiptPage /> },
+              { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
+            ],
+          },
 
           // Finance
           { path: '/finance', element: <Navigate to="/finance/money-accounts" replace /> },

@@ -22,7 +22,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SalesLineType } from '@/features/sales'
-import { useCurrentUser } from '@/features/auth'
+import { hasCapability, useCurrentUser } from '@/features/auth'
+import { useBranches, useCurrentBusiness } from '@/features/business'
 import { RefundDialog } from '../components/RefundDialog'
 import { useActivePosSession, usePosSale, usePosSetup } from '../hooks/usePos'
 import { PosPaymentMode, PosRefundState } from '../types/pos.types'
@@ -34,6 +35,8 @@ export function PosReceiptPage() {
   const [refundMode, setRefundMode] = useState<'refund' | 'void' | null>(null)
   const query = usePosSale(id)
   const currentUser = useCurrentUser().data
+  const business = useCurrentBusiness().data
+  const branches = useBranches().data?.data
   const activeSession = useActivePosSession().data
   const setup = usePosSetup().data
   const sale = query.data
@@ -54,11 +57,19 @@ export function PosReceiptPage() {
     )
 
   const hasMoneyMovement = sale.tenders.length > 0 || sale.change !== null
-  const canRefund = Boolean(currentUser && ['SuperAdmin', 'Owner', 'Manager'].includes(currentUser.role))
+  const canRefund = hasCapability(currentUser?.role, 'managePos')
+  const canSalesTrace = hasCapability(currentUser?.role, 'salesTrace')
+  const canInventoryTrace = hasCapability(currentUser?.role, 'inventoryTrace')
+  const canFinanceTrace = hasCapability(currentUser?.role, 'financeTrace')
+  const canAccountingTrace = hasCapability(currentUser?.role, 'accountingTrace')
   const refundAvailable = sale.remainingRefundableBaseAmount > 0
   const refundState = sale.refundStatus === PosRefundState.FullyRefunded
     ? 'Fully refunded'
     : sale.refundStatus === PosRefundState.PartiallyRefunded ? 'Partially refunded' : 'Not refunded'
+  const branch = branches?.find((item) => item.id === sale.branchId)
+  const receiptName = [business?.name, branch?.name ?? sale.branchName].filter(Boolean).join(' · ') || 'Business'
+  const receiptContact = branch?.phoneNumber ?? business?.primaryPhoneNumber
+  const receiptAddress = branch?.address ?? business?.address
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
@@ -99,14 +110,16 @@ export function PosReceiptPage() {
         </div>
       </header>
 
-      <Card className="print:border-0 print:shadow-none">
+      <Card className={`print:border-0 print:shadow-none ${business?.receiptPaperWidth === 'Mm58' ? 'print:max-w-[58mm]' : 'print:max-w-[80mm]'}`}>
         <CardHeader className="border-b">
           <div className="flex items-start justify-between gap-4">
             <div>
               <CardTitle className="flex items-center gap-2 text-xl">
                 <ReceiptText />
-                Prive Lounge POS Receipt
+                {business?.logoReference && <img src={business.logoReference} alt="" className="size-7 rounded object-contain" />}
+                {receiptName} POS Receipt
               </CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">{[receiptContact, receiptAddress].filter(Boolean).join(' · ')}</p>
               <p className="mt-1 font-mono text-lg text-primary">{sale.documentNumber}</p>
             </div>
             <div className="text-right text-sm">
@@ -287,6 +300,7 @@ export function PosReceiptPage() {
               </div>
             </section>
           )}
+          {business?.receiptFooter && <p className="border-t pt-3 text-center text-xs text-muted-foreground">{business.receiptFooter}</p>}
         </CardContent>
       </Card>
 
@@ -314,13 +328,13 @@ export function PosReceiptPage() {
           <CardTitle>Traceability</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <Link to={`/sales/invoices/${sale.salesInvoiceId}`}>
+          {canSalesTrace && <Link to={`/sales/invoices/${sale.salesInvoiceId}`}>
             <Button variant="outline">
               <ReceiptText />
               Sales source
             </Button>
-          </Link>
-          {sale.stockMovementIds.length > 0 && (
+          </Link>}
+          {canInventoryTrace && sale.stockMovementIds.length > 0 && (
             <Link
               to={`/inventory/ledger?documentNumber=${encodeURIComponent(sale.documentNumber)}`}
             >
@@ -330,7 +344,7 @@ export function PosReceiptPage() {
               </Button>
             </Link>
           )}
-          {hasMoneyMovement && (
+          {canFinanceTrace && hasMoneyMovement && (
             <Link
               to={`/finance/money-ledger?documentNumber=${encodeURIComponent(sale.documentNumber)}`}
             >
@@ -340,12 +354,12 @@ export function PosReceiptPage() {
               </Button>
             </Link>
           )}
-          <Link to={`/accounting/journal?search=${encodeURIComponent(sale.documentNumber)}`}>
+          {canAccountingTrace && <Link to={`/accounting/journal?search=${encodeURIComponent(sale.documentNumber)}`}>
             <Button variant="outline">
               <BookOpen />
               Accounting journal
             </Button>
-          </Link>
+          </Link>}
         </CardContent>
       </Card>
     </div>

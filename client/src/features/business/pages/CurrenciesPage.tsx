@@ -42,9 +42,8 @@ export function CurrenciesPage() {
     setIsDialogOpen(true)
   }
 
-  const currencies = currenciesQuery.data?.data ?? []
-
   const filteredCurrencies = useMemo(() => {
+    const currencies = currenciesQuery.data?.data ?? []
     const term = search.trim().toLowerCase()
     if (!term) return currencies
     return currencies.filter((c) =>
@@ -52,7 +51,7 @@ export function CurrenciesPage() {
       c.code.toLowerCase().includes(term) ||
       c.symbol.toLowerCase().includes(term)
     )
-  }, [currencies, search])
+  }, [currenciesQuery.data, search])
 
   const totalCurrencies = filteredCurrencies.length
   const paginatedCurrencies = useMemo(() => {
