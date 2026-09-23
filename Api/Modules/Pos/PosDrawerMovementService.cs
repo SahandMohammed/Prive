@@ -36,6 +36,20 @@ public sealed class PosDrawerMovementService
   public async Task<PosDrawerMovementResponse> CreateAsync(
     Guid userId, Guid sessionId, CreatePosDrawerMovementRequest request, CancellationToken ct)
   {
+    try
+    {
+      return await CreateCoreAsync(userId, sessionId, request, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      throw new ConflictException(ErrorCodes.Pos.DrawerMovementConflict,
+        "Another drawer movement was posted at the same time. Refresh and try again.");
+    }
+  }
+
+  private async Task<PosDrawerMovementResponse> CreateCoreAsync(
+    Guid userId, Guid sessionId, CreatePosDrawerMovementRequest request, CancellationToken ct)
+  {
     if (!Enum.IsDefined(request.Type) || request.Amount <= 0 || string.IsNullOrWhiteSpace(request.Reason))
       throw new BadRequestException(ErrorCodes.Pos.DrawerMovementInvalid,
         "Select a movement type, positive amount, and reason.");

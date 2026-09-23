@@ -240,6 +240,7 @@ public static class ErrorCodes
     public const string SessionClosed = "POS_SESSION_CLOSED";
     public const string SessionAccessDenied = "POS_SESSION_ACCESS_DENIED";
     public const string SessionCloseConflict = "POS_SESSION_CLOSE_CONFLICT";
+    public const string SessionClosingNoteRequired = "POS_SESSION_CLOSING_NOTE_REQUIRED";
     public const string OpeningCountInvalid = "POS_OPENING_COUNT_INVALID";
     public const string ClosingCountInvalid = "POS_CLOSING_COUNT_INVALID";
     public const string ZReportNotFound = "POS_Z_REPORT_NOT_FOUND";
@@ -260,6 +261,7 @@ public static class ErrorCodes
     public const string DrawerMovementNotFound = "POS_DRAWER_MOVEMENT_NOT_FOUND";
     public const string DrawerMovementInvalid = "POS_DRAWER_MOVEMENT_INVALID";
     public const string DrawerMovementAccessDenied = "POS_DRAWER_MOVEMENT_ACCESS_DENIED";
+    public const string DrawerMovementConflict = "POS_DRAWER_MOVEMENT_CONFLICT";
     public const string SessionCurrencyNotAllowed = "POS_SESSION_CURRENCY_NOT_ALLOWED";
   }
 

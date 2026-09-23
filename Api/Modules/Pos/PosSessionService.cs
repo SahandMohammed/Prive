@@ -258,6 +258,10 @@ public sealed class PosSessionService
     var session = await GetReportSessionAsync(userId, sessionId, trackChanges: true, ct);
     if (session.BranchId != branchId)
       throw SessionNotFound();
+    var closingNotes = Trim(request.Notes);
+    if (userId != session.CashierUserId && closingNotes is null)
+      throw new BadRequestException(ErrorCodes.Pos.SessionClosingNoteRequired,
+        "Enter a closing reason when closing another cashier's POS Session.");
     if (await _db.PosZReports.IgnoreQueryFilters().AnyAsync(report => report.PosSessionId == session.Id, ct))
       throw new ConflictException(ErrorCodes.Pos.SessionCloseConflict, "This POS Session already has a Z Report.");
 
@@ -291,7 +295,7 @@ public sealed class PosSessionService
     session.Status = PosSessionStatus.Closed;
     session.ClosedAtUtc = closedAt;
     session.ClosedByUserId = userId;
-    session.ClosingNotes = Trim(request.Notes);
+    session.ClosingNotes = closingNotes;
     session.UpdatedAtUtc = closedAt;
 
     var z = new PosZReportEntity

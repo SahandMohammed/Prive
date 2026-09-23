@@ -3,8 +3,9 @@ import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useCurrentUser } from '@/features/auth'
 import { useClosePosSession, usePosXReport } from '../hooks/usePos'
-import { posCloseSessionSchema } from '../schemas/pos.schema'
+import { posCloseSessionSchema, posForceCloseSessionSchema } from '../schemas/pos.schema'
 import type { PosCloseSessionValues } from '../schemas/pos.schema'
 import type { PosSession, PosXReport, PosZReport } from '../types/pos.types'
 
@@ -56,8 +57,10 @@ function CloseSessionForm({
   onClosed: (report: PosZReport) => void
 }) {
   const closeSession = useClosePosSession()
+  const { data: currentUser } = useCurrentUser()
+  const closingAnotherCashier = currentUser?.id !== undefined && currentUser.id !== session.cashierUserId
   const form = useForm<PosCloseSessionValues>({
-    resolver: zodResolver(posCloseSessionSchema),
+    resolver: zodResolver(closingAnotherCashier ? posForceCloseSessionSchema : posCloseSessionSchema),
     defaultValues: {
       closingCounts: report.drawers.map((drawer) => ({
         currencyId: drawer.currencyId,
@@ -157,12 +160,19 @@ function CloseSessionForm({
         </section>
 
         <section className="rounded-2xl border bg-card p-5">
-          <h2 className="font-semibold">Session notes</h2>
+          <h2 className="font-semibold">{closingAnotherCashier ? 'Closing reason' : 'Session notes'}</h2>
+          {closingAnotherCashier && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              A reason is required because this session belongs to another cashier.
+            </p>
+          )}
           <textarea
             {...form.register('notes')}
+            aria-label={closingAnotherCashier ? 'Closing reason' : 'Session notes'}
+            aria-required={closingAnotherCashier}
             rows={3}
             maxLength={500}
-            placeholder="Optional closing note"
+            placeholder={closingAnotherCashier ? 'Explain why this session is being closed' : 'Optional closing note'}
             className="mt-3 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
           {form.formState.errors.notes?.message && (

@@ -14,6 +14,46 @@ namespace Api.Tests;
 public sealed partial class PosWorkflowTests
 {
   [Fact]
+  public async Task Cashier_can_close_own_session_without_notes()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+
+    var report = await CreateSessionService(db).CloseSessionAsync(data.CashierId, data.SessionId,
+      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+
+    Assert.Equal(data.CashierId, report.ClosedByUserId);
+    Assert.Null((await db.PosSessions.SingleAsync(session => session.Id == data.SessionId)).ClosingNotes);
+  }
+
+  [Fact]
+  public async Task Management_force_close_requires_a_trimmed_reason()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    await PromoteAsync(db, data.ViewerId);
+    var service = CreateSessionService(db);
+    var counts = new List<PosClosingCountRequest> { new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0) };
+
+    var missing = await Assert.ThrowsAsync<BadRequestException>(() =>
+      service.CloseSessionAsync(data.ViewerId, data.SessionId, new(counts, null), default));
+    Assert.Equal(ErrorCodes.Pos.SessionClosingNoteRequired, missing.Code);
+
+    var whitespace = await Assert.ThrowsAsync<BadRequestException>(() =>
+      service.CloseSessionAsync(data.ViewerId, data.SessionId, new(counts, "   "), default));
+    Assert.Equal(ErrorCodes.Pos.SessionClosingNoteRequired, whitespace.Code);
+    Assert.Equal(PosSessionStatus.Open, (await db.PosSessions.SingleAsync(session => session.Id == data.SessionId)).Status);
+
+    var report = await service.CloseSessionAsync(data.ViewerId, data.SessionId,
+      new(counts, "  Manager verified drawer count  "), default);
+    var session = await db.PosSessions.SingleAsync(item => item.Id == data.SessionId);
+
+    Assert.Equal(data.ViewerId, report.ClosedByUserId);
+    Assert.Equal("Manager verified drawer count", session.ClosingNotes);
+    Assert.Equal(report.Id, (await db.PosZReports.SingleAsync(report => report.PosSessionId == session.Id)).Id);
+  }
+
+  [Fact]
   public async Task Closing_reconciles_cash_preserves_snapshots_and_prevents_further_checkout()
   {
     await using var db = CreateDb();

@@ -341,6 +341,9 @@ public sealed class PosService
     }
     catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
+      _db.ChangeTracker.Clear();
+      existing = await FindIdempotentSaleAsync(request.ClientRequestId, fingerprint, ct);
+      if (existing is not null) return existing;
       throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
         "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
     }

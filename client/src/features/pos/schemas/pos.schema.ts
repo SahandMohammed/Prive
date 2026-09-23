@@ -65,6 +65,11 @@ export const posCloseSessionSchema = z.object({
   notes: z.string().max(500, 'Closing notes cannot exceed 500 characters'),
 })
 
+export const posForceCloseSessionSchema = posCloseSessionSchema.refine(
+  ({ notes }) => notes.trim().length > 0,
+  { path: ['notes'], message: 'A closing reason is required for another cashier\'s session' }
+)
+
 export const posRegisterSchema = z.object({
   code: z.string().trim().min(1, 'Register code is required').max(32, 'Register code cannot exceed 32 characters'),
   name: z.string().trim().min(1, 'Register name is required').max(120, 'Register name cannot exceed 120 characters'),

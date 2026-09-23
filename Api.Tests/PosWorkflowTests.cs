@@ -11,6 +11,8 @@ using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 
 namespace Api.Tests;
@@ -369,12 +371,19 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(PosCatalogItemType.Product, products.Items[0].ItemType);
   }
 
-  private static AppDbContext CreateDb()
+  private static AppDbContext CreateDb(
+    string? databaseName = null,
+    Guid? branchId = null,
+    InMemoryDatabaseRoot? databaseRoot = null,
+    params IInterceptor[] interceptors)
   {
-    var options = new DbContextOptionsBuilder<AppDbContext>()
-      .UseInMemoryDatabase(Guid.NewGuid().ToString())
-      .Options;
-    return new AppDbContext(options, new BranchContext { BranchId = Guid.NewGuid() });
+    var builder = new DbContextOptionsBuilder<AppDbContext>();
+    if (databaseRoot is null)
+      builder.UseInMemoryDatabase(databaseName ?? Guid.NewGuid().ToString());
+    else
+      builder.UseInMemoryDatabase(databaseName ?? Guid.NewGuid().ToString(), databaseRoot);
+    if (interceptors.Length > 0) builder.AddInterceptors(interceptors);
+    return new AppDbContext(builder.Options, new BranchContext { BranchId = branchId ?? Guid.NewGuid() });
   }
 
   private static PosService CreateService(AppDbContext db)
