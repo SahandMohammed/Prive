@@ -12,6 +12,7 @@ using Api.Modules.Sales;
 using Api.Modules.Pos;
 using Api.Modules.Expenses;
 using Api.Modules.Dashboard;
+using Api.Modules.Professional;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Shared.Persistence;
@@ -20,6 +21,8 @@ public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options,
 {
   public DbSet<UserBranchAccessEntity> UserBranchAccess => Set<UserBranchAccessEntity>();
   public DbSet<UserEntity> Users => Set<UserEntity>();
+  public DbSet<ProfessionalEntity> Professionals => Set<ProfessionalEntity>();
+  public DbSet<ProfessionalBranchAssignmentEntity> ProfessionalBranchAssignments => Set<ProfessionalBranchAssignmentEntity>();
   public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
   public DbSet<BusinessEntity> Businesses => Set<BusinessEntity>();
   public DbSet<BranchEntity> Branches => Set<BranchEntity>();

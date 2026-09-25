@@ -5,6 +5,7 @@ using Api.Modules.Currency;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Pos;
+using Api.Modules.Professional;
 using Api.Modules.User;
 
 namespace Api.Modules.Sales;
@@ -93,8 +94,8 @@ public sealed class SalesInvoiceLineEntity
   public decimal LineSubtotal { get; set; }
   public decimal LineAmount { get; set; }
   public decimal BaseLineAmount { get; set; }
-  public Guid? ProfessionalUserId { get; set; }
-  public UserEntity? ProfessionalUser { get; set; }
+  public Guid? ProfessionalId { get; set; }
+  public ProfessionalEntity? Professional { get; set; }
   public Guid? RevenueAccountId { get; set; }
   public Guid? InventoryAccountId { get; set; }
   public Guid? CostOfGoodsSoldAccountId { get; set; }

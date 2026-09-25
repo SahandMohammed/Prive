@@ -56,7 +56,7 @@ export function ProfessionalSelectionDialog({
                   )}
                 >
                   <UserRound className="size-5" />
-                  <span className="min-w-0 flex-1 truncate">{professional.username}</span>
+                  <span className="min-w-0 flex-1 truncate">{professional.name}</span>
                   {selected && <Check className="size-5" aria-label="Selected" />}
                 </button>
               )

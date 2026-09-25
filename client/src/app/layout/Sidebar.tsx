@@ -243,6 +243,15 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
               {t('nav.teamAndUsers')}
             </NavItem>
 
+            {hasCapability(role, 'manageProfessionals') && <NavItem
+              to="/professionals"
+              icon={<Users className="size-4" />}
+              isCollapsed={isCollapsed}
+              onClick={onCloseMobile}
+            >
+              {t('nav.professionals')}
+            </NavItem>}
+
             <NavGroup
               label={t('nav.settings')}
               icon={<Settings className="size-4" />}

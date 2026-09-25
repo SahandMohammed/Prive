@@ -1,6 +1,6 @@
 import type { UserRole } from '@/features/users'
 
-export type Capability = 'pos' | 'managePos' | 'salesTrace' | 'inventoryTrace' | 'financeTrace' | 'accountingTrace' | 'manageDollarRate'
+export type Capability = 'pos' | 'managePos' | 'manageProfessionals' | 'salesTrace' | 'inventoryTrace' | 'financeTrace' | 'accountingTrace' | 'manageDollarRate'
 
 const managementRoles: UserRole[] = ['SuperAdmin', 'Manager', 'Owner']
 const traceRoles: UserRole[] = ['SuperAdmin', 'Manager']
@@ -11,6 +11,7 @@ export function hasCapability(role: UserRole | undefined, capability: Capability
   switch (capability) {
     case 'pos': return managementRoles.includes(role) || role === 'Cashier'
     case 'managePos':
+    case 'manageProfessionals':
     case 'manageDollarRate': return managementRoles.includes(role)
     case 'salesTrace':
     case 'inventoryTrace':

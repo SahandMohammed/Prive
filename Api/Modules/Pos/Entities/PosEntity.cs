@@ -291,10 +291,10 @@ public sealed class PosRefundLineEntity
   public Guid? ServiceId { get; set; }
   public Guid? ProductId { get; set; }
   public Guid? UnitOfMeasureId { get; set; }
-  public Guid? ProfessionalUserId { get; set; }
+  public Guid? ProfessionalId { get; set; }
   public string Description { get; set; } = string.Empty;
   public string? UnitCode { get; set; }
-  public string? ProfessionalUsername { get; set; }
+  public string? ProfessionalName { get; set; }
   public decimal Quantity { get; set; }
   public decimal BaseQuantity { get; set; }
   public decimal RefundAmountBase { get; set; }

@@ -47,12 +47,13 @@ public sealed class UserService
   {
     if (await _db.Users.AnyAsync(u => u.Username == request.Username))
       throw new ConflictException(ErrorCodes.User.UsernameTaken, $"Username '{request.Username}' is already taken.");
+    await ValidateLinkedProfessionalAsync(request.Role, request.LinkedProfessionalId, null);
 
     var user = new UserEntity
     {
       Username = request.Username,
       Role = request.Role,
-      LinkedProfessionalId = request.LinkedProfessionalId,
+      LinkedProfessionalId = request.Role == UserRole.Professional ? request.LinkedProfessionalId : null,
       MustChangePassword = request.MustChangePassword
     };
 
@@ -83,8 +84,9 @@ public sealed class UserService
     var wasPrivileged = IsPrivilegedRole(user.Role);
     var becomesScoped = IsScopedRole(request.Role);
 
+    await ValidateLinkedProfessionalAsync(request.Role, request.LinkedProfessionalId, id);
     user.Role = request.Role;
-    user.LinkedProfessionalId = request.LinkedProfessionalId;
+    user.LinkedProfessionalId = request.Role == UserRole.Professional ? request.LinkedProfessionalId : null;
     user.IsActive = request.IsActive;
 
     var hasActiveBranchAccess = await _db.UserBranchAccess
@@ -127,6 +129,20 @@ public sealed class UserService
 
   private static bool IsPrivilegedRole(UserRole role) => role is UserRole.SuperAdmin or UserRole.Owner;
   private static bool IsScopedRole(UserRole role) => role is UserRole.Manager or UserRole.Cashier or UserRole.Professional;
+
+  private async Task ValidateLinkedProfessionalAsync(UserRole role, Guid? linkedProfessionalId, Guid? userId)
+  {
+    if (linkedProfessionalId is null) return;
+    if (role != UserRole.Professional)
+      throw new BadRequestException(ErrorCodes.Professional.LinkedUserInvalid,
+        "Only a Professional-role user may be linked to a Professional profile.");
+    if (!await _db.Professionals.AnyAsync(professional => professional.Id == linkedProfessionalId))
+      throw new BadRequestException(ErrorCodes.Professional.LinkedUserInvalid,
+        "Choose an existing Professional profile.");
+    if (await _db.Users.AnyAsync(user => user.Id != userId && user.LinkedProfessionalId == linkedProfessionalId))
+      throw new ConflictException(ErrorCodes.Professional.LinkedUserAlreadyAssigned,
+        "This Professional profile is already linked to another user account.");
+  }
 
   private static UserResponse ToResponse(UserEntity u) => new(
     u.Id,

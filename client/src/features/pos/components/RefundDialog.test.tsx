@@ -72,8 +72,8 @@ function refundability(): PosRefundability {
   return {
     posSaleId: 'sale', posSaleDocumentNumber: 'POS-1', salesInvoiceId: 'invoice', salesInvoiceDocumentNumber: 'SI-1', branchId: ids.branch, customerId: null, customerName: null, warehouseId: id('b'), completedAtUtc: '2026-09-13T11:00:00Z', cashierUsername: 'cashier', originalTotalBase: 45_000, refundedBaseAmount: 5_000, remainingRefundableBaseAmount: 40_000, currentOutstandingBaseAmount: 0, refundStatus: 1, baseCurrencyId: ids.base, baseCurrencyCode: 'IQD', refunds: [],
     lines: [
-      { salesInvoiceLineId: ids.service, lineType: SalesLineType.Service, description: 'Haircut', sku: null, unitCode: null, professionalUsername: 'sara', originalQuantity: 1, refundedQuantity: 0, refundableQuantity: 1, originalLineAmountBase: 25_000, refundedAmountBase: 0, refundableAmountBase: 25_000, canRestock: false },
-      { salesInvoiceLineId: ids.product, lineType: SalesLineType.Product, description: 'Shampoo', sku: 'SH', unitCode: 'PC', professionalUsername: null, originalQuantity: 2, refundedQuantity: 1, refundableQuantity: 1, originalLineAmountBase: 20_000, refundedAmountBase: 5_000, refundableAmountBase: 15_000, canRestock: true },
+      { salesInvoiceLineId: ids.service, lineType: SalesLineType.Service, description: 'Haircut', sku: null, unitCode: null, professionalName: 'sara', originalQuantity: 1, refundedQuantity: 0, refundableQuantity: 1, originalLineAmountBase: 25_000, refundedAmountBase: 0, refundableAmountBase: 25_000, canRestock: false },
+      { salesInvoiceLineId: ids.product, lineType: SalesLineType.Product, description: 'Shampoo', sku: 'SH', unitCode: 'PC', professionalName: null, originalQuantity: 2, refundedQuantity: 1, refundableQuantity: 1, originalLineAmountBase: 20_000, refundedAmountBase: 5_000, refundableAmountBase: 15_000, canRestock: true },
     ],
   }
 }

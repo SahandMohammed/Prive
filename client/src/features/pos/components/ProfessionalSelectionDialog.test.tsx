@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProfessionalSelectionDialog } from './ProfessionalSelectionDialog'
 
 const professionals = [
-  { id: '11111111-1111-4111-8111-111111111111', username: 'Daban' },
-  { id: '22222222-2222-4222-8222-222222222222', username: 'Mohammed' },
+  { id: '11111111-1111-4111-8111-111111111111', name: 'Daban' },
+  { id: '22222222-2222-4222-8222-222222222222', name: 'Mohammed' },
 ]
 
 afterEach(cleanup)

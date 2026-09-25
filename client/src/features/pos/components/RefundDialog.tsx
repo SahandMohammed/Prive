@@ -188,7 +188,7 @@ export function RefundDialog({
                     <div>
                       <p className="font-medium">{line.description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {line.lineType === SalesLineType.Service ? `Service · ${line.professionalUsername ?? 'No professional'}` : `Product · ${line.sku ?? 'No SKU'} · ${line.unitCode ?? ''}`}
+                        {line.lineType === SalesLineType.Service ? `Service · ${line.professionalName ?? 'No professional'}` : `Product · ${line.sku ?? 'No SKU'} · ${line.unitCode ?? ''}`}
                         {' · '}sold {money(line.originalQuantity)} · refunded {money(line.refundedQuantity)} · remaining {money(line.refundableQuantity)}
                         {' · '}refundable {money(line.refundableAmountBase)} {data.baseCurrencyCode}
                       </p>

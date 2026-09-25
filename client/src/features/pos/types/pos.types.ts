@@ -33,7 +33,7 @@ export type PosDrawerAdjustmentDirection = (typeof PosDrawerAdjustmentDirection)
 export interface PosBranch { id: string; code: string; name: string; isMainBranch: boolean }
 export interface PosWarehouse { id: string; code: string; name: string; branchId: string }
 export interface PosCategory { id: string; name: string; itemType: PosCatalogItemType }
-export interface PosProfessional { id: string; username: string }
+export interface PosProfessional { id: string; name: string }
 export interface PosMoneyAccount {
   id: string
   code: string
@@ -124,7 +124,7 @@ export interface CompletePosSaleInput {
     productId: string | null
     unitOfMeasureId: string | null
     quantity: number
-    professionalUserId: string | null
+    professionalId: string | null
   }[]
   tenders: { moneyAccountId: string; amount: number }[]
   change: { moneyAccountId: string; amount: number } | null
@@ -315,8 +315,8 @@ export interface PosSaleLine {
   sku: string | null
   unitOfMeasureId: string | null
   unitCode: string | null
-  professionalUserId: string | null
-  professionalUsername: string | null
+  professionalId: string | null
+  professionalName: string | null
   quantity: number
   conversionOperation: 0 | 1 | null
   conversionFactor: number
@@ -479,7 +479,7 @@ export interface PosRefundabilityLine {
   description: string
   sku: string | null
   unitCode: string | null
-  professionalUsername: string | null
+  professionalName: string | null
   originalQuantity: number
   refundedQuantity: number
   refundableQuantity: number
@@ -517,7 +517,7 @@ export interface PosRefundLine {
   lineType: SalesLineType
   description: string
   unitCode: string | null
-  professionalUsername: string | null
+  professionalName: string | null
   quantity: number
   baseQuantity: number
   refundAmountBase: number

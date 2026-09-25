@@ -42,7 +42,7 @@ const refund: PosRefund = {
       lineType: SalesLineType.Product,
       description: 'Shampoo',
       unitCode: 'PC',
-      professionalUsername: null,
+      professionalName: null,
       quantity: 1,
       baseQuantity: 1,
       refundAmountBase: 15_000,

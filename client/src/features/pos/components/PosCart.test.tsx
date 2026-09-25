@@ -14,7 +14,7 @@ const setup: PosSetup = {
   branches: [],
   warehouses: [],
   categories: [],
-  professionals: [{ id: '22222222-2222-4222-8222-222222222222', username: 'Daban' }],
+  professionals: [{ id: '22222222-2222-4222-8222-222222222222', name: 'Daban' }],
   moneyAccounts: [],
 }
 

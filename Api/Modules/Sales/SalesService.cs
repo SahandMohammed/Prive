@@ -3,7 +3,7 @@ using Api.Modules.Accounting;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Pos;
-using Api.Modules.User;
+using Api.Modules.Professional;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -265,7 +265,7 @@ public sealed class SalesService
         line.Description,
         line.Quantity,
         line.UnitPrice,
-        line.ProfessionalUserId)).ToList());
+        line.ProfessionalId)).ToList());
 
     var validation = await ValidateInvoiceAsync(request, true, ct, validateUnits: false);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
@@ -513,7 +513,7 @@ public sealed class SalesService
       var validProductLine = line.LineType == SalesLineType.Product
         && line.ProductId is not null && line.ProductId != Guid.Empty
         && line.UnitOfMeasureId is not null && line.UnitOfMeasureId != Guid.Empty
-        && line.ServiceId is null && line.ProfessionalUserId is null;
+        && line.ServiceId is null && line.ProfessionalId is null;
       if (!validServiceLine && !validProductLine)
         throw new BadRequestException(ErrorCodes.Sales.LineTypeInvalid, "Each sales line must reference exactly one Service or Product.");
     }
@@ -580,15 +580,16 @@ public sealed class SalesService
       || service.RevenueAccount.Classification != AccountClassification.Revenue))
       throw new BadRequestException(ErrorCodes.Sales.ServiceRevenueAccountInvalid, "Every Service requires an active Revenue posting account.");
 
-    var professionalIds = request.Lines.Where(line => line.ProfessionalUserId is not null)
-      .Select(line => line.ProfessionalUserId!.Value).Distinct().ToList();
+    var professionalIds = request.Lines.Where(line => line.ProfessionalId is not null)
+      .Select(line => line.ProfessionalId!.Value).Distinct().ToList();
     if (professionalIds.Count > 0)
     {
-      var validProfessionals = await _db.Users.AsNoTracking().CountAsync(user =>
-        professionalIds.Contains(user.Id) && user.IsActive && user.Role == UserRole.Professional, ct);
+      var validProfessionals = await _db.Professionals.AsNoTracking().CountAsync(professional =>
+        professionalIds.Contains(professional.Id) && professional.IsActive
+        && professional.BranchAssignments.Any(assignment => assignment.BranchId == request.BranchId), ct);
       if (validProfessionals != professionalIds.Count)
         throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
-          "Every assigned Professional must be an active Professional user.");
+          "Every assigned Professional must be active and assigned to the sales branch.");
     }
 
     var products = await _db.Products.AsNoTracking()
@@ -696,7 +697,7 @@ public sealed class SalesService
         UnitPrice = unitPrice,
         BaseUnitPrice = baseUnitPrice,
         IsPriceOverridden = !request.UseMasterPrice,
-        ProfessionalUserId = request.ProfessionalUserId
+        ProfessionalId = request.ProfessionalId
       };
       invoice.Lines.Add(line);
       _db.SalesInvoiceLines.Add(line);
@@ -833,7 +834,7 @@ public sealed class SalesService
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Product)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
-    .Include(invoice => invoice.Lines).ThenInclude(line => line.ProfessionalUser);
+    .Include(invoice => invoice.Lines).ThenInclude(line => line.Professional);
 
   private static SalesInvoiceResponse ToInvoiceResponse(SalesInvoiceEntity invoice)
   {
@@ -910,8 +911,8 @@ public sealed class SalesService
       line.Product?.SKU,
       line.UnitOfMeasureId,
       line.UnitOfMeasure?.Code,
-      line.ProfessionalUserId,
-      line.ProfessionalUser?.Username,
+      line.ProfessionalId,
+      line.Professional?.Name,
       line.Description,
       line.Quantity,
       line.ConversionOperation,

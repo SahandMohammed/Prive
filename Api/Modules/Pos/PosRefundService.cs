@@ -323,13 +323,13 @@ public sealed class PosRefundService
         ServiceId = posting.Original.ServiceId,
         ProductId = posting.Original.ProductId,
         UnitOfMeasureId = posting.Original.UnitOfMeasureId,
-        ProfessionalUserId = posting.Original.ProfessionalUserId,
+        ProfessionalId = posting.Original.ProfessionalId,
         Description = posting.Original.Description
           ?? posting.Original.Service?.Name
           ?? posting.Original.Product?.Name
           ?? "Sale line",
         UnitCode = posting.Original.UnitOfMeasure?.Code,
-        ProfessionalUsername = posting.Original.ProfessionalUser?.Username,
+        ProfessionalName = posting.Original.Professional?.Name,
         Quantity = posting.Quantity,
         BaseQuantity = posting.BaseQuantity,
         RefundAmountBase = posting.RefundAmountBase,
@@ -474,7 +474,7 @@ public sealed class PosRefundService
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
         .ThenInclude(line => line.UnitOfMeasure)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
-        .ThenInclude(line => line.ProfessionalUser)
+        .ThenInclude(line => line.Professional)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
         .ThenInclude(line => line.Movements)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
@@ -521,7 +521,7 @@ public sealed class PosRefundService
       return new PosRefundabilityLineResponse(
         line.Id, line.LineType,
         line.Description ?? line.Service?.Name ?? line.Product?.Name ?? "Sale line",
-        line.Product?.SKU, line.UnitOfMeasure?.Code, line.ProfessionalUser?.Username,
+        line.Product?.SKU, line.UnitOfMeasure?.Code, line.Professional?.Name,
         line.Quantity, refundedQuantity, Math.Max(Quantity(line.Quantity - refundedQuantity), 0),
         line.BaseLineAmount, refundedAmount, Math.Max(Money(line.BaseLineAmount - refundedAmount), 0),
         line.LineType == SalesLineType.Product && sale.SalesInvoice.WarehouseId is not null);
@@ -549,7 +549,7 @@ public sealed class PosRefundService
     refund.CreatedAtUtc, refund.PostedAtUtc, refund.JournalEntryId,
     refund.Lines.OrderBy(line => line.Id).Select(line => new PosRefundLineResponse(
       line.Id, line.OriginalSalesInvoiceLineId, line.LineType, line.Description,
-      line.UnitCode, line.ProfessionalUsername, line.Quantity, line.BaseQuantity,
+      line.UnitCode, line.ProfessionalName, line.Quantity, line.BaseQuantity,
       line.RefundAmountBase, line.RestockProduct, line.OriginalUnitCostBase,
       line.StockMovements.OrderBy(movement => movement.Id).Select(movement => movement.Id).ToList())).ToList(),
     refund.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosRefundTenderResponse(

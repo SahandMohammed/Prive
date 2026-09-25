@@ -7,6 +7,7 @@ using Api.Modules.Currency;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Pos;
+using Api.Modules.Professional;
 using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Persistence;
@@ -73,7 +74,7 @@ public sealed partial class PosWorkflowTests
 
     Assert.Equal(data.CustomerId, sale.CustomerId);
     Assert.Equal(2, sale.Lines.Count);
-    Assert.Equal(data.ProfessionalId, sale.Lines.Single(line => line.LineType == SalesLineType.Service).ProfessionalUserId);
+    Assert.Equal(data.ProfessionalId, sale.Lines.Single(line => line.LineType == SalesLineType.Service).ProfessionalId);
     Assert.Equal(18, await StockQuantityAsync(db, data));
     var movement = await db.StockMovements.SingleAsync(movement => movement.SalesInvoiceId == sale.SalesInvoiceId);
     Assert.Equal(15, movement.UnitCostBase);
@@ -447,7 +448,9 @@ public sealed partial class PosWorkflowTests
     var cashier = new UserEntity { Username = "cashier", PasswordHash = "x", Role = UserRole.Cashier };
     var viewer = new UserEntity { Username = "viewer", PasswordHash = "x", Role = UserRole.Cashier };
     var outsider = new UserEntity { Username = "outside", PasswordHash = "x", Role = UserRole.Cashier };
-    var professional = new UserEntity { Username = "sara", PasswordHash = "x", Role = UserRole.Professional };
+    var professionalUser = new UserEntity { Username = "sara", PasswordHash = "x", Role = UserRole.Professional };
+    var professional = new ProfessionalEntity { Name = "Sara", LinkedUser = professionalUser };
+    professionalUser.LinkedProfessionalId = professional.Id;
     var iqd = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD", DecimalPlaces = 0 };
     var usd = new CurrencyEntity { Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2 };
     var business = new BusinessEntity
@@ -492,7 +495,7 @@ public sealed partial class PosWorkflowTests
       Code = "CASH-USD", Name = "Reception USD", Type = MoneyAccountType.Cashbox,
       Branch = branch, Currency = usd, AccountingAccount = usdMoneyGl
     };
-    db.AddRange(cashier, viewer, outsider, professional, iqd, usd, business, branch, customer, warehouse,
+    db.AddRange(cashier, viewer, outsider, professionalUser, professional, iqd, usd, business, branch, customer, warehouse,
       productCategory, serviceCategory, unit, receivable, inventory, productRevenue, serviceRevenue, cogs,
       iqdMoneyGl, usdMoneyGl, product, salonService, iqdAccount, usdAccount);
     await db.SaveChangesAsync();
@@ -502,7 +505,7 @@ public sealed partial class PosWorkflowTests
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = cashier.Id, AccessLevel = MoneyAccountAccessLevel.Operate },
       new MoneyAccountAccessEntity { MoneyAccountId = iqdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View },
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View });
-    db.UserBranchAccess.Add(new UserBranchAccessEntity { UserId = professional.Id, BranchId = branch.Id });
+    db.ProfessionalBranchAssignments.Add(new ProfessionalBranchAssignmentEntity { ProfessionalId = professional.Id, BranchId = branch.Id });
     if (includeUsdRate) db.ExchangeRates.Add(new ExchangeRateEntity
     {
       FromCurrencyId = usd.Id,

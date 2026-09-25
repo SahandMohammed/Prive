@@ -26,6 +26,15 @@ public static class ErrorCodes
     public const string UsernameTaken = "USER_USERNAME_TAKEN";
   }
 
+  public static class Professional
+  {
+    public const string NotFound = "PROFESSIONAL_NOT_FOUND";
+    public const string BranchInvalid = "PROFESSIONAL_BRANCH_INVALID";
+    public const string LinkedUserInvalid = "PROFESSIONAL_LINKED_USER_INVALID";
+    public const string LinkedUserAlreadyAssigned = "PROFESSIONAL_LINKED_USER_ALREADY_ASSIGNED";
+    public const string HasHistory = "PROFESSIONAL_HAS_HISTORY";
+  }
+
   public static class Business
   {
     public const string NotConfigured = "BUSINESS_NOT_CONFIGURED";

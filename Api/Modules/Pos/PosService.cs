@@ -7,6 +7,7 @@ using Api.Modules.Accounting;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Sales;
+using Api.Modules.Professional;
 using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
@@ -54,11 +55,11 @@ public sealed class PosService
     var categories = serviceCategories.Concat(productCategories)
       .OrderBy(category => category.ItemType).ThenBy(category => category.Name).ToList();
     var selectedBranchId = _db.SelectedBranchId;
-    var professionals = await _db.Users.AsNoTracking()
-      .Where(user => user.IsActive && user.Role == UserRole.Professional
-        && (selectedBranchId == null || _db.UserBranchAccess.Any(access => access.UserId == user.Id && access.BranchId == selectedBranchId)))
-      .OrderBy(user => user.Username)
-      .Select(user => new PosProfessionalResponse(user.Id, user.Username))
+    var professionals = await _db.Professionals.AsNoTracking()
+      .Where(professional => professional.IsActive
+        && (selectedBranchId == null || professional.BranchAssignments.Any(assignment => assignment.BranchId == selectedBranchId)))
+      .OrderBy(professional => professional.Name)
+      .Select(professional => new PosProfessionalResponse(professional.Id, professional.Name))
       .ToListAsync(ct);
 
     var accountRows = await _db.MoneyAccounts.AsNoTracking()
@@ -382,13 +383,13 @@ public sealed class PosService
       .ToDictionaryAsync(product => product.Id, ct);
     if (services.Count != serviceIds.Count || products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "Every POS line must reference an existing Service or Product.");
-    var professionalIds = request.Lines.Where(line => line.ProfessionalUserId is not null)
-      .Select(line => line.ProfessionalUserId!.Value).Distinct().ToList();
+    var professionalIds = request.Lines.Where(line => line.ProfessionalId is not null)
+      .Select(line => line.ProfessionalId!.Value).Distinct().ToList();
     if (professionalIds.Count > 0)
     {
-      var validProfessionals = await _db.Users.AsNoTracking().CountAsync(user =>
-        professionalIds.Contains(user.Id) && user.IsActive && user.Role == UserRole.Professional
-        && _db.UserBranchAccess.Any(access => access.UserId == user.Id && access.BranchId == request.BranchId), ct);
+      var validProfessionals = await _db.Professionals.AsNoTracking().CountAsync(professional =>
+        professionalIds.Contains(professional.Id) && professional.IsActive
+        && professional.BranchAssignments.Any(assignment => assignment.BranchId == request.BranchId), ct);
       if (validProfessionals != professionalIds.Count)
         throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
           "Every selected Professional must be active and assigned to the selected branch.");
@@ -403,7 +404,7 @@ public sealed class PosService
         services[line.ServiceId!.Value].Name,
         line.Quantity,
         services[line.ServiceId.Value].SellingPriceBase,
-        line.ProfessionalUserId)
+        line.ProfessionalId)
       : new SalesInvoiceLineRequest(
         SalesLineType.Product,
         null,
@@ -623,7 +624,7 @@ public sealed class PosService
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Product)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
-    .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.ProfessionalUser)
+    .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Professional)
     .Include(sale => sale.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(sale => sale.Refunds).ThenInclude(refund => refund.ApprovedByUser);
@@ -719,8 +720,8 @@ public sealed class PosService
         line.Product?.SKU,
         line.UnitOfMeasureId,
         line.UnitOfMeasure?.Code,
-        line.ProfessionalUserId,
-        line.ProfessionalUser?.Username,
+        line.ProfessionalId,
+        line.Professional?.Name,
         line.Quantity,
         line.ConversionOperation,
         line.ConversionFactor,
@@ -771,7 +772,7 @@ public sealed class PosService
       var service = line.LineType == SalesLineType.Service && line.ServiceId is not null && line.ServiceId != Guid.Empty
         && line.ProductId is null && line.UnitOfMeasureId is null;
       var product = line.LineType == SalesLineType.Product && line.ProductId is not null && line.ProductId != Guid.Empty
-        && line.ServiceId is null && line.ProfessionalUserId is null
+        && line.ServiceId is null && line.ProfessionalId is null
         && line.UnitOfMeasureId is not null && line.UnitOfMeasureId != Guid.Empty;
       if (!service && !product)
         throw new BadRequestException(ErrorCodes.Pos.LineInvalid,
@@ -815,7 +816,7 @@ public sealed class PosService
     request.PaymentMode,
     Lines = request.Lines
       .OrderBy(line => line.LineType).ThenBy(line => line.ServiceId).ThenBy(line => line.ProductId)
-      .Select(line => new { line.LineType, line.ServiceId, line.ProductId, line.UnitOfMeasureId, line.Quantity, line.ProfessionalUserId }),
+      .Select(line => new { line.LineType, line.ServiceId, line.ProductId, line.UnitOfMeasureId, line.Quantity, line.ProfessionalId }),
     Tenders = request.Tenders.OrderBy(tender => tender.MoneyAccountId).ThenBy(tender => tender.Amount)
       .Select(tender => new { tender.MoneyAccountId, tender.Amount }),
     Change = request.Change is null ? null : new { request.Change.MoneyAccountId, request.Change.Amount }

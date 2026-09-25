@@ -215,7 +215,7 @@ export function CheckoutDialog({
             productId: service ? null : line.item.id,
             unitOfMeasureId: service ? null : line.unitOfMeasureId,
             quantity: line.quantity,
-            professionalUserId: service ? professional?.id ?? null : null,
+            professionalId: service ? professional?.id ?? null : null,
           }
         }),
         tenders: paid
@@ -248,7 +248,7 @@ export function CheckoutDialog({
         <form className="space-y-5" onSubmit={submit}>
           <div className="grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-3">
             <Summary label="Customer" value={customer?.name ?? 'Walk-in'} />
-            <Summary label="Master" value={professional?.username ?? '—'} />
+            <Summary label="Master" value={professional?.name ?? '—'} />
             <Summary label="Sale total" value={`${amount(total)} ${setup.baseCurrencyCode}`} />
           </div>
 
@@ -473,7 +473,7 @@ function UnpaidSummary({ customer, professional, total, baseCurrencyCode }: { cu
       <h3 className="text-lg font-semibold">Unpaid sale</h3>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Summary label="Customer" value={customer.name} />
-        <Summary label="Master" value={professional?.username ?? '—'} />
+        <Summary label="Master" value={professional?.name ?? '—'} />
         <Summary label="Total" value={`${amount(total)} ${baseCurrencyCode}`} />
       </div>
       <p className="mt-4 text-sm text-muted-foreground">This amount will remain outstanding on the customer’s account.</p>

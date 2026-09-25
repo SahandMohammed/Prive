@@ -80,8 +80,8 @@ export interface SalesInvoiceLine {
   sku: string | null
   unitOfMeasureId: string | null
   unitCode: string | null
-  professionalUserId: string | null
-  professionalUsername: string | null
+  professionalId: string | null
+  professionalName: string | null
   description: string | null
   quantity: number
   conversionOperation: 0 | 1 | null

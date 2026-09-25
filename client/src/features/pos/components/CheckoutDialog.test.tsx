@@ -24,7 +24,7 @@ const ids = {
   session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
 }
 
-const professional: PosProfessional = { id: ids.professional, username: 'Daban' }
+const professional: PosProfessional = { id: ids.professional, name: 'Daban' }
 const customer: PosCustomer = { id: ids.customer, name: 'Ahmed Mohammed', primaryPhoneNumber: null }
 
 const iqdCashbox: PosMoneyAccount = {
@@ -143,7 +143,7 @@ describe('POS touch checkout', () => {
       paymentMode: PosPaymentMode.Paid,
       tenders: [{ moneyAccountId: ids.iqdCashbox, amount: 25_000 }],
       change: null,
-      lines: [{ serviceId: ids.service, professionalUserId: ids.professional }],
+      lines: [{ serviceId: ids.service, professionalId: ids.professional }],
     })
   })
 
@@ -156,7 +156,7 @@ describe('POS touch checkout', () => {
     await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledTimes(1))
     expect(hooks.complete.mutate.mock.calls[0][0].lines).toEqual([expect.objectContaining({
       productId: ids.product,
-      professionalUserId: null,
+      professionalId: null,
     })])
   })
 

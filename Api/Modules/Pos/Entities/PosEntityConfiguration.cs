@@ -327,7 +327,7 @@ public sealed class PosRefundLineEntityConfiguration : IEntityTypeConfiguration<
     builder.Property(line => line.LineType).HasConversion<string>().HasMaxLength(16).IsRequired();
     builder.Property(line => line.Description).HasMaxLength(500).IsRequired();
     builder.Property(line => line.UnitCode).HasMaxLength(32);
-    builder.Property(line => line.ProfessionalUsername).HasMaxLength(100);
+    builder.Property(line => line.ProfessionalName).HasMaxLength(200);
     builder.Property(line => line.Quantity).HasPrecision(19, 4).IsRequired();
     builder.Property(line => line.BaseQuantity).HasPrecision(19, 4).IsRequired();
     builder.Property(line => line.RefundAmountBase).HasPrecision(19, 4).IsRequired();

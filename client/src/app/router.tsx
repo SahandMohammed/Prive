@@ -52,6 +52,7 @@ import {
 import { ContactsPage } from '@/features/contacts'
 import { PosPage, PosReceiptPage, PosRefundReceiptPage, PosSessionClosePage, PosSessionsPage, PosZReportPage } from '@/features/pos'
 import { ExpensesPage, ExpenseDetailPage, ExpenseCategoriesPage } from '@/features/expenses'
+import { ProfessionalsPage } from '@/features/professionals'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace />, errorElement: <RouteErrorBoundary /> },
@@ -128,6 +129,10 @@ export const router = createBrowserRouter([
           // Settings
           { path: '/settings/business', element: <BaseBusinessSettingsPage /> },
           { path: '/users', element: <UsersPage /> },
+          {
+            element: <CapabilityRoute capability="manageProfessionals" />,
+            children: [{ path: '/professionals', element: <ProfessionalsPage /> }],
+          },
           { path: '/settings/branches', element: <BranchesPage /> },
           { path: '/settings/currencies', element: <BaseCurrenciesPage /> },
           { path: '/settings/items', element: <ItemsPage /> },

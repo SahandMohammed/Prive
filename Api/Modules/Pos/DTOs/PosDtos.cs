@@ -66,7 +66,7 @@ public sealed record PosSaleLineRequest(
   Guid? ProductId,
   Guid? UnitOfMeasureId,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
-  Guid? ProfessionalUserId);
+  Guid? ProfessionalId);
 
 public sealed record PosTenderRequest(
   [Required] Guid MoneyAccountId,
@@ -161,7 +161,7 @@ public sealed record PosWarehouseResponse(Guid Id, string Code, string Name, Gui
 
 public sealed record PosCategoryResponse(Guid Id, string Name, PosCatalogItemType ItemType);
 
-public sealed record PosProfessionalResponse(Guid Id, string Username);
+public sealed record PosProfessionalResponse(Guid Id, string Name);
 
 public sealed record PosMoneyAccountResponse(
   Guid Id,
@@ -421,8 +421,8 @@ public sealed record PosSaleLineResponse(
   string? SKU,
   Guid? UnitOfMeasureId,
   string? UnitCode,
-  Guid? ProfessionalUserId,
-  string? ProfessionalUsername,
+  Guid? ProfessionalId,
+  string? ProfessionalName,
   decimal Quantity,
   UnitConversionOperation? ConversionOperation,
   decimal ConversionFactor,
@@ -510,7 +510,7 @@ public sealed record PosRefundabilityLineResponse(
   string Description,
   string? Sku,
   string? UnitCode,
-  string? ProfessionalUsername,
+  string? ProfessionalName,
   decimal OriginalQuantity,
   decimal RefundedQuantity,
   decimal RefundableQuantity,
@@ -546,7 +546,7 @@ public sealed record PosRefundLineResponse(
   SalesLineType LineType,
   string Description,
   string? UnitCode,
-  string? ProfessionalUsername,
+  string? ProfessionalName,
   decimal Quantity,
   decimal BaseQuantity,
   decimal RefundAmountBase,

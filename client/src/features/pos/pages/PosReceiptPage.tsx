@@ -177,7 +177,7 @@ export function PosReceiptPage() {
                         <>
                           <p>Service</p>
                           <p className="text-xs text-muted-foreground">
-                            {line.professionalUsername ?? 'No Professional assigned'}
+                            {line.professionalName ?? 'No Professional assigned'}
                           </p>
                         </>
                       ) : (
