@@ -1,45 +1,28 @@
 import { z } from 'zod'
 import { PosPaymentMode, PosRefundReason } from '../types/pos.types'
 
-const tenderSchema = z.object({
-  moneyAccountId: z.string().uuid('Select a Money Account'),
-  amount: z.number().positive('Enter the amount received'),
-})
-
 export const posCheckoutSchema = z.object({
   paymentMode: z.union([
     z.literal(PosPaymentMode.Paid),
-    z.literal(PosPaymentMode.Partial),
     z.literal(PosPaymentMode.Credit),
   ]),
-  tenders: z.array(tenderSchema),
+  moneyAccountId: z.string(),
+  receivedAmount: z.number().min(0, 'Received amount cannot be negative'),
   changeMoneyAccountId: z.string(),
-  changeAmount: z.number().min(0, 'Change cannot be negative'),
 }).superRefine((value, context) => {
-  if (value.paymentMode !== PosPaymentMode.Credit && value.tenders.length === 0) {
+  if (value.paymentMode === PosPaymentMode.Paid && !z.string().uuid().safeParse(value.moneyAccountId).success) {
     context.addIssue({
       code: 'custom',
-      path: ['tenders'],
-      message: value.paymentMode === PosPaymentMode.Paid
-        ? 'Add at least one tender to fully pay the sale'
-        : 'Add at least one tender for a partial payment',
+      path: ['moneyAccountId'],
+      message: 'Select a Cashbox',
     })
   }
 
-  if (value.paymentMode === PosPaymentMode.Credit && value.tenders.length > 0) {
+  if (value.paymentMode === PosPaymentMode.Paid && value.receivedAmount <= 0) {
     context.addIssue({
       code: 'custom',
-      path: ['tenders'],
-      message: 'Credit sales cannot include a tender. Choose Partial if the customer pays something now.',
-    })
-  }
-
-  if (value.paymentMode !== PosPaymentMode.Paid
-    && (value.changeMoneyAccountId !== '' || value.changeAmount > 0)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['changeAmount'],
-      message: 'Change is only valid for a fully paid sale.',
+      path: ['receivedAmount'],
+      message: 'Enter the amount received',
     })
   }
 })

@@ -96,7 +96,6 @@ const cart: PosCartLine[] = [{
   quantity: 1,
   unitOfMeasureId: '',
   unitPriceBase: 25_000,
-  professionalUserId: '',
 }]
 
 beforeEach(() => {
@@ -117,9 +116,13 @@ describe('POS currency availability', () => {
         branchId={ids.branch}
         sessionId="99999999-9999-4999-8999-999999999999"
         warehouseId=""
-        customerId={null}
+        customer={null}
+        professional={null}
         cart={cart}
+        rememberedReceivingCashboxId={null}
+        onReceivingCashboxChange={vi.fn()}
         onOpenChange={vi.fn()}
+        onBack={vi.fn()}
         onCompleted={vi.fn()}
       />
     )

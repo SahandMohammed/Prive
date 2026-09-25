@@ -78,7 +78,6 @@ export interface PosCartLine {
   quantity: number
   unitOfMeasureId: string
   unitPriceBase: number
-  professionalUserId: string
 }
 
 export interface PosCatalogFilters {

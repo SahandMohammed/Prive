@@ -35,7 +35,6 @@ export function addCatalogItemToCart(cart: PosCartLine[], item: PosCatalogItem):
       quantity: 1,
       unitOfMeasureId: item.unitOfMeasureId ?? '',
       unitPriceBase: item.unitPriceBase,
-      professionalUserId: '',
     },
   ]
 }

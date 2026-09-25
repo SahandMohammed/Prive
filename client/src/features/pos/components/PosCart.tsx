@@ -105,20 +105,6 @@ export function PosCart({
                     </Button>
                   </div>
 
-                  {!isProduct && (
-                    <select
-                      aria-label={`Professional for ${line.item.name}`}
-                      value={line.professionalUserId}
-                      onChange={(event) => onCartChange(cart.map((item, currentIndex) => currentIndex === index ? { ...item, professionalUserId: event.target.value } : item))}
-                      className="mt-2 h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">No Professional assigned</option>
-                      {setup.professionals.map((professional) => (
-                        <option key={professional.id} value={professional.id}>{professional.username}</option>
-                      ))}
-                    </select>
-                  )}
-
                   {isProduct && (
                     <select
                       aria-label={`Unit for ${line.item.name}`}
@@ -180,7 +166,7 @@ export function PosCart({
         {hasProduct && !warehouseSelected ? (
           <p className="mt-2 text-center text-[11px] text-destructive">Select a warehouse before selling products.</p>
         ) : (
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">Credit sales are available for a selected customer; payment accounts are required for paid or partial sales.</p>
+          <p className="mt-2 text-center text-[10px] text-muted-foreground">Unpaid sales require a selected customer. Paid sales require a Cashbox.</p>
         )}
       </div>
     </aside>

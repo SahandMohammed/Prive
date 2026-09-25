@@ -11,6 +11,7 @@ import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { PosCart } from '../components/PosCart'
 import { PosCatalogGrid } from '../components/PosCatalogGrid'
 import { PosCategoryNav } from '../components/PosCategoryNav'
+import { ProfessionalSelectionDialog } from '../components/ProfessionalSelectionDialog'
 import { PosTopBar } from '../components/PosTopBar'
 import { SaleCompleteDialog } from '../components/SaleCompleteDialog'
 import { SessionClosedScreen } from '../components/SessionClosedScreen'
@@ -117,7 +118,9 @@ function PosWorkspace({
   const [page, setPage] = useState(1)
   const [cart, setCart] = useState<PosCartLine[]>([])
   const [customer, setCustomer] = useState<PosCustomer | null>(null)
-  const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [checkoutStage, setCheckoutStage] = useState<'professional' | 'payment' | null>(null)
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(null)
+  const [lastReceivingCashboxId, setLastReceivingCashboxId] = useState<string | null>(null)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [completedSale, setCompletedSale] = useState<PosSale | null>(null)
   const [xReportOpen, setXReportOpen] = useState(false)
@@ -143,6 +146,8 @@ function PosWorkspace({
   })
   const items = catalogQuery.data?.data ?? []
   const total = posCartTotal(cart)
+  const cartHasServices = cart.some((line) => line.item.itemType === PosCatalogItemType.Service)
+  const selectedProfessional = setup.professionals.find((professional) => professional.id === selectedProfessionalId) ?? null
 
   const chooseType = (type: '' | PosCatalogItemType) => {
     setItemType(type)
@@ -160,12 +165,27 @@ function PosWorkspace({
     if (nextWarehouseId === warehouseId) return
     setWarehouseId(nextWarehouseId)
     setCart([])
+    setSelectedProfessionalId(null)
+    setCheckoutStage(null)
     setPage(1)
+  }
+
+  const changeCart = (nextCart: PosCartLine[]) => {
+    setCart(nextCart)
+    if (!nextCart.some((line) => line.item.itemType === PosCatalogItemType.Service)) {
+      setSelectedProfessionalId(null)
+    }
+  }
+
+  const startCheckout = () => {
+    setCheckoutStage(cartHasServices ? 'professional' : 'payment')
   }
 
   const completeSale = (sale: PosSale) => {
     setCart([])
     setCustomer(null)
+    setSelectedProfessionalId(null)
+    setCheckoutStage(null)
     setMobileCartOpen(false)
     setCompletedSale(sale)
   }
@@ -178,7 +198,8 @@ function PosWorkspace({
         onClosed={(report) => {
           setCart([])
           setCustomer(null)
-          setCheckoutOpen(false)
+          setSelectedProfessionalId(null)
+          setCheckoutStage(null)
           setMobileCartOpen(false)
           setCompletedSale(null)
           onSessionClosed(report)
@@ -265,9 +286,9 @@ function PosWorkspace({
           setup={setup}
           customer={customer}
           warehouseSelected={Boolean(warehouseId)}
-          onCartChange={setCart}
+          onCartChange={changeCart}
           onCustomerChange={setCustomer}
-          onCheckout={() => setCheckoutOpen(true)}
+          onCheckout={startCheckout}
         />
       </div>
 
@@ -284,22 +305,35 @@ function PosWorkspace({
             setup={setup}
             customer={customer}
             warehouseSelected={Boolean(warehouseId)}
-            onCartChange={setCart}
+            onCartChange={changeCart}
             onCustomerChange={setCustomer}
-            onCheckout={() => { setMobileCartOpen(false); setCheckoutOpen(true) }}
+            onCheckout={() => { setMobileCartOpen(false); startCheckout() }}
           />
         </DialogContent>
       </Dialog>
 
+      <ProfessionalSelectionDialog
+        open={checkoutStage === 'professional'}
+        professionals={setup.professionals}
+        selectedProfessionalId={selectedProfessionalId}
+        onSelect={setSelectedProfessionalId}
+        onContinue={() => setCheckoutStage('payment')}
+        onOpenChange={(open) => { if (!open) setCheckoutStage(null) }}
+      />
+
       <CheckoutDialog
-        open={checkoutOpen}
+        open={checkoutStage === 'payment'}
         setup={setup}
         branchId={selectedBranchId}
         sessionId={session.id}
         warehouseId={warehouseId}
-        customerId={customer?.id ?? null}
+        customer={customer}
+        professional={cartHasServices ? selectedProfessional : null}
         cart={cart}
-        onOpenChange={setCheckoutOpen}
+        rememberedReceivingCashboxId={lastReceivingCashboxId}
+        onReceivingCashboxChange={setLastReceivingCashboxId}
+        onOpenChange={(open) => { if (!open) setCheckoutStage(null) }}
+        onBack={() => setCheckoutStage(cartHasServices ? 'professional' : null)}
         onCompleted={completeSale}
       />
 

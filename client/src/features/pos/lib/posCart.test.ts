@@ -63,6 +63,7 @@ describe('POS cart behavior', () => {
     expect(twice).toHaveLength(1)
     expect(twice[0].quantity).toBe(2)
     expect(posCartTotal(twice)).toBe(50_000)
+    expect(twice[0]).not.toHaveProperty('professionalUserId')
   })
 
   it('rounds every cart line before summing the sale total like the backend', () => {
