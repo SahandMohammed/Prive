@@ -21,10 +21,11 @@ public sealed class BusinessEntityConfiguration : IEntityTypeConfiguration<Busin
     builder.Property(business => business.Country).HasMaxLength(100).IsRequired();
     builder.Property(business => business.LogoReference).HasMaxLength(2048);
     builder.Property(business => business.TimeZoneId).HasMaxLength(100).IsRequired()
-      .HasDefaultValue("Asia/Baghdad");
+      .HasDefaultValue(BusinessEntity.DefaultTimeZoneId);
     builder.Property(business => business.ReceiptFooter).HasMaxLength(500);
     builder.Property(business => business.ReceiptPaperWidth).HasConversion<string>().HasMaxLength(8).IsRequired()
-      .HasDefaultValue(ReceiptPaperWidth.Mm80);
+      .HasDefaultValue(ReceiptPaperWidth.Mm80)
+      .HasSentinel(ReceiptPaperWidth.Mm80);
     builder.HasIndex(business => business.IsActive)
       .IsUnique()
       .HasFilter("\"IsActive\" = true");

@@ -15,5 +15,6 @@ public static class BusinessTime
     return (fromUtc, toUtc);
   }
 
-  private static TimeZoneInfo Zone(BusinessEntity business) => TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
+  private static TimeZoneInfo Zone(BusinessEntity business) => TimeZoneInfo.FindSystemTimeZoneById(
+    string.IsNullOrWhiteSpace(business.TimeZoneId) ? BusinessEntity.DefaultTimeZoneId : business.TimeZoneId);
 }

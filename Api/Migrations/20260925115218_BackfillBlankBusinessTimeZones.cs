@@ -5,17 +5,15 @@
 namespace api.Migrations
 {
     /// <inheritdoc />
-    public partial class RepairPosVarianceBaseAmounts : Migration
+    public partial class BackfillBlankBusinessTimeZones : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                UPDATE pos_session_closing_counts
-                SET "VarianceBaseAmount" = ROUND("VarianceAmount" * "ExchangeRate", 4);
-
-                UPDATE pos_z_drawer_summaries
-                SET "VarianceBaseAmount" = ROUND("VarianceAmount" * "ExchangeRate", 4);
+                UPDATE businesses
+                SET "TimeZoneId" = 'Asia/Baghdad'
+                WHERE "TimeZoneId" IS NULL OR BTRIM("TimeZoneId") = '';
                 """);
         }
 

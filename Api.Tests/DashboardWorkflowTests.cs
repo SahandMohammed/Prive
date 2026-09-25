@@ -13,6 +13,7 @@ using Api.Modules.Purchase;
 using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Tests;
@@ -24,6 +25,8 @@ public sealed class DashboardWorkflowTests
       .UseInMemoryDatabase(Guid.NewGuid().ToString())
       .Options;
 
+  private static DateOnly BusinessToday() => BusinessTime.DateAt(new BusinessEntity(), DateTime.UtcNow);
+
   [Fact]
   public async Task Summary_respects_branch_isolation_and_excludes_other_branches()
   {
@@ -32,7 +35,7 @@ public sealed class DashboardWorkflowTests
     var branchB = new BranchEntity { Name = "Branch B", Code = "BR-B" };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "ahmed", Role = UserRole.Owner };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
@@ -104,7 +107,7 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Branch A", Code = "BR-A", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "cashier1", Role = UserRole.Cashier };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
@@ -183,7 +186,7 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Main Branch", Code = "MAIN", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "manager", Role = UserRole.Manager };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
@@ -271,7 +274,7 @@ public sealed class DashboardWorkflowTests
     var user = new UserEntity { Username = "owner", Role = UserRole.Owner };
     var customer = new ContactEntity { Name = "Daban", IsCustomer = true };
     var supplier = new ContactEntity { Name = "Beauty Supply Co", IsSupplier = true };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
@@ -427,7 +430,7 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Main", Code = "MAIN", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "sahand", Role = UserRole.Owner };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
@@ -495,7 +498,7 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Main", Code = "MAIN", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "user", Role = UserRole.Owner };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
@@ -550,7 +553,7 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Main", Code = "MAIN", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "user", Role = UserRole.Owner };
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
