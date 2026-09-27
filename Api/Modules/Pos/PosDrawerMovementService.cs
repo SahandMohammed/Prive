@@ -66,9 +66,9 @@ public sealed class PosDrawerMovementService
       ?? throw new BadRequestException(ErrorCodes.Pos.DrawerMovementInvalid, "Select an existing Cashbox Money Account.");
     FinanceService.EnsureActive(cashbox);
     if (cashbox.BranchId != branchId || cashbox.Type != MoneyAccountType.Cashbox
-      || !session.OpeningCounts.Any(count => count.CurrencyId == cashbox.CurrencyId))
-      throw new BadRequestException(ErrorCodes.Pos.SessionCurrencyNotAllowed,
-        "The selected Cashbox currency is not part of this POS Session snapshot.");
+      || !session.OpeningCounts.Any(count => count.MoneyAccountId == cashbox.Id))
+      throw new BadRequestException(ErrorCodes.Pos.SessionCashboxNotAllowed,
+        "The selected Cashbox is not part of this POS Session's exact Cashbox snapshot.");
 
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)

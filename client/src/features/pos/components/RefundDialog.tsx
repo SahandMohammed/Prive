@@ -54,9 +54,14 @@ export function RefundDialog({
   const resetPostRefund = postRefund.reset
   const resetVoidSale = voidSale.reset
   const mutation = mode === 'void' ? voidSale : postRefund
+  const sessionCashboxIds = useMemo(
+    () => new Set(session.openingCounts.map((count) => count.moneyAccountId)),
+    [session.openingCounts]
+  )
   const accounts = useMemo(
-    () => setup.moneyAccounts.filter((account) => account.branchId === session.branchId),
-    [session.branchId, setup.moneyAccounts]
+    () => setup.moneyAccounts.filter((account) =>
+      account.branchId === session.branchId && sessionCashboxIds.has(account.id)),
+    [session.branchId, sessionCashboxIds, setup.moneyAccounts]
   )
   const availableAccounts = accounts.filter((account) => account.currentExchangeRate !== null)
   const baseAccount = availableAccounts.find(

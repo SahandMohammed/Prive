@@ -1,5 +1,5 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import { Search, UserRound, X } from 'lucide-react'
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Check, ChevronDown, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePosCustomers } from '../hooks/usePos'
@@ -12,7 +12,12 @@ export function CustomerPicker({
   customer: PosCustomer | null
   onChange: (customer: PosCustomer | null) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const [inputValue, setInputValue] = useState(customer?.name ?? 'Walk-in customer')
   const [search, setSearch] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listboxId = useId()
   const deferredSearch = useDeferredValue(search)
   const query = usePosCustomers({
     page: 1,
@@ -24,51 +29,146 @@ export function CustomerPicker({
     if (!customer || rows.some((item) => item.id === customer.id)) return rows
     return [customer, ...rows]
   }, [customer, query.data?.data])
+  const suggestions = useMemo(() => [null, ...customers] as Array<PosCustomer | null>, [customers])
+  const selectedLabel = customer?.name ?? 'Walk-in customer'
+
+  useEffect(() => {
+    if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restores the selected label after a cancelled search or external reset.
+      setInputValue(selectedLabel)
+      setSearch('')
+    }
+  }, [open, selectedLabel])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keeps keyboard navigation valid as suggestions change.
+    setHighlightedIndex(0)
+  }, [suggestions.length])
+
+  const selectCustomer = (nextCustomer: PosCustomer | null) => {
+    onChange(nextCustomer)
+    setInputValue(nextCustomer?.name ?? 'Walk-in customer')
+    setSearch('')
+    setOpen(false)
+  }
+
+  const showSuggestions = () => {
+    setOpen(true)
+    inputRef.current?.focus()
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      if (!open) {
+        showSuggestions()
+        return
+      }
+      setHighlightedIndex((index) => Math.min(index + 1, suggestions.length - 1))
+    } else if (event.key === 'ArrowUp' && open) {
+      event.preventDefault()
+      setHighlightedIndex((index) => Math.max(index - 1, 0))
+    } else if (event.key === 'Enter' && open) {
+      event.preventDefault()
+      selectCustomer(suggestions[highlightedIndex] ?? null)
+    } else if (event.key === 'Escape' && open) {
+      event.preventDefault()
+      setOpen(false)
+    }
+  }
 
   return (
-    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-background">
-            <UserRound className="size-4 text-muted-foreground" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-muted-foreground">Customer</p>
-            <p className="truncate text-sm font-semibold">{customer?.name ?? 'Walk-in customer'}</p>
-          </div>
-        </div>
-        {customer && (
-          <Button type="button" variant="ghost" size="icon-xs" onClick={() => onChange(null)} aria-label="Clear customer">
-            <X className="size-3.5" />
-          </Button>
-        )}
-      </div>
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search customer or phone"
-          className="h-9 pl-8 text-xs"
-        />
-      </div>
-      <select
-        aria-label="Select customer"
-        value={customer?.id ?? ''}
-        onChange={(event) => {
-          const next = customers.find((item) => item.id === event.target.value) ?? null
-          onChange(next)
+    <div className="relative">
+      <label className="sr-only" htmlFor={listboxId}>
+        Customer
+      </label>
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        ref={inputRef}
+        id={listboxId}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={`${listboxId}-options`}
+        aria-expanded={open}
+        aria-activedescendant={open ? `${listboxId}-option-${highlightedIndex}` : undefined}
+        value={inputValue}
+        onFocus={(event) => {
+          setOpen(true)
+          event.currentTarget.select()
         }}
-        className="h-9 w-full rounded-md border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+        onBlur={() => setOpen(false)}
+        onChange={(event) => {
+          const value = event.target.value
+          setInputValue(value)
+          setSearch(value)
+          setOpen(true)
+          if (!value) onChange(null)
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder="Search customer or phone"
+        className="h-10 bg-background pl-9 pr-10 text-sm"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="absolute right-1 top-1/2 -translate-y-1/2"
+        aria-label="Show customer suggestions"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          if (open) setOpen(false)
+          else showSuggestions()
+        }}
       >
-        <option value="">Walk-in · no customer</option>
-        {customers.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name}{item.primaryPhoneNumber ? ` · ${item.primaryPhoneNumber}` : ''}
-          </option>
-        ))}
-      </select>
-      {query.isError && <p className="text-[11px] text-destructive">{query.error.message}</p>}
+        <ChevronDown className="size-4" />
+      </Button>
+      {open && (
+        <div
+          id={`${listboxId}-options`}
+          role="listbox"
+          aria-label="Customer suggestions"
+          className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
+        >
+          {suggestions.map((item, index) => {
+            const selected = item?.id === customer?.id || (!item && !customer)
+            const label = item?.name ?? 'Walk-in customer'
+
+            return (
+              <button
+                key={item?.id ?? 'walk-in'}
+                id={`${listboxId}-option-${index}`}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left outline-none ${
+                  index === highlightedIndex
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-accent hover:text-accent-foreground'
+                }`}
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  selectCustomer(item)
+                }}
+                onMouseEnter={() => setHighlightedIndex(index)}
+              >
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {item?.primaryPhoneNumber && (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {item.primaryPhoneNumber}
+                  </span>
+                )}
+                {selected && <Check className="size-4 shrink-0 text-primary" />}
+              </button>
+            )
+          })}
+          {query.isPending && (
+            <p className="px-2.5 py-2 text-xs text-muted-foreground">Searching customers…</p>
+          )}
+          {query.isError && (
+            <p className="px-2.5 py-2 text-xs text-destructive">{query.error.message}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

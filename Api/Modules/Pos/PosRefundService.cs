@@ -437,10 +437,10 @@ public sealed class PosRefundService
       if (account.BranchId != branchId || !account.Currency.IsActive)
         throw new BadRequestException(ErrorCodes.Pos.RefundMoneyAccountInvalid,
           $"Money Account '{account.Code}' is not available in this POS branch.");
-      if (account.Type == MoneyAccountType.Cashbox
-        && !session.OpeningCounts.Any(count => count.CurrencyId == account.CurrencyId))
-        throw new BadRequestException(ErrorCodes.Pos.SessionCurrencyNotAllowed,
-          $"Cashbox currency '{account.Currency.Code}' was not part of this POS Session opening snapshot.");
+      if (account.Type != MoneyAccountType.Cashbox
+        || !session.OpeningCounts.Any(count => count.MoneyAccountId == account.Id))
+        throw new BadRequestException(ErrorCodes.Pos.SessionCashboxNotAllowed,
+          $"Cashbox '{account.Code}' is not part of this POS Session's exact Cashbox snapshot.");
       var rate = await _finance.ResolveCurrentRateAsync(account.CurrencyId, baseCurrencyId, now, ct);
       var baseAmount = Money(request.Amount * rate);
       var balance = await _finance.BalanceAsync(account.Id, ct);

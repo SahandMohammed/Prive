@@ -9,6 +9,7 @@ public sealed class MoneyAccountEntityConfiguration : IEntityTypeConfiguration<M
   {
     builder.ToTable("money_accounts");
     builder.HasKey(account => account.Id);
+    builder.HasAlternateKey(account => new { account.Id, account.BranchId, account.CurrencyId });
     builder.Property(account => account.Code).HasMaxLength(32).IsRequired();
     builder.HasIndex(account => account.Code).IsUnique();
     builder.Property(account => account.Name).HasMaxLength(200).IsRequired();

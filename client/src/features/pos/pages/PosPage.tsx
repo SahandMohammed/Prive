@@ -120,7 +120,6 @@ function PosWorkspace({
   const [customer, setCustomer] = useState<PosCustomer | null>(null)
   const [checkoutStage, setCheckoutStage] = useState<'professional' | 'payment' | null>(null)
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(null)
-  const [lastReceivingCashboxId, setLastReceivingCashboxId] = useState<string | null>(null)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [completedSale, setCompletedSale] = useState<PosSale | null>(null)
   const [xReportOpen, setXReportOpen] = useState(false)
@@ -324,14 +323,11 @@ function PosWorkspace({
       <CheckoutDialog
         open={checkoutStage === 'payment'}
         setup={setup}
-        branchId={selectedBranchId}
-        sessionId={session.id}
+        session={session}
         warehouseId={warehouseId}
         customer={customer}
         professional={cartHasServices ? selectedProfessional : null}
         cart={cart}
-        rememberedReceivingCashboxId={lastReceivingCashboxId}
-        onReceivingCashboxChange={setLastReceivingCashboxId}
         onOpenChange={(open) => { if (!open) setCheckoutStage(null) }}
         onBack={() => setCheckoutStage(cartHasServices ? 'professional' : null)}
         onCompleted={completeSale}

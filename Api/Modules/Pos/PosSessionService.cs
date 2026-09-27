@@ -39,7 +39,10 @@ public sealed class PosSessionService
         register.Name,
         register.BranchId,
         register.IsActive,
-        register.Sessions.Any(session => session.Status == PosSessionStatus.Open)))
+        register.Sessions.Any(session => session.Status == PosSessionStatus.Open),
+        register.Cashboxes.OrderBy(cashbox => cashbox.Currency.Code).Select(cashbox => new PosRegisterCashboxResponse(
+          cashbox.MoneyAccountId, cashbox.MoneyAccount.Code, cashbox.MoneyAccount.Name,
+          cashbox.CurrencyId, cashbox.Currency.Code, cashbox.Currency.DecimalPlaces)).ToList()))
       .ToPagedResultAsync(request, ct);
   }
 
@@ -54,7 +57,10 @@ public sealed class PosSessionService
         register.Name,
         register.BranchId,
         register.IsActive,
-        register.Sessions.Any(session => session.Status == PosSessionStatus.Open)))
+        register.Sessions.Any(session => session.Status == PosSessionStatus.Open),
+        register.Cashboxes.OrderBy(cashbox => cashbox.Currency.Code).Select(cashbox => new PosRegisterCashboxResponse(
+          cashbox.MoneyAccountId, cashbox.MoneyAccount.Code, cashbox.MoneyAccount.Name,
+          cashbox.CurrencyId, cashbox.Currency.Code, cashbox.Currency.DecimalPlaces)).ToList()))
       .SingleOrDefaultAsync(ct)
       ?? throw RegisterNotFound();
   }
@@ -65,6 +71,7 @@ public sealed class PosSessionService
     var code = NormalizeCode(request.Code);
     if (await _db.PosRegisters.IgnoreQueryFilters().AnyAsync(register => register.Code == code, ct))
       throw new ConflictException(ErrorCodes.Pos.RegisterCodeTaken, $"POS Register code '{code}' is already in use.");
+    var cashboxes = await ValidateRegisterCashboxesAsync(request.CashboxMoneyAccountIds, null, ct);
 
     var register = new PosRegisterEntity
     {
@@ -73,16 +80,23 @@ public sealed class PosSessionService
       BranchId = branchId,
       IsActive = true
     };
+    foreach (var cashbox in cashboxes)
+      register.Cashboxes.Add(new PosRegisterCashboxEntity
+      {
+        MoneyAccountId = cashbox.Id,
+        BranchId = branchId,
+        CurrencyId = cashbox.CurrencyId
+      });
     _db.PosRegisters.Add(register);
-    await SaveConflictAsync(ErrorCodes.Pos.RegisterCodeTaken,
-      "Another POS Register used this code first. Choose a different code.", ct);
-    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive, false);
+    await SaveRegisterAsync(ct);
+    return await GetRegisterAsync(register.Id, ct);
   }
 
   public async Task<PosRegisterResponse> UpdateRegisterAsync(Guid id, UpdatePosRegisterRequest request, CancellationToken ct)
   {
     var branchId = RequireBranch();
-    var register = await _db.PosRegisters.SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
+    var register = await _db.PosRegisters.Include(item => item.Cashboxes)
+      .SingleOrDefaultAsync(item => item.Id == id && item.BranchId == branchId, ct)
       ?? throw RegisterNotFound();
     var code = NormalizeCode(request.Code);
     if (code != register.Code && await _db.PosRegisters.IgnoreQueryFilters().AnyAsync(item => item.Code == code && item.Id != id, ct))
@@ -90,15 +104,44 @@ public sealed class PosSessionService
     if (!request.IsActive && await _db.PosSessions.AnyAsync(session => session.RegisterId == id && session.Status == PosSessionStatus.Open, ct))
       throw new ConflictException(ErrorCodes.Pos.SessionAlreadyOpen,
         "Close the active POS Session before deactivating this Register.");
+    ValidateCashboxIdShape(request.CashboxMoneyAccountIds);
+    var requestedCashboxIds = request.CashboxMoneyAccountIds.Distinct().Order().ToList();
+    var currentCashboxIds = register.Cashboxes.Select(cashbox => cashbox.MoneyAccountId).Order().ToList();
+    var assignmentsChanged = !requestedCashboxIds.SequenceEqual(currentCashboxIds);
+    if (assignmentsChanged && await _db.PosSessions.AnyAsync(
+      session => session.RegisterId == id && session.Status == PosSessionStatus.Open, ct))
+      throw new ConflictException(ErrorCodes.Pos.CashboxAssignmentLocked,
+        "Close the active POS Session before changing this Register's Cashboxes.");
+    if (assignmentsChanged)
+    {
+      var cashboxes = await ValidateRegisterCashboxesAsync(request.CashboxMoneyAccountIds, register.Id, ct);
+      var requestedByCurrency = cashboxes.ToDictionary(cashbox => cashbox.CurrencyId);
+      foreach (var existing in register.Cashboxes
+        .Where(mapping => !requestedByCurrency.ContainsKey(mapping.CurrencyId)).ToList())
+      {
+        _db.PosRegisterCashboxes.Remove(existing);
+        register.Cashboxes.Remove(existing);
+      }
+      foreach (var cashbox in cashboxes)
+      {
+        var existing = register.Cashboxes.SingleOrDefault(mapping => mapping.CurrencyId == cashbox.CurrencyId);
+        if (existing is not null)
+        {
+          existing.MoneyAccountId = cashbox.Id;
+          continue;
+        }
+        register.Cashboxes.Add(new PosRegisterCashboxEntity
+        {
+          MoneyAccountId = cashbox.Id, BranchId = branchId, CurrencyId = cashbox.CurrencyId
+        });
+      }
+    }
 
     register.Code = code;
     register.Name = request.Name.Trim();
     register.IsActive = request.IsActive;
-    await SaveConflictAsync(ErrorCodes.Pos.RegisterCodeTaken,
-      "Another POS Register used this code first. Choose a different code.", ct);
-    var hasOpenSession = await _db.PosSessions.AsNoTracking()
-      .AnyAsync(session => session.RegisterId == register.Id && session.Status == PosSessionStatus.Open, ct);
-    return new PosRegisterResponse(register.Id, register.Code, register.Name, register.BranchId, register.IsActive, hasOpenSession);
+    await SaveRegisterAsync(ct);
+    return await GetRegisterAsync(register.Id, ct);
   }
 
   public async Task<PosSessionResponse?> GetActiveSessionAsync(Guid userId, CancellationToken ct)
@@ -112,7 +155,10 @@ public sealed class PosSessionService
   public async Task<PosSessionResponse> OpenSessionAsync(Guid userId, OpenPosSessionRequest request, CancellationToken ct)
   {
     var branchId = RequireBranch();
-    var register = await _db.PosRegisters.SingleOrDefaultAsync(item => item.Id == request.RegisterId && item.BranchId == branchId, ct)
+    var register = await _db.PosRegisters
+      .Include(item => item.Cashboxes).ThenInclude(cashbox => cashbox.MoneyAccount).ThenInclude(account => account.Currency)
+      .Include(item => item.Cashboxes).ThenInclude(cashbox => cashbox.MoneyAccount).ThenInclude(account => account.AccessAssignments)
+      .SingleOrDefaultAsync(item => item.Id == request.RegisterId && item.BranchId == branchId, ct)
       ?? throw RegisterNotFound();
     if (!register.IsActive)
       throw new BadRequestException(ErrorCodes.Pos.RegisterInactive, "Select an active POS Register.");
@@ -123,18 +169,29 @@ public sealed class PosSessionService
 
     var openedAt = DateTimeOffset.UtcNow;
     var business = await GetBusinessAsync(ct);
-    var operableCurrencies = await GetOperableCashboxCurrenciesAsync(userId, ct);
-    var ratesByCurrency = new Dictionary<Guid, decimal>();
-    foreach (var currencyId in operableCurrencies)
+    if (register.Cashboxes.Count == 0)
+      throw new BadRequestException(ErrorCodes.Pos.RegisterCashboxInvalid,
+        "Configure at least one active Cashbox for this POS Register before opening a session.");
+    foreach (var mapping in register.Cashboxes)
+      if (!mapping.MoneyAccount.IsActive || mapping.MoneyAccount.Type != MoneyAccountType.Cashbox
+        || !mapping.MoneyAccount.Currency.IsActive
+        || !mapping.MoneyAccount.AccessAssignments.Any(access => access.UserId == userId
+          && access.AccessLevel == MoneyAccountAccessLevel.Operate))
+        throw new BadRequestException(ErrorCodes.Pos.RegisterCashboxInvalid,
+          $"Cashbox '{mapping.MoneyAccount.Code}' is inactive or the cashier does not have Operate access.");
+
+    var ratesByAccount = new Dictionary<Guid, decimal>();
+    foreach (var mapping in register.Cashboxes)
     {
       var rate = await ExchangeRateResolver.FindAsync(
-        _db, currencyId, business.BaseCurrencyId, openedAt.UtcDateTime, ct);
+        _db, mapping.CurrencyId, business.BaseCurrencyId, openedAt.UtcDateTime, ct);
       if (rate is null)
         throw new BadRequestException(ErrorCodes.Pos.OpeningCountInvalid,
           "Every operable Cashbox currency needs an effective exchange rate before a POS Session can open.");
-      ratesByCurrency[currencyId] = rate.Value;
+      ratesByAccount[mapping.MoneyAccountId] = rate.Value;
     }
-    ValidateOpeningCounts(request.OpeningCounts, ratesByCurrency.Keys);
+    ValidateOpeningCounts(request.OpeningCounts, ratesByAccount.Keys);
+    var cashboxesById = register.Cashboxes.ToDictionary(cashbox => cashbox.MoneyAccountId);
 
     var session = new PosSessionEntity
     {
@@ -151,10 +208,13 @@ public sealed class PosSessionService
 
     foreach (var requestCount in request.OpeningCounts)
     {
-      var rate = ratesByCurrency[requestCount.CurrencyId];
+      var mapping = cashboxesById[requestCount.MoneyAccountId];
+      var rate = ratesByAccount[requestCount.MoneyAccountId];
       session.OpeningCounts.Add(new PosSessionOpeningCountEntity
       {
-        CurrencyId = requestCount.CurrencyId,
+        BranchId = branchId,
+        MoneyAccountId = requestCount.MoneyAccountId,
+        CurrencyId = mapping.CurrencyId,
         Amount = Money(requestCount.Amount),
         ExchangeRate = rate,
         BaseAmount = Money(requestCount.Amount * rate)
@@ -267,25 +327,27 @@ public sealed class PosSessionService
 
     var business = await GetBusinessAsync(ct);
     var x = BuildXReport(session, business.BaseCurrencyId, business.BaseCurrency.Code);
-    ValidateClosingCounts(request.ClosingCounts, x.Drawers.Select(drawer => drawer.CurrencyId));
+    ValidateClosingCounts(request.ClosingCounts, x.Drawers.Select(drawer => drawer.MoneyAccountId));
     var closedAt = DateTimeOffset.UtcNow;
-    var closingByCurrency = request.ClosingCounts.ToDictionary(count => count.CurrencyId);
+    var closingByAccount = request.ClosingCounts.ToDictionary(count => count.MoneyAccountId);
 
     foreach (var drawer in x.Drawers)
     {
-      var requestCount = closingByCurrency[drawer.CurrencyId];
+      var requestCount = closingByAccount[drawer.MoneyAccountId];
       var rate = await _finance.ResolveCurrentRateAsync(drawer.CurrencyId, business.BaseCurrencyId, closedAt.UtcDateTime, ct);
       var counted = Money(requestCount.CountedAmount);
       var countedBase = Money(counted * rate);
       _db.PosSessionClosingCounts.Add(new PosSessionClosingCountEntity
       {
         PosSession = session,
+        BranchId = session.BranchId,
+        MoneyAccountId = drawer.MoneyAccountId,
         CurrencyId = drawer.CurrencyId,
         ExpectedAmount = drawer.ExpectedAmount,
         CountedAmount = counted,
         VarianceAmount = Money(counted - drawer.ExpectedAmount),
         ExchangeRate = rate,
-        ExpectedBaseAmount = drawer.ExpectedBaseAmount,
+        ExpectedBaseAmount = Money(drawer.ExpectedAmount * rate),
         CountedBaseAmount = countedBase,
         VarianceBaseAmount = Money((counted - drawer.ExpectedAmount) * rate)
       });
@@ -351,11 +413,15 @@ public sealed class PosSessionService
 
     foreach (var drawer in x.Drawers)
     {
-      var close = session.ClosingCounts.Single(count => count.CurrencyId == drawer.CurrencyId);
+      var close = session.ClosingCounts.Single(count => count.MoneyAccountId == drawer.MoneyAccountId);
       z.DrawerSummaries.Add(new PosZDrawerSummaryEntity
       {
+        MoneyAccountId = drawer.MoneyAccountId,
+        MoneyAccountCode = drawer.MoneyAccountCode,
+        MoneyAccountName = drawer.MoneyAccountName,
         CurrencyId = drawer.CurrencyId,
         CurrencyCode = drawer.CurrencyCode,
+        CurrencyDecimalPlaces = drawer.CurrencyDecimalPlaces,
         OpeningAmount = drawer.OpeningAmount,
         TenderedAmount = drawer.TenderedAmount,
         ChangeAmount = drawer.ChangeAmount,
@@ -368,7 +434,7 @@ public sealed class PosSessionService
         TenderedBaseAmount = drawer.TenderedBaseAmount,
         ChangeBaseAmount = drawer.ChangeBaseAmount,
         RefundBaseAmount = drawer.RefundBaseAmount,
-        ExpectedBaseAmount = drawer.ExpectedBaseAmount,
+        ExpectedBaseAmount = close.ExpectedBaseAmount,
         CountedBaseAmount = close.CountedBaseAmount,
         VarianceBaseAmount = close.VarianceBaseAmount,
         CashInAmount = drawer.CashInAmount,
@@ -540,23 +606,20 @@ public sealed class PosSessionService
     }
     payments = payments.OrderBy(payment => payment.CurrencyCode).ThenBy(payment => payment.MoneyAccountCode).ToList();
 
-    var drawerCurrencies = session.OpeningCounts.Select(count => new { count.CurrencyId, count.Currency.Code })
-      .OrderBy(item => item.Code).ToList();
     var drawers = new List<PosDrawerSummaryResponse>();
-    foreach (var currency in drawerCurrencies)
+    foreach (var opening in session.OpeningCounts.OrderBy(count => count.Currency.Code))
     {
-      var opening = session.OpeningCounts.FirstOrDefault(count => count.CurrencyId == currency.CurrencyId);
-      var cashPayments = payments.Where(payment => payment.MoneyAccountType == MoneyAccountType.Cashbox
-        && payment.CurrencyId == currency.CurrencyId).ToList();
-      var openingAmount = opening?.Amount ?? 0m;
-      var tenderedAmount = Money(cashPayments.Sum(payment => payment.TenderedAmount));
-      var changeAmount = Money(cashPayments.Sum(payment => payment.ChangeAmount));
-      var refundAmount = Money(cashPayments.Sum(payment => payment.RefundAmount));
-      var openingBase = opening?.BaseAmount ?? 0m;
-      var tenderedBase = Money(cashPayments.Sum(payment => payment.TenderedBaseAmount));
-      var changeBase = Money(cashPayments.Sum(payment => payment.ChangeBaseAmount));
-      var refundBase = Money(cashPayments.Sum(payment => payment.RefundBaseAmount));
-      var movements = session.DrawerMovements.Where(movement => movement.CurrencyId == currency.CurrencyId).ToList();
+      var cashPayment = payments.SingleOrDefault(payment => payment.MoneyAccountId == opening.MoneyAccountId);
+      var openingAmount = opening.Amount;
+      var tenderedAmount = cashPayment?.TenderedAmount ?? 0m;
+      var changeAmount = cashPayment?.ChangeAmount ?? 0m;
+      var refundAmount = cashPayment?.RefundAmount ?? 0m;
+      var openingBase = opening.BaseAmount;
+      var tenderedBase = cashPayment?.TenderedBaseAmount ?? 0m;
+      var changeBase = cashPayment?.ChangeBaseAmount ?? 0m;
+      var refundBase = cashPayment?.RefundBaseAmount ?? 0m;
+      var movements = session.DrawerMovements
+        .Where(movement => movement.CashboxMoneyAccountId == opening.MoneyAccountId).ToList();
       var cashIn = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashIn).Sum(movement => movement.Amount));
       var cashOut = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashOut).Sum(movement => movement.Amount));
       var cashDrop = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.CashDrop).Sum(movement => movement.Amount));
@@ -568,7 +631,9 @@ public sealed class PosSessionService
       var adjustmentBase = Money(movements.Where(movement => movement.Type == PosDrawerMovementType.Adjustment)
         .Sum(movement => movement.AdjustmentDirection == PosDrawerAdjustmentDirection.In ? movement.BaseAmount : -movement.BaseAmount));
       drawers.Add(new PosDrawerSummaryResponse(
-        currency.CurrencyId, currency.Code, openingAmount, tenderedAmount, changeAmount,
+        opening.MoneyAccountId, opening.MoneyAccount.Code, opening.MoneyAccount.Name,
+        opening.CurrencyId, opening.Currency.Code, opening.Currency.DecimalPlaces,
+        openingAmount, tenderedAmount, changeAmount,
         refundAmount, Money(openingAmount + tenderedAmount - changeAmount - refundAmount + cashIn - cashOut - cashDrop + adjustment), null, null,
         openingBase, tenderedBase, changeBase, refundBase,
         Money(openingBase + tenderedBase - changeBase - refundBase + cashInBase - cashOutBase - cashDropBase + adjustmentBase), null, null,
@@ -586,7 +651,8 @@ public sealed class PosSessionService
     .Include(session => session.Register)
     .Include(session => session.CashierUser)
     .Include(session => session.ClosedByUser)
-    .Include(session => session.OpeningCounts).ThenInclude(count => count.Currency);
+    .Include(session => session.OpeningCounts).ThenInclude(count => count.Currency)
+    .Include(session => session.OpeningCounts).ThenInclude(count => count.MoneyAccount);
 
   private IQueryable<PosSessionEntity> SessionReportQuery() => SessionQuery()
     .Include(session => session.Sales).ThenInclude(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
@@ -595,7 +661,8 @@ public sealed class PosSessionService
     .Include(session => session.Refunds).ThenInclude(refund => refund.Lines)
     .Include(session => session.Refunds).ThenInclude(refund => refund.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(session => session.DrawerMovements)
-    .Include(session => session.ClosingCounts).ThenInclude(count => count.Currency);
+    .Include(session => session.ClosingCounts).ThenInclude(count => count.Currency)
+    .Include(session => session.ClosingCounts).ThenInclude(count => count.MoneyAccount);
 
   private static PosSessionResponse ToSessionResponse(PosSessionEntity session) => new(
     session.Id, session.SessionNumber, session.BranchId, session.Branch.Code, session.Branch.Name,
@@ -604,7 +671,10 @@ public sealed class PosSessionService
     session.OpenedAtUtc, session.ClosedAtUtc, session.ClosedByUserId, session.ClosedByUser?.Username,
     session.OpeningNotes, session.ClosingNotes,
     session.OpeningCounts.OrderBy(count => count.Currency.Code)
-      .Select(count => new PosSessionCountResponse(count.CurrencyId, count.Currency.Code, count.Amount, count.ExchangeRate, count.BaseAmount)).ToList());
+      .Select(count => new PosSessionCountResponse(
+        count.MoneyAccountId, count.MoneyAccount.Code, count.MoneyAccount.Name,
+        count.CurrencyId, count.Currency.Code, count.Currency.DecimalPlaces,
+        count.Amount, count.ExchangeRate, count.BaseAmount)).ToList());
 
   private static PosZReportResponse ToZReportResponse(PosZReportEntity report) => new(
     report.Id, report.ReportNumber, report.PosSessionId, report.PosSession.SessionNumber,
@@ -625,7 +695,9 @@ public sealed class PosSessionService
         summary.NetBaseAmount)).ToList(),
     report.DrawerSummaries.OrderBy(summary => summary.CurrencyCode)
       .Select(summary => new PosDrawerSummaryResponse(
-        summary.CurrencyId, summary.CurrencyCode, summary.OpeningAmount, summary.TenderedAmount,
+        summary.MoneyAccountId, summary.MoneyAccountCode, summary.MoneyAccountName,
+        summary.CurrencyId, summary.CurrencyCode, summary.CurrencyDecimalPlaces,
+        summary.OpeningAmount, summary.TenderedAmount,
         summary.ChangeAmount, summary.RefundAmount, summary.ExpectedAmount, summary.CountedAmount, summary.VarianceAmount,
         summary.OpeningBaseAmount, summary.TenderedBaseAmount, summary.ChangeBaseAmount, summary.RefundBaseAmount,
         summary.ExpectedBaseAmount, summary.CountedBaseAmount, summary.VarianceBaseAmount,
@@ -633,32 +705,61 @@ public sealed class PosSessionService
         summary.CashInBaseAmount, summary.CashOutBaseAmount, summary.CashDropBaseAmount, summary.AdjustmentBaseAmount,
         summary.ExchangeRate)).ToList());
 
-  private async Task<List<Guid>> GetOperableCashboxCurrenciesAsync(Guid userId, CancellationToken ct)
+  private static void ValidateOpeningCounts(List<PosOpeningCountRequest> counts, IEnumerable<Guid> requiredMoneyAccounts)
+  {
+    var required = requiredMoneyAccounts.Order().ToList();
+    var supplied = counts.Select(count => count.MoneyAccountId).Order().ToList();
+    if (counts.Select(count => count.MoneyAccountId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
+      throw new BadRequestException(ErrorCodes.Pos.OpeningCountInvalid,
+        "Enter one physical opening count for every Cashbox configured on this Register.");
+  }
+
+  private static void ValidateClosingCounts(List<PosClosingCountRequest> counts, IEnumerable<Guid> requiredMoneyAccounts)
+  {
+    var required = requiredMoneyAccounts.Order().ToList();
+    var supplied = counts.Select(count => count.MoneyAccountId).Order().ToList();
+    if (counts.Select(count => count.MoneyAccountId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
+      throw new BadRequestException(ErrorCodes.Pos.ClosingCountInvalid,
+        "Enter one physical closing count for every Cashbox in this POS Session.");
+  }
+
+  private async Task<List<MoneyAccountEntity>> ValidateRegisterCashboxesAsync(
+    List<Guid> moneyAccountIds,
+    Guid? currentRegisterId,
+    CancellationToken ct)
   {
     var branchId = RequireBranch();
-    return await _db.MoneyAccounts.AsNoTracking()
-      .Where(account => account.BranchId == branchId && account.IsActive && account.Type == MoneyAccountType.Cashbox
-        && account.Currency.IsActive && account.AccessAssignments.Any(access => access.UserId == userId
-          && access.AccessLevel == MoneyAccountAccessLevel.Operate))
-      .Select(account => account.CurrencyId).Distinct().ToListAsync(ct);
+    ValidateCashboxIdShape(moneyAccountIds);
+
+    var cashboxes = await _db.MoneyAccounts.Include(account => account.Currency)
+      .Where(account => moneyAccountIds.Contains(account.Id))
+      .ToListAsync(ct);
+    if (cashboxes.Count != moneyAccountIds.Count
+      || cashboxes.Any(account => account.BranchId != branchId || !account.IsActive
+        || account.Type != MoneyAccountType.Cashbox || !account.Currency.IsActive))
+      throw new BadRequestException(ErrorCodes.Pos.RegisterCashboxInvalid,
+        "Every configured account must be an active Cashbox with an active currency in this branch.");
+    if (cashboxes.Select(account => account.CurrencyId).Distinct().Count() != cashboxes.Count)
+      throw new BadRequestException(ErrorCodes.Pos.RegisterCashboxDuplicateCurrency,
+        "A Register can have only one Cashbox for each currency.");
+
+    var assigned = await _db.PosRegisterCashboxes.IgnoreQueryFilters().AsNoTracking()
+      .Where(mapping => moneyAccountIds.Contains(mapping.MoneyAccountId)
+        && (currentRegisterId == null || mapping.PosRegisterId != currentRegisterId))
+      .Select(mapping => new { CashboxCode = mapping.MoneyAccount.Code, RegisterCode = mapping.PosRegister.Code })
+      .FirstOrDefaultAsync(ct);
+    if (assigned is not null)
+      throw new ConflictException(ErrorCodes.Pos.CashboxAlreadyAssigned,
+        $"Cashbox '{assigned.CashboxCode}' is already assigned to Register '{assigned.RegisterCode}'.");
+    return cashboxes;
   }
 
-  private static void ValidateOpeningCounts(List<PosOpeningCountRequest> counts, IEnumerable<Guid> requiredCurrencies)
+  private static void ValidateCashboxIdShape(List<Guid> moneyAccountIds)
   {
-    var required = requiredCurrencies.Order().ToList();
-    var supplied = counts.Select(count => count.CurrencyId).Order().ToList();
-    if (counts.Select(count => count.CurrencyId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
-      throw new BadRequestException(ErrorCodes.Pos.OpeningCountInvalid,
-        "Enter one opening count for every operable Cashbox currency in this branch.");
-  }
-
-  private static void ValidateClosingCounts(List<PosClosingCountRequest> counts, IEnumerable<Guid> requiredCurrencies)
-  {
-    var required = requiredCurrencies.Order().ToList();
-    var supplied = counts.Select(count => count.CurrencyId).Order().ToList();
-    if (counts.Select(count => count.CurrencyId).Distinct().Count() != counts.Count || !required.SequenceEqual(supplied))
-      throw new BadRequestException(ErrorCodes.Pos.ClosingCountInvalid,
-        "Enter one physical closing count for every drawer currency in this POS Session.");
+    if (moneyAccountIds.Count == 0 || moneyAccountIds.Any(id => id == Guid.Empty)
+      || moneyAccountIds.Distinct().Count() != moneyAccountIds.Count)
+      throw new BadRequestException(ErrorCodes.Pos.RegisterCashboxInvalid,
+        "Select each Cashbox once and configure at least one Cashbox for the Register.");
   }
 
   private async Task EnsureSessionAccessAsync(Guid userId, Guid cashierUserId, CancellationToken ct)
@@ -702,12 +803,25 @@ public sealed class PosSessionService
     return $"Z-{next:000000}";
   }
 
-  private async Task SaveConflictAsync(string code, string message, CancellationToken ct)
+  private async Task SaveRegisterAsync(CancellationToken ct)
   {
     try { await _db.SaveChangesAsync(ct); }
-    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    catch (Exception exception) when (PosConcurrency.IsUniqueConstraint(
+      exception, PosRegisterCashboxEntityConfiguration.MoneyAccountUniqueIndexName))
     {
-      throw new ConflictException(code, message);
+      throw new ConflictException(ErrorCodes.Pos.CashboxAlreadyAssigned,
+        "A selected Cashbox was assigned to another Register first. Refresh and choose another Cashbox.");
+    }
+    catch (Exception exception) when (PosConcurrency.IsUniqueConstraint(
+      exception, "UX_pos_register_cashboxes_register_currency"))
+    {
+      throw new ConflictException(ErrorCodes.Pos.RegisterCashboxDuplicateCurrency,
+        "A Register can have only one Cashbox for each currency.");
+    }
+    catch (Exception exception) when (PosConcurrency.IsUniqueConstraint(exception, "IX_pos_registers_Code"))
+    {
+      throw new ConflictException(ErrorCodes.Pos.RegisterCodeTaken,
+        "Another POS Register used this code first. Choose a different code.");
     }
   }
 

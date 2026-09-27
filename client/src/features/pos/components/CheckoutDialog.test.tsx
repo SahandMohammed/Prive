@@ -2,11 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MoneyAccountType } from '@/features/finance'
 import { CheckoutDialog } from './CheckoutDialog'
-import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
-import type { PosCartLine, PosCustomer, PosMoneyAccount, PosProfessional, PosSetup } from '../types/pos.types'
+import { PosCatalogItemType, PosPaymentMode, PosSessionStatus } from '../types/pos.types'
+import type {
+  PosCartLine,
+  PosCustomer,
+  PosMoneyAccount,
+  PosProfessional,
+  PosSession,
+  PosSetup,
+} from '../types/pos.types'
 
 const hooks = vi.hoisted(() => ({
-  complete: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null },
+  complete: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null as Error | null },
 }))
 
 vi.mock('../hooks/usePos', () => ({ useCompletePosSale: () => hooks.complete }))
@@ -22,6 +29,7 @@ const ids = {
   professional: '88888888-8888-4888-8888-888888888888',
   customer: '99999999-9999-4999-8999-999999999999',
   session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  register: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
 }
 
 const professional: PosProfessional = { id: ids.professional, name: 'Daban' }
@@ -29,26 +37,28 @@ const customer: PosCustomer = { id: ids.customer, name: 'Ahmed Mohammed', primar
 
 const iqdCashbox: PosMoneyAccount = {
   id: ids.iqdCashbox,
-  code: 'CASH-IQD',
-  name: 'Reception Cashbox',
+  code: 'MAIN-CASH-IQD',
+  name: 'Reception IQD Cashbox',
   type: MoneyAccountType.Cashbox,
   branchId: ids.branch,
   currencyId: ids.baseCurrency,
   currencyCode: 'IQD',
+  currencyDecimalPlaces: 0,
   balance: 0,
   currentExchangeRate: 1,
 }
 
 const usdCashbox: PosMoneyAccount = {
   id: ids.usdCashbox,
-  code: 'CASH-USD',
-  name: 'Dollar Cashbox',
+  code: 'MAIN-CASH-USD',
+  name: 'Reception USD Cashbox',
   type: MoneyAccountType.Cashbox,
   branchId: ids.branch,
   currencyId: ids.usdCurrency,
   currencyCode: 'USD',
+  currencyDecimalPlaces: 2,
   balance: 0,
-  currentExchangeRate: 1_300,
+  currentExchangeRate: 1_310,
 }
 
 const setup: PosSetup = {
@@ -58,7 +68,31 @@ const setup: PosSetup = {
   warehouses: [],
   categories: [],
   professionals: [professional],
-  moneyAccounts: [iqdCashbox],
+  moneyAccounts: [iqdCashbox, usdCashbox],
+}
+
+const session: PosSession = {
+  id: ids.session,
+  sessionNumber: 'PSS-000001',
+  branchId: ids.branch,
+  branchCode: 'MAIN',
+  branchName: 'Main',
+  registerId: ids.register,
+  registerCode: 'RECEPTION',
+  registerName: 'Reception POS',
+  cashierUserId: ids.customer,
+  cashierUsername: 'cashier',
+  status: PosSessionStatus.Open,
+  openedAtUtc: '2026-09-26T08:00:00Z',
+  closedAtUtc: null,
+  closedByUserId: null,
+  closedByUsername: null,
+  openingNotes: null,
+  closingNotes: null,
+  openingCounts: [
+    sessionCount(iqdCashbox, 1),
+    sessionCount(usdCashbox, 1_310),
+  ],
 }
 
 const serviceCart: PosCartLine[] = [{
@@ -66,9 +100,9 @@ const serviceCart: PosCartLine[] = [{
     itemType: PosCatalogItemType.Service,
     id: ids.service,
     name: 'Haircut',
-    categoryId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    categoryId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
     categoryName: 'Hair',
-    unitPriceBase: 25_000,
+    unitPriceBase: 30_000,
     sku: null,
     barcode: null,
     unitOfMeasureId: null,
@@ -80,7 +114,7 @@ const serviceCart: PosCartLine[] = [{
   },
   quantity: 1,
   unitOfMeasureId: '',
-  unitPriceBase: 25_000,
+  unitPriceBase: 30_000,
 }]
 
 const productCart: PosCartLine[] = [{
@@ -90,26 +124,37 @@ const productCart: PosCartLine[] = [{
     itemType: PosCatalogItemType.Product,
     id: ids.product,
     name: 'Shampoo',
-    unitOfMeasureId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    unitOfMeasureId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
     unitName: 'Piece',
     unitCode: 'PC',
     availableQuantity: 10,
   },
-  unitOfMeasureId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  unitOfMeasureId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
 }]
+
+function sessionCount(account: PosMoneyAccount, exchangeRate: number) {
+  return {
+    moneyAccountId: account.id,
+    moneyAccountCode: account.code,
+    moneyAccountName: account.name,
+    currencyId: account.currencyId,
+    currencyCode: account.currencyCode,
+    currencyDecimalPlaces: account.currencyDecimalPlaces,
+    amount: 0,
+    exchangeRate,
+    baseAmount: 0,
+  }
+}
 
 function renderCheckout(overrides: Partial<React.ComponentProps<typeof CheckoutDialog>> = {}) {
   const props: React.ComponentProps<typeof CheckoutDialog> = {
     open: true,
     setup,
-    branchId: ids.branch,
-    sessionId: ids.session,
+    session,
     warehouseId: '',
     customer: null,
     professional,
     cart: serviceCart,
-    rememberedReceivingCashboxId: null,
-    onReceivingCashboxChange: vi.fn(),
     onOpenChange: vi.fn(),
     onBack: vi.fn(),
     onCompleted: vi.fn(),
@@ -118,148 +163,149 @@ function renderCheckout(overrides: Partial<React.ComponentProps<typeof CheckoutD
   return render(<CheckoutDialog {...props} />)
 }
 
-async function setReceivedAmount(value: string) {
-  const input = screen.getByLabelText('Amount received')
+function enter(currencyCode: string, value: string) {
+  const input = screen.getByLabelText(`${currencyCode} amount`)
   fireEvent.change(input, { target: { value } })
-  await waitFor(() => expect(input).toHaveValue(Number(value)))
+  return input
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  hooks.complete.error = null
+})
 afterEach(cleanup)
 
-describe('POS touch checkout', () => {
-  it('preselects a sole valid Cashbox, keeps Paid available for Walk-in, and submits one tender', async () => {
+describe('POS dual-currency touch checkout', () => {
+  it('renders exact session Cashboxes as IQD/USD amount fields without ordinary account selectors', () => {
     renderCheckout()
 
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(ids.iqdCashbox))
-    await setReceivedAmount('25000')
-    const save = screen.getByRole('button', { name: /Save Paid Sale/ })
-    expect(save).toBeEnabled()
-    fireEvent.click(save)
+    expect(screen.getByLabelText('IQD amount')).toHaveAttribute('step', '1')
+    expect(screen.getByLabelText('USD amount')).toHaveAttribute('step', '0.01')
+    expect(screen.getByText('IQD · MAIN-CASH-IQD')).toBeInTheDocument()
+    expect(screen.getByText('USD · MAIN-CASH-USD')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Cashbox')).not.toBeInTheDocument()
+  })
 
-    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledTimes(1))
+  it('omits zero fields and maps IQD-only and USD-only payments to their exact session Cashboxes', async () => {
+    renderCheckout()
+    enter('IQD', '30000')
+    fireEvent.click(screen.getByRole('button', { name: /Save Paid Sale/ }))
+    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
     expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
-      customerId: null,
-      paymentMode: PosPaymentMode.Paid,
-      tenders: [{ moneyAccountId: ids.iqdCashbox, amount: 25_000 }],
+      tenders: [{ moneyAccountId: ids.iqdCashbox, amount: 30_000 }],
       change: null,
-      lines: [{ serviceId: ids.service, professionalId: ids.professional }],
+      paymentMode: PosPaymentMode.Paid,
+    })
+
+    cleanup()
+    vi.clearAllMocks()
+    renderCheckout()
+    enter('USD', '23')
+    fireEvent.click(screen.getByRole('button', { name: /Save Paid Sale/ }))
+    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
+    expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
+      tenders: [{ moneyAccountId: ids.usdCashbox, amount: 23 }],
+      change: { moneyAccountId: ids.iqdCashbox, amount: 130 },
     })
   })
 
-  it('maps product lines to a null professional even when the sale has a selected Master', async () => {
-    renderCheckout({ cart: productCart })
-
-    await setReceivedAmount('25000')
+  it('creates two independent tenders when both native amount fields are positive', async () => {
+    renderCheckout()
+    enter('IQD', '10000')
+    enter('USD', '15.27')
     fireEvent.click(screen.getByRole('button', { name: /Save Paid Sale/ }))
 
-    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledTimes(1))
-    expect(hooks.complete.mutate.mock.calls[0][0].lines).toEqual([expect.objectContaining({
-      productId: ids.product,
-      professionalId: null,
-    })])
+    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
+    expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
+      tenders: [
+        { moneyAccountId: ids.iqdCashbox, amount: 10_000 },
+        { moneyAccountId: ids.usdCashbox, amount: 15.27 },
+      ],
+      change: { moneyAccountId: ids.iqdCashbox, amount: 3.7 },
+    })
   })
 
-  it('maps Unpaid to Credit without a tender or change, and requires a customer', async () => {
-    const onBack = vi.fn()
-    renderCheckout({ customer, onBack })
+  it('uses bill helpers and directs the single keypad to the last active form field', () => {
+    renderCheckout()
 
+    fireEvent.click(screen.getByRole('button', { name: '25K' }))
+    fireEvent.click(screen.getByRole('button', { name: '10K' }))
+    expect(screen.getByLabelText('IQD amount')).toHaveValue(35_000)
+
+    fireEvent.focus(screen.getByLabelText('USD amount'))
+    fireEvent.click(screen.getByRole('button', { name: '$5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Keypad 2' }))
+    expect(screen.getByLabelText('USD amount')).toHaveValue(52)
+    expect(screen.getByLabelText('IQD amount')).toHaveValue(35_000)
+    fireEvent.click(screen.getByRole('button', { name: 'Backspace amount' }))
+    expect(screen.getByLabelText('USD amount')).toHaveValue(5)
+  })
+
+  it('calculates Exact from the remaining balance and rounds up to visible USD precision', () => {
+    renderCheckout()
+    enter('IQD', '10000')
+    fireEvent.focus(screen.getByLabelText('USD amount'))
+    fireEvent.click(screen.getByRole('button', { name: 'Exact remaining · USD' }))
+
+    expect(screen.getByLabelText('USD amount')).toHaveValue(15.27)
+    expect(screen.getByText('30,003.7 IQD')).toBeInTheDocument()
+    expect(screen.getByText('3.7 IQD')).toBeInTheDocument()
+    expect(screen.getByText('From MAIN-CASH-IQD')).toBeInTheDocument()
+  })
+
+  it('sets Exact to zero when the other field already settles or overpays the sale', () => {
+    renderCheckout()
+    enter('IQD', '30001')
+    enter('USD', '5')
+    fireEvent.focus(screen.getByLabelText('USD amount'))
+    fireEvent.click(screen.getByRole('button', { name: 'Exact remaining · USD' }))
+    expect(screen.getByLabelText('USD amount')).toHaveValue(0)
+  })
+
+  it('keeps entered native amounts after a stale-FX server rejection and recomputes the preview', () => {
+    const view = renderCheckout()
+    enter('IQD', '10000')
+    enter('USD', '15.27')
+    hooks.complete.error = new Error('Recorded change must equal 156.4 IQD.')
+
+    view.rerender(<CheckoutDialog
+      open
+      setup={{ ...setup, moneyAccounts: [iqdCashbox, { ...usdCashbox, currentExchangeRate: 1_320 }] }}
+      session={session}
+      warehouseId=""
+      customer={null}
+      professional={professional}
+      cart={serviceCart}
+      onOpenChange={vi.fn()}
+      onBack={vi.fn()}
+      onCompleted={vi.fn()}
+    />)
+
+    expect(screen.getByLabelText('IQD amount')).toHaveValue(10_000)
+    expect(screen.getByLabelText('USD amount')).toHaveValue(15.27)
+    expect(screen.getByText('30,156.4 IQD')).toBeInTheDocument()
+    expect(screen.getByText('Recorded change must equal 156.4 IQD.')).toBeInTheDocument()
+  })
+
+  it('blocks Paid completion when the exact session base-currency Cashbox is missing', () => {
+    renderCheckout({ session: { ...session, openingCounts: [sessionCount(usdCashbox, 1_310)] } })
+    enter('USD', '23')
+    expect(screen.getByText(/no IQD Cashbox/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Save Paid Sale/ })).toBeDisabled()
+  })
+
+  it('keeps Unpaid behavior and product-professional mapping unchanged', async () => {
+    renderCheckout({ customer, cart: productCart })
     fireEvent.click(screen.getByRole('button', { name: /Unpaid/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Save Unpaid Sale' }))
 
-    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
     expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
       customerId: ids.customer,
       paymentMode: PosPaymentMode.Credit,
       tenders: [],
       change: null,
+      lines: [{ productId: ids.product, professionalId: null }],
     })
-
-    cleanup()
-    renderCheckout({ onBack })
-    fireEvent.click(screen.getByRole('button', { name: /Unpaid/ }))
-    expect(screen.getByText('Customer required')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save Unpaid Sale' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Back to sale' }))
-    expect(onBack).toHaveBeenCalled()
-  })
-
-  it('remembers an explicitly selected receiving Cashbox and restores a valid remembered Cashbox', async () => {
-    const onReceivingCashboxChange = vi.fn()
-    const multiCashboxSetup = { ...setup, moneyAccounts: [iqdCashbox, usdCashbox] }
-    renderCheckout({ setup: multiCashboxSetup, onReceivingCashboxChange })
-
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(''))
-    fireEvent.change(screen.getByLabelText('Cashbox'), { target: { value: ids.usdCashbox } })
-    expect(onReceivingCashboxChange).toHaveBeenCalledWith(ids.usdCashbox)
-
-    cleanup()
-    renderCheckout({ setup: multiCashboxSetup, rememberedReceivingCashboxId: ids.usdCashbox })
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(ids.usdCashbox))
-  })
-
-  it('uses common bills and the keypad against the same amount field', async () => {
-    renderCheckout()
-
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(ids.iqdCashbox))
-    fireEvent.click(screen.getByRole('button', { name: '25,000' }))
-    fireEvent.click(screen.getByRole('button', { name: '25,000' }))
-    expect(screen.getByLabelText('Amount received')).toHaveValue(50_000)
-    fireEvent.click(screen.getByRole('button', { name: 'Clear amount' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Keypad 2' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Keypad 5' }))
-    expect(screen.getByLabelText('Amount received')).toHaveValue(25)
-    fireEvent.click(screen.getByRole('button', { name: 'Backspace amount' }))
-    expect(screen.getByLabelText('Amount received')).toHaveValue(2)
-  })
-
-  it('uses the existing four-decimal FX helpers for Exact without bill-denomination rounding', async () => {
-    renderCheckout({ setup: { ...setup, moneyAccounts: [iqdCashbox, usdCashbox] } })
-
-    fireEvent.change(screen.getByLabelText('Cashbox'), { target: { value: ids.usdCashbox } })
-    fireEvent.click(screen.getByRole('button', { name: /Exact/ }))
-    expect(screen.getByLabelText('Amount received')).toHaveValue(19.2308)
-    expect(screen.getByText('25,000.04 IQD')).toBeInTheDocument()
-  })
-
-  it('shows only Cashboxes in the receiving-account selector', async () => {
-    const bankAccount: PosMoneyAccount = {
-      ...iqdCashbox,
-      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-      code: 'BANK-IQD',
-      name: 'Bank account',
-      type: MoneyAccountType.Bank,
-    }
-    renderCheckout({ setup: { ...setup, moneyAccounts: [iqdCashbox, bankAccount] } })
-
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(ids.iqdCashbox))
-    expect(screen.queryByRole('option', { name: /BANK-IQD/ })).not.toBeInTheDocument()
-  })
-
-  it('returns foreign-currency overpayment from an IQD Cashbox', async () => {
-    renderCheckout({ setup: { ...setup, moneyAccounts: [iqdCashbox, usdCashbox] } })
-
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(''))
-    fireEvent.change(screen.getByLabelText('Cashbox'), { target: { value: ids.usdCashbox } })
-    await setReceivedAmount('20')
-    await waitFor(() => expect(screen.getByLabelText('IQD Cashbox for change')).toHaveValue(ids.iqdCashbox))
-    expect(screen.getByText('Change to customer')).toBeInTheDocument()
-    expect(screen.getByText('1,000 IQD')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Save Paid Sale/ }))
-
-    await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledTimes(1))
-    expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
-      tenders: [{ moneyAccountId: ids.usdCashbox, amount: 20 }],
-      change: { moneyAccountId: ids.iqdCashbox, amount: 1_000 },
-    })
-  })
-
-  it('blocks foreign-currency overpayment when no IQD Cashbox can return change', async () => {
-    renderCheckout({ setup: { ...setup, moneyAccounts: [usdCashbox] } })
-
-    await waitFor(() => expect(screen.getByLabelText('Cashbox')).toHaveValue(ids.usdCashbox))
-    await setReceivedAmount('20')
-    expect(screen.getByText(/IQD Cashbox is required to return change/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Save Paid Sale/ })).toBeDisabled()
   })
 })

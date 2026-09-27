@@ -132,11 +132,25 @@ public sealed class FinanceService
     if (code != account.Code && await _db.MoneyAccounts.AnyAsync(item => item.Code == code && item.Id != id, ct))
       throw new ConflictException(ErrorCodes.Finance.MoneyAccountCodeTaken, $"Money Account code '{code}' is already in use.");
 
-    var hasHistory = await _db.MoneyLedgerEntries.AnyAsync(entry => entry.MoneyAccountId == id, ct);
+    var hasHistory = await _db.MoneyLedgerEntries.AnyAsync(entry => entry.MoneyAccountId == id, ct)
+      || await _db.PosRegisterCashboxes.AnyAsync(mapping => mapping.MoneyAccountId == id, ct)
+      || await _db.PosSessionOpeningCounts.AnyAsync(count => count.MoneyAccountId == id, ct)
+      || await _db.PosSessionClosingCounts.AnyAsync(count => count.MoneyAccountId == id, ct);
     if (hasHistory && (account.BranchId != request.BranchId || account.CurrencyId != request.CurrencyId
       || account.Type != request.Type))
       throw new BadRequestException(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed,
-        "A Money Account with posted movements cannot change its branch, currency, or type.");
+        "A Money Account with financial or POS history cannot change its branch, currency, or type.");
+
+    if (account.IsActive && !request.IsActive)
+    {
+      var configuredOnActiveRegister = await _db.PosRegisterCashboxes.AnyAsync(
+        mapping => mapping.MoneyAccountId == id && mapping.PosRegister.IsActive, ct);
+      var referencedByOpenSession = await _db.PosSessionOpeningCounts.AnyAsync(
+        count => count.MoneyAccountId == id && count.PosSession.Status == PosSessionStatus.Open, ct);
+      if (configuredOnActiveRegister || referencedByOpenSession)
+        throw new BadRequestException(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed,
+          "Remove this Cashbox from its active Register after all POS Sessions close before deactivating it.");
+    }
 
     if (!await _db.Branches.AnyAsync(branch => branch.Id == request.BranchId && branch.IsActive, ct))
       throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
@@ -184,10 +198,17 @@ public sealed class FinanceService
     var hasCustomerReceipts = await _db.CustomerReceipts.AnyAsync(r => r.MoneyAccountId == id, ct);
     var hasPosTenders = await _db.PosTenders.AnyAsync(t => t.MoneyAccountId == id, ct);
     var hasPosChanges = await _db.PosChanges.AnyAsync(c => c.MoneyAccountId == id, ct);
+    var hasPosRefundTenders = await _db.PosRefundTenders.AnyAsync(t => t.MoneyAccountId == id, ct);
+    var hasPosDrawerMovements = await _db.PosDrawerMovements.AnyAsync(
+      movement => movement.CashboxMoneyAccountId == id || movement.DestinationMoneyAccountId == id, ct);
+    var hasPosStructure = await _db.PosRegisterCashboxes.AnyAsync(mapping => mapping.MoneyAccountId == id, ct)
+      || await _db.PosSessionOpeningCounts.AnyAsync(count => count.MoneyAccountId == id, ct)
+      || await _db.PosSessionClosingCounts.AnyAsync(count => count.MoneyAccountId == id, ct);
 
-    if (hasLedger || hasTransfers || hasSupplierPayments || hasCustomerReceipts || hasPosTenders || hasPosChanges)
+    if (hasLedger || hasTransfers || hasSupplierPayments || hasCustomerReceipts || hasPosTenders || hasPosChanges
+      || hasPosRefundTenders || hasPosDrawerMovements || hasPosStructure)
       throw new BadRequestException(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed,
-        "A Money Account with financial history cannot be deleted. Deactivate it instead.");
+        "A Money Account with financial or POS history cannot be deleted. Deactivate it when configuration rules allow.");
 
     await using var transaction = _db.Database.IsRelational()
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)

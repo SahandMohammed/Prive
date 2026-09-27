@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MoneyAccountType } from '@/features/finance'
@@ -59,6 +59,7 @@ const setup: PosSetup = {
       branchId: ids.branch,
       currencyId: ids.iqd,
       currencyCode: 'IQD',
+      currencyDecimalPlaces: 0,
       balance: 0,
       currentExchangeRate: 1,
     },
@@ -70,6 +71,7 @@ const setup: PosSetup = {
       branchId: ids.branch,
       currencyId: ids.usd,
       currencyCode: 'USD',
+      currencyDecimalPlaces: 2,
       balance: 0,
       currentExchangeRate: null,
     },
@@ -108,33 +110,33 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('POS currency availability', () => {
-  it('keeps a rate-missing USD account visible but disabled at checkout', async () => {
+  it('keeps a rate-missing session USD field visible but blocks it from settling checkout', () => {
     render(
       <CheckoutDialog
         open
         setup={setup}
-        branchId={ids.branch}
-        sessionId="99999999-9999-4999-8999-999999999999"
+        session={{ ...activeSession(), openingCounts: registerCashboxes().map((cashbox) => ({
+          ...cashbox,
+          amount: 0,
+          exchangeRate: cashbox.currencyId === ids.iqd ? 1 : 0,
+          baseAmount: 0,
+        })) }}
         warehouseId=""
         customer={null}
         professional={null}
         cart={cart}
-        rememberedReceivingCashboxId={null}
-        onReceivingCashboxChange={vi.fn()}
         onOpenChange={vi.fn()}
         onBack={vi.fn()}
         onCompleted={vi.fn()}
       />
     )
 
-    const usdOption = await screen.findByRole('option', {
-      name: /CASHIER-MAIN-USD.*USD.*Rate missing/,
-    })
-    expect(usdOption).toBeDisabled()
-    expect(screen.getByRole('option', { name: /CASHIER-MAIN-IQD.*IQD/ })).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('USD amount'), { target: { value: '20' } })
+    expect(screen.getByText('Current rate unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Save Paid Sale/ })).toBeDisabled()
   })
 
-  it('opens an IQD session while explaining that USD is unavailable', async () => {
+  it('blocks opening the exact Register Cashbox snapshot while one configured FX rate is unavailable', () => {
     render(
       <OpenSessionScreen
         setup={setup}
@@ -146,23 +148,17 @@ describe('POS currency availability', () => {
           branchId: ids.branch,
           isActive: true,
           hasOpenSession: false,
+          cashboxes: registerCashboxes(),
         }]}
         cashier="cashier"
         onExit={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/USD cash is unavailable because its rate to IQD is missing/)).toBeInTheDocument()
-    expect(screen.getAllByRole('spinbutton')).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
-    await waitFor(() => expect(hooks.open.mutate).toHaveBeenCalledWith({
-      registerId: ids.register,
-      openingCounts: [{ currencyId: ids.iqd, amount: 0 }],
-      notes: null,
-    }, expect.objectContaining({
-      onSuccess: expect.any(Function),
-      onError: expect.any(Function),
-    })))
+    expect(screen.getByText(/CASHIER-MAIN-USD cannot open because/)).toBeInTheDocument()
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Open Session' })).toBeDisabled()
+    expect(hooks.open.mutate).not.toHaveBeenCalled()
   })
 
   it('offers only registers that do not already have an open session', () => {
@@ -178,6 +174,7 @@ describe('POS currency availability', () => {
             branchId: ids.branch,
             isActive: true,
             hasOpenSession: true,
+            cashboxes: registerCashboxes(),
           },
           {
             id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -186,6 +183,7 @@ describe('POS currency availability', () => {
             branchId: ids.branch,
             isActive: true,
             hasOpenSession: false,
+            cashboxes: registerCashboxes(),
           },
         ]}
         cashier="cashier"
@@ -256,6 +254,17 @@ function activeSession(): PosSession {
     cashierUsername: 'manager', status: 0, openedAtUtc: '2026-09-13T12:00:00Z', closedAtUtc: null,
     closedByUserId: null, closedByUsername: null, openingNotes: null, closingNotes: null, openingCounts: [],
   }
+}
+
+function registerCashboxes() {
+  return setup.moneyAccounts.map((account) => ({
+    moneyAccountId: account.id,
+    moneyAccountCode: account.code,
+    moneyAccountName: account.name,
+    currencyId: account.currencyId,
+    currencyCode: account.currencyCode,
+    currencyDecimalPlaces: account.currencyDecimalPlaces,
+  }))
 }
 
 function receiptSale(): PosSale {

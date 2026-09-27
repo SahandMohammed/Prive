@@ -60,6 +60,7 @@ public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options,
   public DbSet<SalesInvoiceEntity> SalesInvoices => Set<SalesInvoiceEntity>();
   public DbSet<SalesInvoiceLineEntity> SalesInvoiceLines => Set<SalesInvoiceLineEntity>();
   public DbSet<PosRegisterEntity> PosRegisters => Set<PosRegisterEntity>();
+  public DbSet<PosRegisterCashboxEntity> PosRegisterCashboxes => Set<PosRegisterCashboxEntity>();
   public DbSet<PosSessionEntity> PosSessions => Set<PosSessionEntity>();
   public DbSet<PosSessionOpeningCountEntity> PosSessionOpeningCounts => Set<PosSessionOpeningCountEntity>();
   public DbSet<PosSessionClosingCountEntity> PosSessionClosingCounts => Set<PosSessionClosingCountEntity>();

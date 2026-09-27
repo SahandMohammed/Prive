@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, type FormEvent } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, Store } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import { MoneyAccountType } from '@/features/finance'
+import { useForm, useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useOpenPosSession } from '../hooks/usePos'
@@ -44,31 +43,37 @@ export function OpenSessionScreen({
     () => activeRegisters.filter((register) => !register.hasOpenSession),
     [activeRegisters]
   )
-  const cashCurrencies = useMemo(() => {
-    const rows = setup.moneyAccounts
-      .filter((account) => account.type === MoneyAccountType.Cashbox
-        && account.branchId === branch?.id
-        && account.currentExchangeRate !== null)
-      .map((account) => ({ id: account.currencyId, code: account.currencyCode }))
-    return [...new Map(rows.map((row) => [row.id, row])).values()].sort((a, b) => a.code.localeCompare(b.code))
-  }, [branch?.id, setup.moneyAccounts])
-  const unavailableCashCurrencies = useMemo(() => {
-    const rows = setup.moneyAccounts
-      .filter((account) => account.type === MoneyAccountType.Cashbox
-        && account.branchId === branch?.id
-        && account.currentExchangeRate === null)
-      .map((account) => account.currencyCode)
-    return [...new Set(rows)].sort()
-  }, [branch?.id, setup.moneyAccounts])
+  const initialRegister = availableRegisters[0]
 
   const form = useForm<PosOpenSessionValues>({
     resolver: zodResolver(posOpenSessionSchema),
     defaultValues: {
       registerId: availableRegisters[0]?.id ?? '',
-      openingCounts: cashCurrencies.map((currency) => ({ currencyId: currency.id, amount: 0 })),
+      openingCounts: initialRegister?.cashboxes.map((cashbox) => ({ moneyAccountId: cashbox.moneyAccountId, amount: 0 })) ?? [],
       notes: '',
     },
   })
+  const registerId = useWatch({ control: form.control, name: 'registerId' })
+  const selectedRegister = useMemo(
+    () => availableRegisters.find((register) => register.id === registerId),
+    [availableRegisters, registerId],
+  )
+  const selectedCashboxes = useMemo(() => selectedRegister?.cashboxes ?? [], [selectedRegister])
+  const unavailableCashboxes = selectedCashboxes.filter((cashbox) => {
+    const account = setup.moneyAccounts.find((item) => item.id === cashbox.moneyAccountId)
+    return !account || account.currentExchangeRate === null
+  })
+  const lastRegisterId = useRef(initialRegister?.id ?? '')
+
+  useEffect(() => {
+    if (registerId === lastRegisterId.current) return
+    lastRegisterId.current = registerId
+    form.setValue('openingCounts', selectedCashboxes.map((cashbox) => ({
+      moneyAccountId: cashbox.moneyAccountId,
+      amount: 0,
+    })))
+    form.clearErrors('openingCounts')
+  }, [form, registerId, selectedCashboxes])
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     void form.handleSubmit((values) => {
@@ -143,24 +148,28 @@ export function OpenSessionScreen({
               <p className="text-xs text-muted-foreground">Count each physical Cashbox currency separately.</p>
             </div>
             <div className="space-y-2">
-              {unavailableCashCurrencies.length > 0 && (
+              {unavailableCashboxes.length > 0 && (
                 <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
-                  {unavailableCashCurrencies.join(', ')} cash is unavailable because its rate to {setup.baseCurrencyCode} is missing. You can still open the session and use currencies with a valid rate.
+                  {unavailableCashboxes.map((cashbox) => cashbox.moneyAccountCode).join(', ')} cannot open because cashier access or an effective rate to {setup.baseCurrencyCode} is missing.
                 </p>
               )}
-              {cashCurrencies.length === 0 ? (
+              {selectedCashboxes.length === 0 ? (
                 <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-                  No operable Cashbox Money Account is assigned to this cashier. The session can open with no physical drawer currencies, but cash tender will not be available until Finance access is configured.
+                  This Register has no configured Cashboxes. A Manager, Owner, or SuperAdmin must correct its configuration before opening a session.
                 </p>
-              ) : cashCurrencies.map((currency, index) => (
-                <label key={currency.id} className="grid grid-cols-[90px_1fr] items-center gap-3 rounded-xl border p-3">
-                  <span className="font-mono text-sm font-semibold">{currency.code}</span>
+              ) : selectedCashboxes.map((cashbox, index) => (
+                <label key={cashbox.moneyAccountId} className="grid grid-cols-[minmax(130px,1fr)_1fr] items-center gap-3 rounded-xl border p-3">
                   <span>
-                    <input type="hidden" {...form.register(`openingCounts.${index}.currencyId`)} />
+                    <span className="block font-mono text-sm font-semibold">{cashbox.currencyCode} · {cashbox.moneyAccountCode}</span>
+                    <span className="block text-xs text-muted-foreground">{cashbox.moneyAccountName}</span>
+                  </span>
+                  <span>
+                    <input type="hidden" {...form.register(`openingCounts.${index}.moneyAccountId`)} />
                     <Input
+                      aria-label={`${cashbox.moneyAccountCode} opening physical count`}
                       type="number"
                       min="0"
-                      step="0.0001"
+                      step={displayQuantum(cashbox.currencyDecimalPlaces)}
                       {...form.register(`openingCounts.${index}.amount`, { valueAsNumber: true })}
                     />
                     {form.formState.errors.openingCounts?.[index]?.amount?.message && (
@@ -197,7 +206,8 @@ export function OpenSessionScreen({
             </Button>
             <Button
               type="submit"
-              disabled={availableRegisters.length === 0 || openSession.isPending}
+              disabled={availableRegisters.length === 0 || selectedCashboxes.length === 0
+                || unavailableCashboxes.length > 0 || openSession.isPending}
               onClick={prepareWorkspace}
             >
               {openSession.isPending ? 'Opening…' : 'Open Session'}
@@ -208,6 +218,8 @@ export function OpenSessionScreen({
     </div>
   )
 }
+
+const displayQuantum = (decimalPlaces: number) => 10 ** -Math.max(0, Math.min(decimalPlaces, 4))
 
 function ReadOnly({ label, value }: { label: string; value: string }) {
   return (

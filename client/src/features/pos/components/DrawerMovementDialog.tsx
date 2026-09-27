@@ -21,8 +21,14 @@ export function DrawerMovementDialog({ sessionId, open, onOpenChange }: { sessio
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [notes, setNotes] = useState('')
-  const allowedCurrencyIds = useMemo(() => new Set(session.data?.openingCounts.map((count) => count.currencyId) ?? []), [session.data])
-  const cashboxes = (setup.data?.moneyAccounts ?? []).filter((account) => account.type === MoneyAccountType.Cashbox && allowedCurrencyIds.has(account.currencyId) && account.currentExchangeRate !== null)
+  const allowedCashboxIds = useMemo(
+    () => new Set(session.data?.openingCounts.map((count) => count.moneyAccountId) ?? []),
+    [session.data],
+  )
+  const cashboxes = (setup.data?.moneyAccounts ?? []).filter((account) =>
+    account.type === MoneyAccountType.Cashbox
+    && allowedCashboxIds.has(account.id)
+    && account.currentExchangeRate !== null)
   const selectedCashbox = cashboxes.find((account) => account.id === cashboxId)
   const destinations = (setup.data?.moneyAccounts ?? []).filter((account) => account.id !== cashboxId && selectedCashbox?.currencyId === account.currencyId && account.currentExchangeRate !== null)
   const postingAccounts = (accounts.data ?? []).filter((account) => account.isActive && !account.isGroup)

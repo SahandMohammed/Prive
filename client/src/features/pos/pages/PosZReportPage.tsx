@@ -84,13 +84,16 @@ export function PosZReportPage() {
         </Section>
 
         <Section title="Drawer Reconciliation">
-          {report.drawers.length === 0 ? <Empty text="No physical Cashbox currency was associated with this session." /> : (
+          {report.drawers.length === 0 ? <Empty text="No physical Cashbox was associated with this session." /> : (
             <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full min-w-[720px] border-collapse text-sm print:min-w-0">
-                <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Currency</th><th>Opening</th><th>Received</th><th>Change</th><th>Refunds</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead>
+                <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Cashbox</th><th>Opening</th><th>Received</th><th>Change</th><th>Refunds</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead>
                 <tbody>{report.drawers.map((row) => (
-                  <tr key={row.currencyId} className="border-b last:border-0">
-                    <td className="py-2 font-mono font-semibold">{row.currencyCode}</td>
+                  <tr key={row.moneyAccountId} className="border-b last:border-0">
+                    <td className="py-2">
+                      <span className="block font-mono font-semibold">{row.currencyCode} · {row.moneyAccountCode}</span>
+                      <span className="block text-xs text-muted-foreground">{row.moneyAccountName}</span>
+                    </td>
                     <td>{money(row.openingAmount)}</td><td>{money(row.tenderedAmount)}</td><td>{money(row.changeAmount)}</td><td>{money(row.refundAmount)}</td><td>{money(row.expectedAmount)}</td><td>{money(row.countedAmount ?? 0)}</td>
                     <td className={(row.varianceAmount ?? 0) < 0 ? 'text-destructive print:text-black' : ''}>{signed(row.varianceAmount ?? 0)}</td>
                   </tr>

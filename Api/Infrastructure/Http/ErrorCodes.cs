@@ -243,6 +243,10 @@ public static class ErrorCodes
     public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
     public const string RegisterInactive = "POS_REGISTER_INACTIVE";
     public const string RegisterCodeTaken = "POS_REGISTER_CODE_TAKEN";
+    public const string RegisterCashboxInvalid = "POS_REGISTER_CASHBOX_INVALID";
+    public const string RegisterCashboxDuplicateCurrency = "POS_REGISTER_CASHBOX_DUPLICATE_CURRENCY";
+    public const string CashboxAlreadyAssigned = "POS_CASHBOX_ALREADY_ASSIGNED";
+    public const string CashboxAssignmentLocked = "POS_CASHBOX_ASSIGNMENT_LOCKED";
     public const string SessionNotFound = "POS_SESSION_NOT_FOUND";
     public const string SessionAlreadyOpen = "POS_SESSION_ALREADY_OPEN";
     public const string SessionRequired = "POS_SESSION_REQUIRED";
@@ -272,6 +276,8 @@ public static class ErrorCodes
     public const string DrawerMovementAccessDenied = "POS_DRAWER_MOVEMENT_ACCESS_DENIED";
     public const string DrawerMovementConflict = "POS_DRAWER_MOVEMENT_CONFLICT";
     public const string SessionCurrencyNotAllowed = "POS_SESSION_CURRENCY_NOT_ALLOWED";
+    public const string SessionCashboxNotAllowed = "POS_SESSION_CASHBOX_NOT_ALLOWED";
+    public const string BaseCashboxRequired = "POS_BASE_CASHBOX_REQUIRED";
   }
 
   public static class Expenses

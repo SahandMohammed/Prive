@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, ArrowLeftRight, Loader2, Play, Plus, ReceiptText, Settings2, Store } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { AlertCircle, ArrowLeftRight, Loader2, Pencil, Play, Plus, ReceiptText, Settings2, Store } from 'lucide-react'
+import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { hasCapability, useCurrentUser } from '@/features/auth'
 import { useBranchSelectionStore } from '@/features/business'
+import { MoneyAccountType, useMoneyAccounts } from '@/features/finance'
 import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { DrawerMovementDialog } from '../components/DrawerMovementDialog'
 import { PosTransactionsTab } from '../components/PosTransactionsTab'
@@ -34,7 +35,7 @@ import {
 import { posRegisterSchema } from '../schemas/pos.schema'
 import type { PosRegisterValues } from '../schemas/pos.schema'
 import { PosSessionStatus } from '../types/pos.types'
-import type { PosSession } from '../types/pos.types'
+import type { PosRegister, PosSession } from '../types/pos.types'
 
 export function PosSessionsPage() {
   const navigate = useNavigate()
@@ -47,6 +48,7 @@ export function PosSessionsPage() {
   const [reportPageSize, setReportPageSize] = useState(20)
   const [openSessionDialog, setOpenSessionDialog] = useState(false)
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false)
+  const [editingRegister, setEditingRegister] = useState<PosRegister | null>(null)
   const [drawerSessionId, setDrawerSessionId] = useState<string | null>(null)
 
   const activeSession = useActivePosSession()
@@ -64,21 +66,79 @@ export function PosSessionsPage() {
   const canManageRegisters = hasCapability(user?.role, 'managePos')
   const selectedBranch =
     setup.data?.branches.find((branch) => branch.id === selectedBranchId) ?? setup.data?.branches[0]
+  const cashboxAccounts = useMoneyAccounts({
+    page: 1,
+    pageSize: 100,
+    branchId: selectedBranch?.id,
+    type: MoneyAccountType.Cashbox,
+    isActive: true,
+  }, true, canManageRegisters && Boolean(selectedBranch?.id))
+  const cashboxGroups = useMemo(() => {
+    const accounts = cashboxAccounts.data?.data ?? []
+    const grouped = accounts.reduce((result, account) => {
+      const items = result.get(account.currencyId) ?? []
+      items.push(account)
+      result.set(account.currencyId, items)
+      return result
+    }, new Map<string, typeof accounts>())
+    return [...grouped.entries()]
+      .map(([currencyId, items]) => ({
+        currencyId,
+        currencyCode: items[0]?.currencyCode ?? '',
+        accounts: items,
+      }))
+      .sort((left, right) => left.currencyCode.localeCompare(right.currencyCode))
+  }, [cashboxAccounts.data])
+  const cashboxOwner = useMemo(() => new Map(
+    (registers.data ?? []).flatMap((register) => register.cashboxes.map((cashbox) => [
+      cashbox.moneyAccountId,
+      register,
+    ] as const)),
+  ), [registers.data])
 
   const registerForm = useForm<PosRegisterValues>({
     resolver: zodResolver(posRegisterSchema),
-    defaultValues: { code: '', name: '' },
+    defaultValues: { code: '', name: '', cashboxMoneyAccountIds: [] },
   })
+  const selectedCashboxIds = useWatch({
+    control: registerForm.control,
+    name: 'cashboxMoneyAccountIds',
+  }) ?? []
 
   const closeRegisterDialog = () => {
     setRegisterDialogOpen(false)
-    registerForm.reset()
+    setEditingRegister(null)
+    registerForm.reset({ code: '', name: '', cashboxMoneyAccountIds: [] })
     createRegister.reset()
+    updateRegister.reset()
   }
 
-  const create = registerForm.handleSubmit((values) => {
+  const saveRegister = registerForm.handleSubmit((values) => {
+    if (editingRegister) {
+      updateRegister.mutate({
+        id: editingRegister.id,
+        body: { ...values, isActive: editingRegister.isActive },
+      }, { onSuccess: closeRegisterDialog })
+      return
+    }
     createRegister.mutate(values, { onSuccess: closeRegisterDialog })
   })
+
+  const openNewRegister = () => {
+    setEditingRegister(null)
+    registerForm.reset({ code: '', name: '', cashboxMoneyAccountIds: [] })
+    setRegisterDialogOpen(true)
+  }
+
+  const openRegisterEditor = (register: PosRegister) => {
+    setEditingRegister(register)
+    registerForm.reset({
+      code: register.code,
+      name: register.name,
+      cashboxMoneyAccountIds: register.cashboxes.map((cashbox) => cashbox.moneyAccountId),
+    })
+    setRegisterDialogOpen(true)
+  }
 
   const openWorkspace = () => {
     const workspace = window.open('/pos/workspace', '_blank')
@@ -333,7 +393,7 @@ export function PosSessionsPage() {
                     Configure physical POS stations for the selected branch.
                   </p>
                 </div>
-                <Button onClick={() => setRegisterDialogOpen(true)}>
+                <Button onClick={openNewRegister}>
                   <Plus className="size-4" />
                   Add register
                 </Button>
@@ -346,18 +406,19 @@ export function PosSessionsPage() {
                       <TableRow className={head}>
                         <TableHead className="px-4">Code</TableHead>
                         <TableHead className="px-4">Register</TableHead>
+                        <TableHead className="px-4">Cashboxes</TableHead>
                         <TableHead className="px-4">Status</TableHead>
                         <TableHead className="px-4">Availability</TableHead>
                         <TableHead className="w-28 px-4 text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                      {registers.isPending && <StateRow colSpan={5} loading message="Loading registers…" />}
+                      {registers.isPending && <StateRow colSpan={6} loading message="Loading registers…" />}
                       {registers.isError && !registers.isPending && (
-                        <StateRow colSpan={5} error message={registers.error.message} />
+                        <StateRow colSpan={6} error message={registers.error.message} />
                       )}
                       {!registers.isPending && !registers.isError && registers.data?.length === 0 && (
-                        <StateRow colSpan={5} message="No POS registers configured for this branch." />
+                        <StateRow colSpan={6} message="No POS registers configured for this branch." />
                       )}
                       {(registers.data ?? []).map((register) => (
                         <TableRow key={register.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
@@ -366,6 +427,15 @@ export function PosSessionsPage() {
                           </TableCell>
                           <TableCell className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200">
                             {register.name}
+                          </TableCell>
+                          <TableCell className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-300">
+                            {register.cashboxes.length > 0
+                              ? register.cashboxes.map((cashbox) => (
+                                  <span key={cashbox.moneyAccountId} className="mr-2 inline-flex rounded bg-slate-100 px-2 py-0.5 font-mono text-xs dark:bg-slate-800">
+                                    {cashbox.currencyCode} · {cashbox.moneyAccountCode}
+                                  </span>
+                                ))
+                              : '—'}
                           </TableCell>
                           <TableCell className="px-4 py-3.5">
                             <span className={register.isActive
@@ -382,24 +452,35 @@ export function PosSessionsPage() {
                             </span>
                           </TableCell>
                           <TableCell className="px-4 py-3.5 text-right">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title={register.hasOpenSession
-                                ? 'Close the open session before deactivating this register.'
-                                : undefined}
-                              disabled={updateRegister.isPending || register.hasOpenSession}
-                              onClick={() => updateRegister.mutate({
-                                id: register.id,
-                                body: {
-                                  code: register.code,
-                                  name: register.name,
-                                  isActive: !register.isActive,
-                                },
-                              })}
-                            >
-                              {register.isActive ? 'Deactivate' : 'Activate'}
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                aria-label={`Edit ${register.name}`}
+                                onClick={() => openRegisterEditor(register)}
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title={register.hasOpenSession
+                                  ? 'Close the open session before deactivating this register.'
+                                  : undefined}
+                                disabled={updateRegister.isPending || register.hasOpenSession}
+                                onClick={() => updateRegister.mutate({
+                                  id: register.id,
+                                  body: {
+                                    code: register.code,
+                                    name: register.name,
+                                    isActive: !register.isActive,
+                                    cashboxMoneyAccountIds: register.cashboxes.map((cashbox) => cashbox.moneyAccountId),
+                                  },
+                                })}
+                              >
+                                {register.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -541,27 +622,91 @@ export function PosSessionsPage() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add POS register</DialogTitle>
+            <DialogTitle>{editingRegister ? 'Edit POS register' : 'Add POS register'}</DialogTitle>
             <DialogDescription>
-              Create a physical POS station for the selected branch. Only one open session can use it at a time.
+              Assign one physical Cashbox per currency. A Cashbox can belong to only one Register.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={create} className="space-y-4">
+          <form onSubmit={saveRegister} className="space-y-4">
             <Field label="Register code" error={registerForm.formState.errors.code?.message}>
               <Input {...registerForm.register('code')} placeholder="e.g. RECEPTION" maxLength={32} />
             </Field>
             <Field label="Register name" error={registerForm.formState.errors.name?.message}>
               <Input {...registerForm.register('name')} placeholder="e.g. Reception POS" maxLength={120} />
             </Field>
-            {createRegister.isError && (
-              <p className="text-sm text-destructive">{createRegister.error.message}</p>
+            <fieldset className="space-y-3" disabled={Boolean(editingRegister?.hasOpenSession)}>
+              <legend className="text-sm font-medium text-slate-700 dark:text-slate-300">Cashboxes</legend>
+              {cashboxAccounts.isPending && (
+                <p className="text-sm text-muted-foreground">Loading eligible Cashboxes…</p>
+              )}
+              {cashboxAccounts.isError && (
+                <p className="text-sm text-destructive">{cashboxAccounts.error.message}</p>
+              )}
+              {!cashboxAccounts.isPending && !cashboxAccounts.isError && cashboxGroups.length === 0 && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  No active Cashboxes are configured for this branch.
+                </p>
+              )}
+              {cashboxGroups.map((group) => {
+                const currentId = selectedCashboxIds.find(
+                  (id) => group.accounts.some((account) => account.id === id),
+                ) ?? ''
+                return (
+                  <Field key={group.currencyId} label={group.currencyCode}>
+                    <select
+                      aria-label={`${group.currencyCode} Cashbox`}
+                      className="h-10 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={currentId}
+                      onChange={(event) => {
+                        const otherCurrencyIds = selectedCashboxIds.filter(
+                          (id) => !group.accounts.some((account) => account.id === id),
+                        )
+                        registerForm.setValue(
+                          'cashboxMoneyAccountIds',
+                          event.target.value ? [...otherCurrencyIds, event.target.value] : otherCurrencyIds,
+                          { shouldDirty: true, shouldValidate: true },
+                        )
+                      }}
+                    >
+                      <option value="">Select a Cashbox</option>
+                      {group.accounts.map((account) => {
+                        const owner = cashboxOwner.get(account.id)
+                        const ownedElsewhere = Boolean(owner && owner.id !== editingRegister?.id)
+                        return (
+                          <option key={account.id} value={account.id} disabled={ownedElsewhere}>
+                            {account.code} — {account.name}
+                            {ownedElsewhere ? ` (assigned to ${owner?.name})` : ''}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </Field>
+                )
+              })}
+              {editingRegister?.hasOpenSession && (
+                <p className="text-xs text-amber-700">
+                  Cashbox assignments are locked while this Register has an open session.
+                </p>
+              )}
+              {registerForm.formState.errors.cashboxMoneyAccountIds?.message && (
+                <p className="text-xs text-destructive">
+                  {registerForm.formState.errors.cashboxMoneyAccountIds.message}
+                </p>
+              )}
+            </fieldset>
+            {(createRegister.isError || updateRegister.isError) && (
+              <p className="text-sm text-destructive">
+                {createRegister.error?.message ?? updateRegister.error?.message}
+              </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeRegisterDialog} disabled={createRegister.isPending}>
+              <Button type="button" variant="outline" onClick={closeRegisterDialog} disabled={createRegister.isPending || updateRegister.isPending}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createRegister.isPending}>
-                {createRegister.isPending ? 'Creating…' : 'Add register'}
+              <Button type="submit" disabled={createRegister.isPending || updateRegister.isPending || cashboxAccounts.isPending}>
+                {createRegister.isPending || updateRegister.isPending
+                  ? 'Saving…'
+                  : editingRegister ? 'Save register' : 'Add register'}
               </Button>
             </DialogFooter>
           </form>

@@ -6,12 +6,10 @@ const cashboxId = '11111111-1111-4111-8111-111111111111'
 const tender = { moneyAccountId: cashboxId, amount: 10_000 }
 
 describe('posCheckoutSchema', () => {
-  it('requires a Cashbox and received amount for a paid checkout', () => {
+  it('requires at least one positive session Cashbox amount for a paid checkout', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Paid,
-      moneyAccountId: '',
-      receivedAmount: 0,
-      changeMoneyAccountId: '',
+      cashboxAmounts: { [cashboxId]: 0 },
     })
 
     expect(result.success).toBe(false)
@@ -20,9 +18,7 @@ describe('posCheckoutSchema', () => {
   it('accepts an unpaid checkout without Cashbox details', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Credit,
-      moneyAccountId: '',
-      receivedAmount: 0,
-      changeMoneyAccountId: '',
+      cashboxAmounts: {},
     })
 
     expect(result.success).toBe(true)
@@ -31,9 +27,7 @@ describe('posCheckoutSchema', () => {
   it('does not expose Partial as a cashier checkout mode', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Partial,
-      moneyAccountId: cashboxId,
-      receivedAmount: 1,
-      changeMoneyAccountId: '',
+      cashboxAmounts: { [cashboxId]: 1 },
     })
 
     expect(result.success).toBe(false)

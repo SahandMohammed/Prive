@@ -78,6 +78,7 @@ public sealed class PosService
         account.BranchId,
         account.CurrencyId,
         CurrencyCode = account.Currency.Code,
+        CurrencyDecimalPlaces = account.Currency.DecimalPlaces,
         Balance = account.LedgerEntries.Sum(entry => (decimal?)entry.Amount) ?? 0m
       })
       .ToListAsync(ct);
@@ -105,6 +106,7 @@ public sealed class PosService
         account.BranchId,
         account.CurrencyId,
         account.CurrencyCode,
+        account.CurrencyDecimalPlaces,
         account.Balance,
         currentRate);
     }).ToList();
@@ -365,6 +367,11 @@ public sealed class PosService
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
+    var baseCashbox = session.OpeningCounts.SingleOrDefault(
+      count => count.CurrencyId == business.BaseCurrencyId);
+    if (request.PaymentMode == PosPaymentMode.Paid && baseCashbox is null)
+      throw new BadRequestException(ErrorCodes.Pos.BaseCashboxRequired,
+        $"This POS Session has no configured {business.BaseCurrency.Code} Cashbox. Close it and correct the Register configuration.");
     var existing = await FindIdempotentSaleAsync(request.ClientRequestId, fingerprint, ct);
     if (existing is not null) return existing;
     var date = BusinessTime.DateAt(business, DateTime.UtcNow);
@@ -437,10 +444,10 @@ public sealed class PosService
       if (account.BranchId != request.BranchId)
         throw new BadRequestException(ErrorCodes.Pos.MoneyAccountBranchMismatch,
           $"Money Account '{account.Code}' does not belong to the selected POS branch.");
-      if (account.Type == MoneyAccountType.Cashbox
-        && !session.OpeningCounts.Any(count => count.CurrencyId == account.CurrencyId))
-        throw new BadRequestException(ErrorCodes.Pos.SessionCurrencyNotAllowed,
-          $"Cashbox currency '{account.Currency.Code}' was not part of this POS Session opening snapshot.");
+      if (account.Type != MoneyAccountType.Cashbox
+        || !session.OpeningCounts.Any(count => count.MoneyAccountId == account.Id))
+        throw new BadRequestException(ErrorCodes.Pos.SessionCashboxNotAllowed,
+          $"Cashbox '{account.Code}' is not part of this POS Session's exact Cashbox snapshot.");
     }
 
     var rates = new Dictionary<Guid, decimal>();
@@ -490,6 +497,9 @@ public sealed class PosService
     if (request.Change is not null)
     {
       var account = accounts[request.Change.MoneyAccountId];
+      if (baseCashbox is null || account.Id != baseCashbox.MoneyAccountId)
+        throw new BadRequestException(ErrorCodes.Pos.BaseCashboxRequired,
+          $"Change must be returned from this session's configured {business.BaseCurrency.Code} Cashbox.");
       var rate = rates[account.CurrencyId];
       var baseAmount = Money(request.Change.Amount * rate);
       if (baseAmount != changeDueBase)

@@ -177,6 +177,83 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
+  public async Task Checkout_uses_transaction_time_fx_and_rejects_stale_change_without_partial_effects()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db, iqdOpeningBalance: 1_000);
+    var pricedService = await db.Services.SingleAsync(item => item.Id == data.ServiceId);
+    pricedService.SellingPriceBase = 30_000;
+    var previewRate = await db.ExchangeRates.SingleAsync(rate => rate.FromCurrencyId == data.UsdCurrencyId);
+    previewRate.Rate = 1_310;
+    db.ExchangeRates.Add(new ExchangeRateEntity
+    {
+      FromCurrencyId = data.UsdCurrencyId,
+      ToCurrencyId = data.IqdCurrencyId,
+      Rate = 1_320,
+      EffectiveAtUtc = DateTime.UtcNow.AddSeconds(-1),
+      CreatedByUserId = data.CashierId
+    });
+    await db.SaveChangesAsync();
+    var service = CreateService(db);
+    var saleCount = await db.PosSales.CountAsync();
+    var invoiceCount = await db.SalesInvoices.CountAsync();
+    var stockCount = await db.StockMovements.CountAsync();
+    var ledgerCount = await db.MoneyLedgerEntries.CountAsync();
+    var journalCount = await db.JournalEntries.CountAsync();
+    var stale = Request(data, [ServiceLine(data)],
+      [new(data.IqdMoneyAccountId, 10_000), new(data.UsdMoneyAccountId, 15.27m)],
+      change: new(data.IqdMoneyAccountId, 3.7m));
+
+    var mismatch = await Assert.ThrowsAsync<BadRequestException>(() =>
+      service.CompleteSaleAsync(stale, data.CashierId, default));
+
+    Assert.Equal(ErrorCodes.Pos.ChangeMismatch, mismatch.Code);
+    Assert.Equal(saleCount, await db.PosSales.CountAsync());
+    Assert.Equal(invoiceCount, await db.SalesInvoices.CountAsync());
+    Assert.Equal(stockCount, await db.StockMovements.CountAsync());
+    Assert.Equal(ledgerCount, await db.MoneyLedgerEntries.CountAsync());
+    Assert.Equal(journalCount, await db.JournalEntries.CountAsync());
+
+    var completed = await service.CompleteSaleAsync(stale with
+    {
+      ClientRequestId = Guid.NewGuid(),
+      Change = new(data.IqdMoneyAccountId, 156.4m)
+    }, data.CashierId, default);
+    var usd = completed.Tenders.Single(tender => tender.MoneyAccountId == data.UsdMoneyAccountId);
+    Assert.Equal(1_320, usd.ExchangeRate);
+    Assert.Equal(20_156.4m, usd.BaseAmount);
+    Assert.Equal(156.4m, completed.ChangeBaseAmount);
+
+    (await db.ExchangeRates.SingleAsync(rate => rate.Rate == 1_320)).Rate = 1_330;
+    await db.SaveChangesAsync();
+    var historical = await service.GetSaleAsync(completed.Id, default);
+    Assert.Equal(1_320, historical.Tenders.Single(tender => tender.MoneyAccountId == data.UsdMoneyAccountId).ExchangeRate);
+    Assert.Equal(20_156.4m, historical.Tenders.Single(tender => tender.MoneyAccountId == data.UsdMoneyAccountId).BaseAmount);
+  }
+
+  [Fact]
+  public async Task Same_currency_cashbox_outside_the_exact_session_snapshot_is_rejected()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var substitute = await db.MoneyAccounts.SingleAsync(account => account.Code == "VIEWER-IQD");
+    db.MoneyAccountAccess.Add(new()
+    {
+      MoneyAccountId = substitute.Id,
+      UserId = data.CashierId,
+      AccessLevel = MoneyAccountAccessLevel.Operate
+    });
+    await db.SaveChangesAsync();
+
+    var rejected = await Assert.ThrowsAsync<BadRequestException>(() => CreateService(db).CompleteSaleAsync(
+      Request(data, [ServiceLine(data)], [new(substitute.Id, 25_000)]), data.CashierId, default));
+
+    Assert.Equal(ErrorCodes.Pos.SessionCashboxNotAllowed, rejected.Code);
+    Assert.Empty(await db.PosSales.ToListAsync());
+    Assert.Empty(await db.SalesInvoices.ToListAsync());
+  }
+
+  [Fact]
   public async Task Usd_only_sale_keeps_the_invoice_in_iqd_and_posts_physical_usd()
   {
     await using var db = CreateDb();
@@ -340,10 +417,12 @@ public sealed partial class PosWorkflowTests
 
     var setup = await service.GetSetupAsync(data.CashierId, default);
     Assert.Equal(2, setup.MoneyAccounts.Count);
+    Assert.Equal(0, setup.MoneyAccounts.Single(account => account.CurrencyId == data.IqdCurrencyId).CurrencyDecimalPlaces);
+    Assert.Equal(2, setup.MoneyAccounts.Single(account => account.CurrencyId == data.UsdCurrencyId).CurrencyDecimalPlaces);
     Assert.Equal(1_300, setup.MoneyAccounts.Single(account => account.CurrencyId == data.UsdCurrencyId).CurrentExchangeRate);
     Assert.Contains(setup.Professionals, professional => professional.Id == data.ProfessionalId);
     var viewerSetup = await service.GetSetupAsync(data.ViewerId, default);
-    Assert.Empty(viewerSetup.MoneyAccounts);
+    Assert.Equal(data.IqdCurrencyId, Assert.Single(viewerSetup.MoneyAccounts).CurrencyId);
 
     var catalog = await service.GetCatalogAsync(new PosCatalogQuery
     {
@@ -495,16 +574,30 @@ public sealed partial class PosWorkflowTests
       Code = "CASH-USD", Name = "Reception USD", Type = MoneyAccountType.Cashbox,
       Branch = branch, Currency = usd, AccountingAccount = usdMoneyGl
     };
+    var viewerAccount = new MoneyAccountEntity
+    {
+      Code = "VIEWER-IQD", Name = "Viewer IQD", Type = MoneyAccountType.Cashbox,
+      Branch = branch, Currency = iqd,
+      AccountingAccount = new() { Code = "1113", Name = "Viewer IQD", Classification = AccountClassification.Asset }
+    };
+    var outsideAccount = new MoneyAccountEntity
+    {
+      Code = "OUTSIDE-IQD", Name = "Outside IQD", Type = MoneyAccountType.Cashbox,
+      Branch = branch, Currency = iqd,
+      AccountingAccount = new() { Code = "1114", Name = "Outside IQD", Classification = AccountClassification.Asset }
+    };
     db.AddRange(cashier, viewer, outsider, professionalUser, professional, iqd, usd, business, branch, customer, warehouse,
       productCategory, serviceCategory, unit, receivable, inventory, productRevenue, serviceRevenue, cogs,
-      iqdMoneyGl, usdMoneyGl, product, salonService, iqdAccount, usdAccount);
+      iqdMoneyGl, usdMoneyGl, product, salonService, iqdAccount, usdAccount, viewerAccount, outsideAccount);
     await db.SaveChangesAsync();
 
     db.MoneyAccountAccess.AddRange(
       new MoneyAccountAccessEntity { MoneyAccountId = iqdAccount.Id, UserId = cashier.Id, AccessLevel = MoneyAccountAccessLevel.Operate },
       new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = cashier.Id, AccessLevel = MoneyAccountAccessLevel.Operate },
       new MoneyAccountAccessEntity { MoneyAccountId = iqdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View },
-      new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View });
+      new MoneyAccountAccessEntity { MoneyAccountId = usdAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.View },
+      new MoneyAccountAccessEntity { MoneyAccountId = viewerAccount.Id, UserId = viewer.Id, AccessLevel = MoneyAccountAccessLevel.Operate },
+      new MoneyAccountAccessEntity { MoneyAccountId = outsideAccount.Id, UserId = outsider.Id, AccessLevel = MoneyAccountAccessLevel.Operate });
     db.ProfessionalBranchAssignments.Add(new ProfessionalBranchAssignmentEntity { ProfessionalId = professional.Id, BranchId = branch.Id });
     if (includeUsdRate) db.ExchangeRates.Add(new ExchangeRateEntity
     {
@@ -545,13 +638,13 @@ public sealed partial class PosWorkflowTests
     await db.SaveChangesAsync();
 
     var sessions = CreateSessionService(db);
-    var register = await sessions.CreateRegisterAsync(new("MAIN", "Main POS"), default);
+    var register = await sessions.CreateRegisterAsync(new("MAIN", "Main POS", [iqdAccount.Id, usdAccount.Id]), default);
     var session = await sessions.OpenSessionAsync(cashier.Id,
-      new(register.Id, includeUsdRate ? [new(iqd.Id, 0), new(usd.Id, 0)] : [new(iqd.Id, 0)], null), default);
-    var viewerRegister = await sessions.CreateRegisterAsync(new("VIEWER", "Viewer POS"), default);
-    var viewerSession = await sessions.OpenSessionAsync(viewer.Id, new(viewerRegister.Id, [], null), default);
-    var outsideRegister = await sessions.CreateRegisterAsync(new("OUTSIDE", "Outside POS"), default);
-    var outsideSession = await sessions.OpenSessionAsync(outsider.Id, new(outsideRegister.Id, [], null), default);
+      new(register.Id, [new(iqdAccount.Id, 0), new(usdAccount.Id, 0)], null), default);
+    var viewerRegister = await sessions.CreateRegisterAsync(new("VIEWER", "Viewer POS", [viewerAccount.Id]), default);
+    var viewerSession = await sessions.OpenSessionAsync(viewer.Id, new(viewerRegister.Id, [new(viewerAccount.Id, 0)], null), default);
+    var outsideRegister = await sessions.CreateRegisterAsync(new("OUTSIDE", "Outside POS", [outsideAccount.Id]), default);
+    var outsideSession = await sessions.OpenSessionAsync(outsider.Id, new(outsideRegister.Id, [new(outsideAccount.Id, 0)], null), default);
 
     return new TestData(
       session.Id,

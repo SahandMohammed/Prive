@@ -42,6 +42,7 @@ export interface PosMoneyAccount {
   branchId: string
   currencyId: string
   currencyCode: string
+  currencyDecimalPlaces: number
   balance: number
   currentExchangeRate: number | null
 }
@@ -132,6 +133,14 @@ export interface CompletePosSaleInput {
   clientRequestId?: string
 }
 
+export interface PosRegisterCashbox {
+  moneyAccountId: string
+  moneyAccountCode: string
+  moneyAccountName: string
+  currencyId: string
+  currencyCode: string
+  currencyDecimalPlaces: number
+}
 export interface PosRegister {
   id: string
   code: string
@@ -139,10 +148,15 @@ export interface PosRegister {
   branchId: string
   isActive: boolean
   hasOpenSession: boolean
+  cashboxes: PosRegisterCashbox[]
 }
 export interface PosSessionCount {
+  moneyAccountId: string
+  moneyAccountCode: string
+  moneyAccountName: string
   currencyId: string
   currencyCode: string
+  currencyDecimalPlaces: number
   amount: number
   exchangeRate: number
   baseAmount: number
@@ -185,11 +199,11 @@ export interface PosSessionSummary {
 }
 export interface OpenPosSessionInput {
   registerId: string
-  openingCounts: { currencyId: string; amount: number }[]
+  openingCounts: { moneyAccountId: string; amount: number }[]
   notes: string | null
 }
 export interface ClosePosSessionInput {
-  closingCounts: { currencyId: string; countedAmount: number }[]
+  closingCounts: { moneyAccountId: string; countedAmount: number }[]
   notes: string | null
 }
 export interface PosPaymentSummary {
@@ -209,8 +223,12 @@ export interface PosPaymentSummary {
   netBaseAmount: number
 }
 export interface PosDrawerSummary {
+  moneyAccountId: string
+  moneyAccountCode: string
+  moneyAccountName: string
   currencyId: string
   currencyCode: string
+  currencyDecimalPlaces: number
   openingAmount: number
   tenderedAmount: number
   changeAmount: number

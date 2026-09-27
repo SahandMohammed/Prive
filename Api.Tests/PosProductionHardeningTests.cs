@@ -117,6 +117,52 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
+  public async Task Concurrent_register_cashbox_assignment_has_one_winner_and_a_typed_loser()
+  {
+    var databaseName = Guid.NewGuid().ToString();
+    var databaseRoot = new InMemoryDatabaseRoot();
+    TestData data;
+    Guid cashboxId;
+    await using (var seed = CreateDb(databaseName, databaseRoot: databaseRoot))
+    {
+      data = await SeedAsync(seed);
+      var cashbox = new MoneyAccountEntity
+      {
+        Code = "CONCURRENT-IQD",
+        Name = "Concurrent IQD Cashbox",
+        Type = MoneyAccountType.Cashbox,
+        BranchId = data.BranchId,
+        CurrencyId = data.IqdCurrencyId,
+        AccountingAccount = new()
+        {
+          Code = "1116",
+          Name = "Concurrent IQD Cashbox",
+          Classification = AccountClassification.Asset
+        }
+      };
+      seed.MoneyAccounts.Add(cashbox);
+      await seed.SaveChangesAsync();
+      cashboxId = cashbox.Id;
+    }
+
+    var conflict = new CoordinatedUniqueViolationInterceptor(
+      PosRegisterCashboxEntityConfiguration.MoneyAccountUniqueIndexName);
+    await using var firstDb = CreateDb(databaseName, data.BranchId, databaseRoot, conflict);
+    await using var secondDb = CreateDb(databaseName, data.BranchId, databaseRoot, conflict);
+    var results = await Task.WhenAll(
+      CaptureAsync(() => CreateSessionService(firstDb).CreateRegisterAsync(
+        new("CONCURRENT-A", "Concurrent A", [cashboxId]), default)),
+      CaptureAsync(() => CreateSessionService(secondDb).CreateRegisterAsync(
+        new("CONCURRENT-B", "Concurrent B", [cashboxId]), default)));
+
+    Assert.Single(results, result => result.Value is not null);
+    var loser = Assert.IsType<ConflictException>(Assert.Single(results, result => result.Error is not null).Error);
+    Assert.Equal(ErrorCodes.Pos.CashboxAlreadyAssigned, loser.Code);
+    await using var observer = CreateDb(databaseName, data.BranchId, databaseRoot);
+    Assert.Single(await observer.PosRegisterCashboxes.Where(mapping => mapping.MoneyAccountId == cashboxId).ToListAsync());
+  }
+
+  [Fact]
   public async Task Simultaneous_identical_sale_requests_replay_one_financial_posting()
   {
     var databaseName = Guid.NewGuid().ToString();
@@ -237,7 +283,7 @@ public sealed partial class PosWorkflowTests
 
   private sealed record ConcurrentResult<T>(T? Value, Exception? Error);
 
-  private sealed class CoordinatedUniqueViolationInterceptor : SaveChangesInterceptor
+  private sealed class CoordinatedUniqueViolationInterceptor(string? constraintName = null) : SaveChangesInterceptor
   {
     private readonly TaskCompletionSource<bool> _secondSaveStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<bool> _firstSaveCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -256,7 +302,12 @@ public sealed partial class PosWorkflowTests
 
       _secondSaveStarted.TrySetResult(true);
       await _firstSaveCompleted.Task.WaitAsync(cancellationToken);
-      throw new PostgresException("Duplicate drawer or idempotency key", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation);
+      throw new PostgresException(
+        "Duplicate drawer or idempotency key",
+        "ERROR",
+        "ERROR",
+        PostgresErrorCodes.UniqueViolation,
+        constraintName: constraintName);
     }
 
     public override ValueTask<int> SavedChangesAsync(

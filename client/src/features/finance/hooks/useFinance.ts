@@ -15,10 +15,11 @@ import type {
 export const FINANCE_KEY = ['finance'] as const
 const refresh = (client: ReturnType<typeof useQueryClient>) =>
   client.invalidateQueries({ queryKey: FINANCE_KEY })
-export function useMoneyAccounts(filters: PageFilters, management = true) {
+export function useMoneyAccounts(filters: PageFilters, management = true, enabled = true) {
   return useQuery({
     queryKey: [...FINANCE_KEY, 'money-accounts', management, filters],
     queryFn: () => financeApi.moneyAccounts(filters, management),
+    enabled,
   })
 }
 export function useMoneyAccount(id?: string) {

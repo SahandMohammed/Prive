@@ -131,15 +131,17 @@ public sealed record CreatePosDrawerMovementRequest(
 
 public sealed record CreatePosRegisterRequest(
   [Required, MaxLength(32)] string Code,
-  [Required, MaxLength(120)] string Name);
+  [Required, MaxLength(120)] string Name,
+  [Required, MinLength(1)] List<Guid> CashboxMoneyAccountIds);
 
 public sealed record UpdatePosRegisterRequest(
   [Required, MaxLength(32)] string Code,
   [Required, MaxLength(120)] string Name,
-  bool IsActive);
+  bool IsActive,
+  [Required, MinLength(1)] List<Guid> CashboxMoneyAccountIds);
 
 public sealed record PosOpeningCountRequest(
-  [Required] Guid CurrencyId,
+  [Required] Guid MoneyAccountId,
   [Range(typeof(decimal), "0", "9999999999999")] decimal Amount);
 
 public sealed record OpenPosSessionRequest(
@@ -148,7 +150,7 @@ public sealed record OpenPosSessionRequest(
   [MaxLength(500)] string? Notes);
 
 public sealed record PosClosingCountRequest(
-  [Required] Guid CurrencyId,
+  [Required] Guid MoneyAccountId,
   [Range(typeof(decimal), "0", "9999999999999")] decimal CountedAmount);
 
 public sealed record ClosePosSessionRequest(
@@ -171,6 +173,7 @@ public sealed record PosMoneyAccountResponse(
   Guid BranchId,
   Guid CurrencyId,
   string CurrencyCode,
+  int CurrencyDecimalPlaces,
   decimal Balance,
   decimal? CurrentExchangeRate);
 
@@ -201,17 +204,30 @@ public sealed record PosCatalogItemResponse(
 
 public sealed record PosCustomerResponse(Guid Id, string Name, string? PrimaryPhoneNumber);
 
+public sealed record PosRegisterCashboxResponse(
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  int CurrencyDecimalPlaces);
+
 public sealed record PosRegisterResponse(
   Guid Id,
   string Code,
   string Name,
   Guid BranchId,
   bool IsActive,
-  bool HasOpenSession);
+  bool HasOpenSession,
+  List<PosRegisterCashboxResponse> Cashboxes);
 
 public sealed record PosSessionCountResponse(
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
   Guid CurrencyId,
   string CurrencyCode,
+  int CurrencyDecimalPlaces,
   decimal Amount,
   decimal ExchangeRate,
   decimal BaseAmount);
@@ -269,8 +285,12 @@ public sealed record PosPaymentSummaryResponse(
   decimal NetBaseAmount);
 
 public sealed record PosDrawerSummaryResponse(
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
   Guid CurrencyId,
   string CurrencyCode,
+  int CurrencyDecimalPlaces,
   decimal OpeningAmount,
   decimal TenderedAmount,
   decimal ChangeAmount,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Banknote, Check, RotateCcw } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { MoneyAccountType } from '@/features/finance'
 import { SalesLineType } from '@/features/sales'
 import { useCompletePosSale } from '../hooks/usePos'
 import { posCartTotal } from '../lib/posCart'
@@ -23,40 +22,38 @@ import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
 import type {
   PosCartLine,
   PosCustomer,
-  PosMoneyAccount,
   PosProfessional,
   PosSale,
+  PosSession,
+  PosSessionCount,
   PosSetup,
 } from '../types/pos.types'
 
 const IQD_BILLS = [250, 500, 1_000, 5_000, 10_000, 25_000, 50_000]
 const USD_BILLS = [1, 5, 10, 20, 50, 100]
+const POS_MONEY_QUANTUM = 0.0001
+
+type SessionCashbox = PosSessionCount & { currentExchangeRate: number | null }
 
 export function CheckoutDialog({
   open,
   setup,
-  branchId,
-  sessionId,
+  session,
   warehouseId,
   customer,
   professional,
   cart,
-  rememberedReceivingCashboxId,
-  onReceivingCashboxChange,
   onOpenChange,
   onBack,
   onCompleted,
 }: {
   open: boolean
   setup: PosSetup
-  branchId: string
-  sessionId: string
+  session: PosSession
   warehouseId: string
   customer: PosCustomer | null
   professional: PosProfessional | null
   cart: PosCartLine[]
-  rememberedReceivingCashboxId: string | null
-  onReceivingCashboxChange: (cashboxId: string) => void
   onOpenChange: (open: boolean) => void
   onBack: () => void
   onCompleted: (sale: PosSale) => void
@@ -65,63 +62,43 @@ export function CheckoutDialog({
   const complete = useCompletePosSale()
   const resetComplete = complete.reset
   const initializedForOpen = useRef(false)
-  const cashboxes = useMemo(
-    () => setup.moneyAccounts.filter((account) =>
-      account.branchId === branchId && account.type === MoneyAccountType.Cashbox),
-    [branchId, setup.moneyAccounts]
-  )
-  const validCashboxes = useMemo(
-    () => cashboxes.filter((account) => account.currentExchangeRate !== null),
-    [cashboxes]
-  )
-  const baseCashboxes = useMemo(
-    () => validCashboxes.filter((account) => account.currencyId === setup.baseCurrencyId),
-    [setup.baseCurrencyId, validCashboxes]
-  )
-  const rememberedCashbox = validCashboxes.find((account) => account.id === rememberedReceivingCashboxId)
-  const defaultCashbox = rememberedCashbox ?? (validCashboxes.length === 1 ? validCashboxes[0] : undefined)
+  const cashboxes = useMemo<SessionCashbox[]>(() => session.openingCounts
+    .map((snapshot) => ({
+      ...snapshot,
+      currentExchangeRate: setup.moneyAccounts.find((account) => account.id === snapshot.moneyAccountId)
+        ?.currentExchangeRate ?? null,
+    }))
+    .sort((left, right) => {
+      const leftBase = left.currencyId === setup.baseCurrencyId ? 0 : 1
+      const rightBase = right.currencyId === setup.baseCurrencyId ? 0 : 1
+      return leftBase - rightBase || left.currencyCode.localeCompare(right.currencyCode)
+    }), [session.openingCounts, setup.baseCurrencyId, setup.moneyAccounts])
+  const baseCashbox = cashboxes.find((cashbox) => cashbox.currencyId === setup.baseCurrencyId)
+  const initialCashboxId = cashboxes[0]?.moneyAccountId ?? ''
+  const [activeCashboxId, setActiveCashboxId] = useState(initialCashboxId)
   const form = useForm<PosCheckoutValues>({
     resolver: zodResolver(posCheckoutSchema),
     defaultValues: {
       paymentMode: PosPaymentMode.Paid,
-      moneyAccountId: '',
-      receivedAmount: 0,
-      changeMoneyAccountId: '',
+      cashboxAmounts: Object.fromEntries(cashboxes.map((cashbox) => [cashbox.moneyAccountId, 0])),
     },
   })
   const values = useWatch({ control: form.control })
   const paymentMode = values.paymentMode ?? PosPaymentMode.Paid
   const paid = paymentMode === PosPaymentMode.Paid
-  const receivingCashbox = cashboxes.find((account) => account.id === values.moneyAccountId)
-  const validReceivingCashbox = validCashboxes.find((account) => account.id === values.moneyAccountId)
-  const receivedAmount = numberOrZero(values.receivedAmount)
-  const receivedBaseAmount = posTenderBaseAmount(receivedAmount, validReceivingCashbox?.currentExchangeRate ?? 0)
+  const cashboxAmounts = values.cashboxAmounts ?? {}
+  const positiveCashboxes = cashboxes.filter((cashbox) => numberOrZero(cashboxAmounts[cashbox.moneyAccountId]) > 0)
+  const missingRate = positiveCashboxes.find((cashbox) => cashbox.currentExchangeRate === null)
+  const receivedBaseAmount = roundPosMoney(cashboxes.reduce((sum, cashbox) => sum + posTenderBaseAmount(
+    numberOrZero(cashboxAmounts[cashbox.moneyAccountId]), cashbox.currentExchangeRate ?? 0,
+  ), 0))
   const remaining = roundPosMoney(Math.max(total - receivedBaseAmount, 0))
   const changeDue = paid ? roundPosMoney(Math.max(receivedBaseAmount - total, 0)) : 0
-  const foreignReceipt = Boolean(validReceivingCashbox && validReceivingCashbox.currencyId !== setup.baseCurrencyId)
-  const selectedBaseChangeCashbox = baseCashboxes.find((account) => account.id === values.changeMoneyAccountId)
-  const changeCashbox = changeDue === 0
-    ? null
-    : foreignReceipt
-      ? selectedBaseChangeCashbox ?? null
-      : validReceivingCashbox ?? null
-  const changeAmount = changeCashbox
-    ? roundPosMoney(changeDue / (changeCashbox.currentExchangeRate ?? 1))
-    : 0
-  const changeBaseAmount = changeCashbox
-    ? posTenderBaseAmount(changeAmount, changeCashbox.currentExchangeRate ?? 0)
-    : 0
   const hasCustomer = Boolean(customer)
   const ready = paid
-    ? Boolean(validReceivingCashbox)
-      && receivedBaseAmount >= total
-      && (changeDue === 0 || (Boolean(changeCashbox) && changeBaseAmount === changeDue))
+    ? positiveCashboxes.length > 0 && !missingRate && Boolean(baseCashbox) && receivedBaseAmount >= total
     : hasCustomer
-  const bills = validReceivingCashbox?.currencyCode === 'IQD'
-    ? IQD_BILLS
-    : validReceivingCashbox?.currencyCode === 'USD'
-      ? USD_BILLS
-      : []
+  const activeCashbox = cashboxes.find((cashbox) => cashbox.moneyAccountId === activeCashboxId)
 
   useEffect(() => {
     if (!open) {
@@ -129,73 +106,74 @@ export function CheckoutDialog({
       return
     }
     if (initializedForOpen.current) return
-
     form.reset({
       paymentMode: PosPaymentMode.Paid,
-      moneyAccountId: defaultCashbox?.id ?? '',
-      receivedAmount: 0,
-      changeMoneyAccountId: '',
+      cashboxAmounts: Object.fromEntries(cashboxes.map((cashbox) => [cashbox.moneyAccountId, 0])),
     })
+    setActiveCashboxId(initialCashboxId)
     resetComplete()
     initializedForOpen.current = true
-  }, [defaultCashbox?.id, form, open, resetComplete])
-
-  useEffect(() => {
-    if (!foreignReceipt || changeDue === 0) {
-      if (values.changeMoneyAccountId !== '') form.setValue('changeMoneyAccountId', '')
-      return
-    }
-    if (selectedBaseChangeCashbox) return
-    form.setValue('changeMoneyAccountId', baseCashboxes.length === 1 ? baseCashboxes[0].id : '', {
-      shouldValidate: true,
-    })
-  }, [baseCashboxes, changeDue, foreignReceipt, form, selectedBaseChangeCashbox, values.changeMoneyAccountId])
+  }, [cashboxes, form, initialCashboxId, open, resetComplete])
 
   const selectPaymentMode = (mode: typeof PosPaymentMode.Paid | typeof PosPaymentMode.Credit) => {
     form.setValue('paymentMode', mode, { shouldValidate: true })
     form.clearErrors('root')
+    complete.reset()
   }
 
-  const selectCashbox = (cashboxId: string) => {
-    form.setValue('moneyAccountId', cashboxId, { shouldValidate: true })
-    form.setValue('receivedAmount', 0, { shouldValidate: true })
-    form.setValue('changeMoneyAccountId', '')
+  const setCashboxAmount = (cashbox: SessionCashbox, next: number) => {
+    const normalized = normalizeDisplayAmount(Math.max(next, 0), cashbox.currencyDecimalPlaces)
+    form.setValue(`cashboxAmounts.${cashbox.moneyAccountId}`, normalized, { shouldValidate: true })
     form.clearErrors('root')
-    if (validCashboxes.some((account) => account.id === cashboxId)) {
-      onReceivingCashboxChange(cashboxId)
-    }
-  }
-
-  const setReceivedAmount = (next: number) => {
-    form.setValue('receivedAmount', roundPosMoney(Math.max(next, 0)), { shouldValidate: true })
-    form.clearErrors('root')
+    complete.reset()
   }
 
   const appendDigit = (digit: string) => {
-    const current = String(receivedAmount)
-    const nextText = current === '0' ? digit : `${current}${digit}`
+    if (!activeCashbox) return
+    const current = numberOrZero(cashboxAmounts[activeCashbox.moneyAccountId])
+    const nextText = current === 0 ? digit : `${current}${digit}`
+    if (decimalPlaces(nextText) > activeCashbox.currencyDecimalPlaces) return
     const next = Number(nextText)
-    if (!Number.isFinite(next) || decimalPlaces(nextText) > 4) return
-    setReceivedAmount(next)
+    if (Number.isFinite(next)) setCashboxAmount(activeCashbox, next)
   }
 
   const backspace = () => {
-    const nextText = String(receivedAmount).slice(0, -1)
-    setReceivedAmount(nextText === '' || nextText === '-' ? 0 : Number(nextText))
+    if (!activeCashbox) return
+    const current = numberOrZero(cashboxAmounts[activeCashbox.moneyAccountId])
+    const nextText = String(current).slice(0, -1)
+    setCashboxAmount(activeCashbox, nextText === '' ? 0 : Number(nextText))
+  }
+
+  const exactRemaining = () => {
+    if (!activeCashbox || !activeCashbox.currentExchangeRate) return
+    const otherBase = roundPosMoney(cashboxes
+      .filter((cashbox) => cashbox.moneyAccountId !== activeCashbox.moneyAccountId)
+      .reduce((sum, cashbox) => sum + posTenderBaseAmount(
+        Math.max(numberOrZero(cashboxAmounts[cashbox.moneyAccountId]), 0),
+        cashbox.currentExchangeRate ?? 0,
+      ), 0))
+    const remainingBase = roundPosMoney(Math.max(total - otherBase, 0))
+    if (remainingBase === 0) {
+      setCashboxAmount(activeCashbox, 0)
+      return
+    }
+
+    let nativeAmount = roundPosMoney(remainingBase / activeCashbox.currentExchangeRate)
+    while (posTenderBaseAmount(nativeAmount, activeCashbox.currentExchangeRate) < remainingBase) {
+      nativeAmount = roundPosMoney(nativeAmount + POS_MONEY_QUANTUM)
+    }
+    nativeAmount = ceilToDisplayPrecision(nativeAmount, activeCashbox.currencyDecimalPlaces)
+    const displayQuantum = quantum(activeCashbox.currencyDecimalPlaces)
+    while (posTenderBaseAmount(nativeAmount, activeCashbox.currentExchangeRate) < remainingBase) {
+      nativeAmount = normalizeDisplayAmount(nativeAmount + displayQuantum, activeCashbox.currencyDecimalPlaces)
+    }
+    setCashboxAmount(activeCashbox, nativeAmount)
   }
 
   const submit = form.handleSubmit((value) => {
     if (!ready) {
       form.setError('root', { message: readinessMessage({
-        paid,
-        customer,
-        validReceivingCashbox,
-        receivingCashbox,
-        remaining,
-        foreignReceipt,
-        baseCashboxes,
-        changeCashbox,
-        setup,
+        paid, customer, cashboxes, positiveCashboxes, missingRate, baseCashbox, remaining, setup,
       }) })
       return
     }
@@ -203,8 +181,8 @@ export function CheckoutDialog({
     form.clearErrors('root')
     complete.mutate(
       {
-        branchId,
-        posSessionId: sessionId,
+        branchId: session.branchId,
+        posSessionId: session.id,
         warehouseId: warehouseId || null,
         customerId: customer?.id ?? null,
         lines: cart.map((line) => {
@@ -219,10 +197,15 @@ export function CheckoutDialog({
           }
         }),
         tenders: paid
-          ? [{ moneyAccountId: value.moneyAccountId, amount: value.receivedAmount }]
+          ? cashboxes.flatMap((cashbox) => {
+              const nativeAmount = normalizeDisplayAmount(
+                numberOrZero(value.cashboxAmounts[cashbox.moneyAccountId]), cashbox.currencyDecimalPlaces,
+              )
+              return nativeAmount > 0 ? [{ moneyAccountId: cashbox.moneyAccountId, amount: nativeAmount }] : []
+            })
           : [],
-        change: paid && changeDue > 0 && changeCashbox
-          ? { moneyAccountId: changeCashbox.id, amount: changeAmount }
+        change: paid && changeDue > 0 && baseCashbox
+          ? { moneyAccountId: baseCashbox.moneyAccountId, amount: changeDue }
           : null,
         paymentMode: paid ? PosPaymentMode.Paid : PosPaymentMode.Credit,
       },
@@ -237,11 +220,11 @@ export function CheckoutDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[96vh] overflow-y-auto sm:max-w-4xl">
+      <DialogContent className="max-h-[96vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-xl">Payment</DialogTitle>
           <DialogDescription>
-            Complete this sale now or keep the total outstanding on the selected customer account.
+            Enter native amounts in this session’s Cashboxes. Exchange values shown here are previews; Save validates current rates again.
           </DialogDescription>
         </DialogHeader>
 
@@ -258,111 +241,106 @@ export function CheckoutDialog({
           </div>
 
           {paid ? (
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
               <div className="space-y-4">
-                <Field label="Cashbox" error={form.formState.errors.moneyAccountId?.message}>
-                  <select
-                    aria-label="Cashbox"
-                    value={values.moneyAccountId ?? ''}
-                    onChange={(event) => selectCashbox(event.target.value)}
-                    className="h-14 w-full rounded-xl border bg-background px-4 text-base font-medium outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Select Cashbox</option>
-                    {cashboxes.map((cashbox) => (
-                      <option key={cashbox.id} value={cashbox.id} disabled={cashbox.currentExchangeRate === null}>
-                        {cashbox.code} — {cashbox.name} · {cashbox.currencyCode}{cashbox.currentExchangeRate === null ? ' · Rate missing' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
                 {cashboxes.length === 0 && (
                   <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-                    No operable Cashbox is available for this branch.
+                    This session has no Cashbox snapshot. Paid completion is unavailable.
                   </p>
                 )}
+                {cashboxes.map((cashbox) => {
+                  const fieldName = `cashboxAmounts.${cashbox.moneyAccountId}` as const
+                  const field = form.register(fieldName, { setValueAs: (input) => input === '' ? 0 : Number(input) })
+                  const nativeAmount = numberOrZero(cashboxAmounts[cashbox.moneyAccountId])
+                  const bills = cashbox.currencyCode === 'IQD' ? IQD_BILLS : cashbox.currencyCode === 'USD' ? USD_BILLS : []
+                  const error = form.formState.errors.cashboxAmounts?.[cashbox.moneyAccountId]?.message
+                  return (
+                    <section
+                      key={cashbox.moneyAccountId}
+                      className={`space-y-3 rounded-xl border p-4 ${activeCashboxId === cashbox.moneyAccountId ? 'ring-2 ring-ring' : ''}`}
+                    >
+                      <Field label={`${cashbox.currencyCode} · ${cashbox.moneyAccountCode}`} error={error}>
+                        <div className="relative">
+                          <Input
+                            aria-label={`${cashbox.currencyCode} amount`}
+                            type="number"
+                            min="0"
+                            step={quantum(cashbox.currencyDecimalPlaces)}
+                            inputMode="decimal"
+                            className="h-16 pr-20 text-right font-mono text-2xl font-bold"
+                            {...field}
+                            onFocus={() => setActiveCashboxId(cashbox.moneyAccountId)}
+                            onChange={(event) => {
+                              if (decimalPlaces(event.target.value) <= cashbox.currencyDecimalPlaces) field.onChange(event)
+                              form.clearErrors('root')
+                              complete.reset()
+                            }}
+                            onBlur={(event) => {
+                              field.onBlur(event)
+                              setCashboxAmount(cashbox, Number(event.target.value) || 0)
+                            }}
+                          />
+                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                            {cashbox.currencyCode}
+                          </span>
+                        </div>
+                      </Field>
 
-                <Field label={`Amount received${validReceivingCashbox ? ` · ${validReceivingCashbox.currencyCode}` : ''}`} error={form.formState.errors.receivedAmount?.message}>
-                  <div className="relative">
-                    <Input
-                      aria-label="Amount received"
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      inputMode="decimal"
-                      className="h-16 pr-20 text-right font-mono text-2xl font-bold"
-                      {...form.register('receivedAmount', {
-                        setValueAs: (value) => value === '' ? 0 : Number(value),
-                      })}
-                    />
-                    {validReceivingCashbox && (
-                      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                        {validReceivingCashbox.currencyCode}
-                      </span>
-                    )}
-                  </div>
-                </Field>
+                      <p className="text-xs text-muted-foreground">
+                        {cashbox.moneyAccountName}
+                        {cashbox.currencyId !== setup.baseCurrencyId && cashbox.currentExchangeRate !== null && (
+                          <span className="ml-2 font-medium text-foreground">
+                            {formatNative(nativeAmount, cashbox.currencyDecimalPlaces)} {cashbox.currencyCode} ≈ {amount(posTenderBaseAmount(nativeAmount, cashbox.currentExchangeRate))} {setup.baseCurrencyCode}
+                          </span>
+                        )}
+                        {cashbox.currentExchangeRate === null && <span className="ml-2 text-destructive">Current rate unavailable</span>}
+                      </p>
 
-                {validReceivingCashbox && validReceivingCashbox.currencyId !== setup.baseCurrencyId && (
-                  <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                    1 {validReceivingCashbox.currencyCode} = {amount(validReceivingCashbox.currentExchangeRate ?? 0)} {setup.baseCurrencyCode}
-                    <span className="ml-2 font-medium text-foreground">Equivalent: {amount(receivedBaseAmount)} {setup.baseCurrencyCode}</span>
-                  </p>
-                )}
+                      {bills.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                          {bills.map((bill) => (
+                            <Button
+                              key={bill}
+                              type="button"
+                              variant="outline"
+                              className="h-11 font-mono"
+                              onClick={() => {
+                                setActiveCashboxId(cashbox.moneyAccountId)
+                                setCashboxAmount(cashbox, nativeAmount + bill)
+                              }}
+                            >
+                              {cashbox.currencyCode === 'USD' ? `$${bill}` : compactBill(bill)}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
+              </div>
 
-                {bills.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-sm font-semibold">Common bills</p>
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                      {bills.map((bill) => (
-                        <Button key={bill} type="button" variant="outline" className="h-12 font-mono" onClick={() => setReceivedAmount(receivedAmount + bill)}>
-                          {validReceivingCashbox?.currencyCode === 'USD' ? `$${amount(bill)}` : amount(bill)}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
+              <div className="space-y-4">
+                <NumericKeypad
+                  onDigit={appendDigit}
+                  onClear={() => activeCashbox && setCashboxAmount(activeCashbox, 0)}
+                  onBackspace={backspace}
+                />
                 <Button
                   type="button"
                   variant="secondary"
                   className="h-14 w-full text-base"
-                  disabled={!validReceivingCashbox}
-                  onClick={() => setReceivedAmount(roundPosMoney(total / (validReceivingCashbox?.currentExchangeRate ?? 1)))}
+                  disabled={!activeCashbox?.currentExchangeRate}
+                  onClick={exactRemaining}
                 >
                   <RotateCcw className="size-4" />
-                  Exact · {amount(total)} {setup.baseCurrencyCode}
+                  Exact remaining{activeCashbox ? ` · ${activeCashbox.currencyCode}` : ''}
                 </Button>
-
-                {changeDue > 0 && foreignReceipt && (
-                  <Field label={`${setup.baseCurrencyCode} Cashbox for change`} error={form.formState.errors.changeMoneyAccountId?.message}>
-                    <select
-                      aria-label={`${setup.baseCurrencyCode} Cashbox for change`}
-                      value={values.changeMoneyAccountId ?? ''}
-                      onChange={(event) => form.setValue('changeMoneyAccountId', event.target.value, { shouldValidate: true })}
-                      className="h-14 w-full rounded-xl border bg-background px-4 text-base font-medium outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Select {setup.baseCurrencyCode} Cashbox</option>
-                      {baseCashboxes.map((cashbox) => (
-                        <option key={cashbox.id} value={cashbox.id}>{cashbox.code} — {cashbox.name} · {cashbox.currencyCode}</option>
-                      ))}
-                    </select>
-                    {baseCashboxes.length === 0 && (
-                      <span className="text-xs font-normal text-destructive">An {setup.baseCurrencyCode} Cashbox is required to return change for a foreign-currency payment.</span>
-                    )}
-                  </Field>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                <NumericKeypad onDigit={appendDigit} onClear={() => setReceivedAmount(0)} onBackspace={backspace} />
                 <PaymentSummary
                   total={total}
                   receivedBaseAmount={receivedBaseAmount}
                   remaining={remaining}
                   changeDue={changeDue}
-                  changeCashbox={changeCashbox}
-                  changeAmount={changeAmount}
+                  baseCashbox={baseCashbox}
                   baseCurrencyCode={setup.baseCurrencyCode}
                 />
               </div>
@@ -371,9 +349,9 @@ export function CheckoutDialog({
             <UnpaidSummary customer={customer} professional={professional} total={total} baseCurrencyCode={setup.baseCurrencyCode} />
           )}
 
-          {(form.formState.errors.root?.message || complete.error) && (
-            <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
-              {form.formState.errors.root?.message ?? complete.error?.message}
+          {(form.formState.errors.root?.message || form.formState.errors.cashboxAmounts?.root?.message || complete.error) && (
+            <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
+              {form.formState.errors.root?.message ?? form.formState.errors.cashboxAmounts?.root?.message ?? complete.error?.message}
             </p>
           )}
 
@@ -381,11 +359,7 @@ export function CheckoutDialog({
             <Button type="button" variant="outline" className="h-12" onClick={onBack}>Back to sale</Button>
             <Button type="submit" className="h-12 min-w-56" disabled={!ready || complete.isPending}>
               <Banknote className="size-4" />
-              {complete.isPending
-                ? 'Saving…'
-                : paid
-                  ? `Save Paid Sale · ${amount(total)} ${setup.baseCurrencyCode}`
-                  : 'Save Unpaid Sale'}
+              {complete.isPending ? 'Saving…' : paid ? `Save Paid Sale · ${amount(total)} ${setup.baseCurrencyCode}` : 'Save Unpaid Sale'}
             </Button>
           </DialogFooter>
         </form>
@@ -424,36 +398,27 @@ function NumericKeypad({ onDigit, onClear, onBackspace }: { onDigit: (digit: str
   )
 }
 
-function PaymentSummary({
-  total,
-  receivedBaseAmount,
-  remaining,
-  changeDue,
-  changeCashbox,
-  changeAmount,
-  baseCurrencyCode,
-}: {
+function PaymentSummary({ total, receivedBaseAmount, remaining, changeDue, baseCashbox, baseCurrencyCode }: {
   total: number
   receivedBaseAmount: number
   remaining: number
   changeDue: number
-  changeCashbox: PosMoneyAccount | null
-  changeAmount: number
+  baseCashbox: SessionCashbox | undefined
   baseCurrencyCode: string
 }) {
   return (
     <div className="space-y-3 rounded-xl bg-muted p-4">
-      <Summary label="Sale total" value={`${amount(total)} ${baseCurrencyCode}`} />
-      <Summary label="Received" value={`${amount(receivedBaseAmount)} ${baseCurrencyCode}`} />
-      {changeDue > 0 ? (
+      <Summary label="Total" value={`${amount(total)} ${baseCurrencyCode}`} />
+      <Summary label="Received equivalent" value={`${amount(receivedBaseAmount)} ${baseCurrencyCode}`} />
+      <Summary label="Remaining" value={`${amount(remaining)} ${baseCurrencyCode}`} accent={remaining > 0} />
+      {changeDue > 0 && (
         <div className="rounded-lg bg-primary p-3 text-primary-foreground">
-          <p className="text-xs font-semibold uppercase tracking-wide">Change to customer</p>
+          <p className="text-xs font-semibold uppercase tracking-wide">Change</p>
           <p className="mt-1 font-mono text-2xl font-bold">{amount(changeDue)} {baseCurrencyCode}</p>
-          {changeCashbox && <p className="mt-1 text-xs opacity-90">From {changeCashbox.name} · {amount(changeAmount)} {changeCashbox.currencyCode}</p>}
+          {baseCashbox && <p className="mt-1 text-xs opacity-90">From {baseCashbox.moneyAccountCode}</p>}
         </div>
-      ) : (
-        <Summary label="Remaining to collect" value={`${amount(remaining)} ${baseCurrencyCode}`} accent={remaining > 0} />
       )}
+      {!baseCashbox && <p className="text-xs font-medium text-destructive">This session has no {baseCurrencyCode} Cashbox. Paid completion is blocked.</p>}
     </div>
   )
 }
@@ -467,7 +432,6 @@ function UnpaidSummary({ customer, professional, total, baseCurrencyCode }: { cu
       </div>
     )
   }
-
   return (
     <div className="rounded-xl border bg-muted/30 p-5">
       <h3 className="text-lg font-semibold">Unpaid sale</h3>
@@ -489,23 +453,22 @@ function Summary({ label, value, accent = false }: { label: string; value: strin
   return <div><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className={`mt-1 font-mono text-lg font-bold ${accent ? 'text-destructive' : ''}`}>{value}</p></div>
 }
 
-function readinessMessage({ paid, customer, validReceivingCashbox, receivingCashbox, remaining, foreignReceipt, baseCashboxes, changeCashbox, setup }: {
+function readinessMessage({ paid, customer, cashboxes, positiveCashboxes, missingRate, baseCashbox, remaining, setup }: {
   paid: boolean
   customer: PosCustomer | null
-  validReceivingCashbox: PosMoneyAccount | undefined
-  receivingCashbox: PosMoneyAccount | undefined
+  cashboxes: SessionCashbox[]
+  positiveCashboxes: SessionCashbox[]
+  missingRate: SessionCashbox | undefined
+  baseCashbox: SessionCashbox | undefined
   remaining: number
-  foreignReceipt: boolean
-  baseCashboxes: PosMoneyAccount[]
-  changeCashbox: PosMoneyAccount | null
   setup: PosSetup
 }) {
   if (!paid) return customer ? 'Unpaid sales do not receive payment now.' : 'A customer is required for an unpaid sale.'
-  if (!receivingCashbox) return 'Select a Cashbox before saving this sale.'
-  if (!validReceivingCashbox) return 'The selected Cashbox is unavailable because its exchange rate is missing.'
+  if (cashboxes.length === 0) return 'This POS Session has no configured Cashboxes.'
+  if (!baseCashbox) return `This POS Session requires its configured ${setup.baseCurrencyCode} Cashbox before Paid checkout.`
+  if (positiveCashboxes.length === 0) return 'Enter an amount received.'
+  if (missingRate) return `The current ${missingRate.currencyCode} exchange rate is unavailable.`
   if (remaining > 0) return `Remaining to collect: ${amount(remaining)} ${setup.baseCurrencyCode}.`
-  if (foreignReceipt && baseCashboxes.length === 0) return `An ${setup.baseCurrencyCode} Cashbox is required to return change for a foreign-currency payment.`
-  if (!changeCashbox) return `Select an ${setup.baseCurrencyCode} Cashbox to return change.`
   return 'Review the payment details before saving this sale.'
 }
 
@@ -515,6 +478,28 @@ function numberOrZero(value: number | undefined): number {
 
 function decimalPlaces(value: string) {
   return value.split('.')[1]?.length ?? 0
+}
+
+function quantum(decimalPlaceCount: number) {
+  return 10 ** -Math.max(0, Math.min(decimalPlaceCount, 4))
+}
+
+function normalizeDisplayAmount(value: number, decimalPlaceCount: number) {
+  const factor = 10 ** Math.max(0, Math.min(decimalPlaceCount, 4))
+  return Math.round((value + Number.EPSILON) * factor) / factor
+}
+
+function ceilToDisplayPrecision(value: number, decimalPlaceCount: number) {
+  const factor = 10 ** Math.max(0, Math.min(decimalPlaceCount, 4))
+  return Math.ceil((value - Number.EPSILON) * factor) / factor
+}
+
+function formatNative(value: number, decimalPlaceCount: number) {
+  return value.toLocaleString(undefined, { minimumFractionDigits: decimalPlaceCount, maximumFractionDigits: decimalPlaceCount })
+}
+
+function compactBill(value: number) {
+  return value >= 1_000 ? `${value / 1_000}K` : String(value)
 }
 
 const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })

@@ -17,7 +17,20 @@ public sealed class PosRegisterEntity
   public Guid BranchId { get; set; }
   public BranchEntity Branch { get; set; } = null!;
   public bool IsActive { get; set; } = true;
+  public ICollection<PosRegisterCashboxEntity> Cashboxes { get; set; } = new List<PosRegisterCashboxEntity>();
   public ICollection<PosSessionEntity> Sessions { get; set; } = new List<PosSessionEntity>();
+}
+
+public sealed class PosRegisterCashboxEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public Guid PosRegisterId { get; set; }
+  public PosRegisterEntity PosRegister { get; set; } = null!;
+  public Guid MoneyAccountId { get; set; }
+  public MoneyAccountEntity MoneyAccount { get; set; } = null!;
+  public Guid BranchId { get; set; }
+  public Guid CurrencyId { get; set; }
+  public CurrencyEntity Currency { get; set; } = null!;
 }
 
 public sealed class PosSessionEntity
@@ -52,6 +65,9 @@ public sealed class PosSessionOpeningCountEntity
   public Guid Id { get; set; } = Guid.NewGuid();
   public Guid PosSessionId { get; set; }
   public PosSessionEntity PosSession { get; set; } = null!;
+  public Guid BranchId { get; set; }
+  public Guid MoneyAccountId { get; set; }
+  public MoneyAccountEntity MoneyAccount { get; set; } = null!;
   public Guid CurrencyId { get; set; }
   public CurrencyEntity Currency { get; set; } = null!;
   public decimal Amount { get; set; }
@@ -64,6 +80,9 @@ public sealed class PosSessionClosingCountEntity
   public Guid Id { get; set; } = Guid.NewGuid();
   public Guid PosSessionId { get; set; }
   public PosSessionEntity PosSession { get; set; } = null!;
+  public Guid BranchId { get; set; }
+  public Guid MoneyAccountId { get; set; }
+  public MoneyAccountEntity MoneyAccount { get; set; } = null!;
   public Guid CurrencyId { get; set; }
   public CurrencyEntity Currency { get; set; } = null!;
   public decimal ExpectedAmount { get; set; }
@@ -137,8 +156,12 @@ public sealed class PosZDrawerSummaryEntity
   public Guid Id { get; set; } = Guid.NewGuid();
   public Guid PosZReportId { get; set; }
   public PosZReportEntity PosZReport { get; set; } = null!;
+  public Guid MoneyAccountId { get; set; }
+  public string MoneyAccountCode { get; set; } = string.Empty;
+  public string MoneyAccountName { get; set; } = string.Empty;
   public Guid CurrencyId { get; set; }
   public string CurrencyCode { get; set; } = string.Empty;
+  public int CurrencyDecimalPlaces { get; set; }
   public decimal OpeningAmount { get; set; }
   public decimal TenderedAmount { get; set; }
   public decimal ChangeAmount { get; set; }

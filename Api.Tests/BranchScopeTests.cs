@@ -11,6 +11,7 @@ using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Branch;
 using Api.Modules.Contact;
+using Api.Modules.Currency;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Sales;
@@ -58,13 +59,15 @@ public sealed class BranchScopeTests
     var options = Options();
     var a = new BranchEntity();
     var b = new BranchEntity();
+    var currency = new CurrencyEntity { Code = "IQD" };
     await using (var seed = new AppDbContext(options))
     {
+      seed.Add(currency);
       foreach (var branch in new[] { a, b })
       {
         var journal = new JournalEntryEntity { Branch = branch };
         var warehouse = new WarehouseEntity { Branch = branch };
-        var account = new MoneyAccountEntity { Branch = branch };
+        var account = new MoneyAccountEntity { Branch = branch, Currency = currency };
         seed.AddRange(new JournalLineEntity { JournalEntry = journal, DebitBaseAmount = branch == a ? 10 : 90 },
           new StockMovementEntity { Warehouse = warehouse, QuantityIn = branch == a ? 2 : 8 },
           new MoneyLedgerEntryEntity { MoneyAccount = account, JournalEntry = journal, Amount = branch == a ? 5 : 50 },
@@ -114,15 +117,16 @@ public sealed class BranchScopeTests
     var options = Options();
     var a = new BranchEntity();
     var b = new BranchEntity();
+    var currency = new CurrencyEntity { Code = "IQD" };
     await using (var seed = new AppDbContext(options))
     {
-      seed.AddRange(a, b, new MoneyAccountEntity { Branch = b, Code = "CASH-01" });
+      seed.AddRange(a, b, currency, new MoneyAccountEntity { Branch = b, Currency = currency, Code = "CASH-01" });
       await seed.SaveChangesAsync();
     }
 
     await using var db = new AppDbContext(options, new BranchContext { BranchId = a.Id });
     Assert.Empty(await db.MoneyAccounts.ToListAsync());
-    db.MoneyAccounts.Add(new MoneyAccountEntity { BranchId = a.Id, Code = "CASH-01" });
+    db.MoneyAccounts.Add(new MoneyAccountEntity { BranchId = a.Id, CurrencyId = currency.Id, Code = "CASH-01" });
     var error = await Assert.ThrowsAsync<ConflictException>(() => db.SaveChangesAsync());
     Assert.Equal(ErrorCodes.Finance.MoneyAccountCodeTaken, error.Code);
   }

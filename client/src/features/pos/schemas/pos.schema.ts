@@ -6,23 +6,14 @@ export const posCheckoutSchema = z.object({
     z.literal(PosPaymentMode.Paid),
     z.literal(PosPaymentMode.Credit),
   ]),
-  moneyAccountId: z.string(),
-  receivedAmount: z.number().min(0, 'Received amount cannot be negative'),
-  changeMoneyAccountId: z.string(),
+  cashboxAmounts: z.record(z.string().uuid(), z.number().min(0, 'Received amount cannot be negative')),
 }).superRefine((value, context) => {
-  if (value.paymentMode === PosPaymentMode.Paid && !z.string().uuid().safeParse(value.moneyAccountId).success) {
+  if (value.paymentMode === PosPaymentMode.Paid
+    && !Object.values(value.cashboxAmounts).some((amount) => amount > 0)) {
     context.addIssue({
       code: 'custom',
-      path: ['moneyAccountId'],
-      message: 'Select a Cashbox',
-    })
-  }
-
-  if (value.paymentMode === PosPaymentMode.Paid && value.receivedAmount <= 0) {
-    context.addIssue({
-      code: 'custom',
-      path: ['receivedAmount'],
-      message: 'Enter the amount received',
+      path: ['cashboxAmounts'],
+      message: 'Enter an amount received',
     })
   }
 })
@@ -31,7 +22,7 @@ export const posOpenSessionSchema = z.object({
   registerId: z.string().uuid('Select a POS Register'),
   openingCounts: z.array(
     z.object({
-      currencyId: z.string().uuid(),
+      moneyAccountId: z.string().uuid(),
       amount: z.number().min(0, 'Opening cash cannot be negative'),
     })
   ),
@@ -41,7 +32,7 @@ export const posOpenSessionSchema = z.object({
 export const posCloseSessionSchema = z.object({
   closingCounts: z.array(
     z.object({
-      currencyId: z.string().uuid(),
+      moneyAccountId: z.string().uuid(),
       countedAmount: z.number().min(0, 'Counted cash cannot be negative'),
     })
   ),
@@ -56,6 +47,7 @@ export const posForceCloseSessionSchema = posCloseSessionSchema.refine(
 export const posRegisterSchema = z.object({
   code: z.string().trim().min(1, 'Register code is required').max(32, 'Register code cannot exceed 32 characters'),
   name: z.string().trim().min(1, 'Register name is required').max(120, 'Register name cannot exceed 120 characters'),
+  cashboxMoneyAccountIds: z.array(z.string().uuid()).min(1, 'Select at least one Cashbox'),
 })
 
 export const posRefundSchema = z.object({

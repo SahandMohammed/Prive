@@ -329,7 +329,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(ErrorCodes.Pos.RefundSessionRequired, missingSession.Code);
     var wrongSession = await Assert.ThrowsAsync<BadRequestException>(() => refunds.PostRefundAsync(sale.Id,
       request with { PosSessionId = data.ViewerSessionId }, data.CashierId, default));
-    Assert.Equal(ErrorCodes.Pos.SessionCurrencyNotAllowed, wrongSession.Code);
+    Assert.Equal(ErrorCodes.Pos.SessionCashboxNotAllowed, wrongSession.Code);
 
     var session = await db.PosSessions.SingleAsync(x => x.Id == data.SessionId);
     session.Status = PosSessionStatus.Closed;
@@ -428,7 +428,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(0, x.Drawers.Single(x => x.CurrencyId == data.IqdCurrencyId).ExpectedAmount);
 
     var z = await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
-      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+      new([new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0)], null), default);
     Assert.Equal(x.RefundTotalBase, z.RefundTotalBase);
     Assert.Equal(x.NetSalesBase, z.NetSalesBase);
     Assert.Equal(1, z.RefundCount);

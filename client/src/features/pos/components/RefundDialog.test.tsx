@@ -22,12 +22,15 @@ const ids = { branch: id('1'), base: id('2'), usd: id('3'), baseAccount: id('4')
 const setup: PosSetup = {
   baseCurrencyId: ids.base, baseCurrencyCode: 'IQD', branches: [], warehouses: [], categories: [], professionals: [],
   moneyAccounts: [
-    { id: ids.baseAccount, code: 'CASH-IQD', name: 'IQD Cash', type: MoneyAccountType.Cashbox, branchId: ids.branch, currencyId: ids.base, currencyCode: 'IQD', balance: 100_000, currentExchangeRate: 1 },
-    { id: ids.usdAccount, code: 'CASH-USD', name: 'USD Cash', type: MoneyAccountType.Cashbox, branchId: ids.branch, currencyId: ids.usd, currencyCode: 'USD', balance: 100, currentExchangeRate: null },
+    { id: ids.baseAccount, code: 'CASH-IQD', name: 'IQD Cash', type: MoneyAccountType.Cashbox, branchId: ids.branch, currencyId: ids.base, currencyCode: 'IQD', currencyDecimalPlaces: 0, balance: 100_000, currentExchangeRate: 1 },
+    { id: ids.usdAccount, code: 'CASH-USD', name: 'USD Cash', type: MoneyAccountType.Cashbox, branchId: ids.branch, currencyId: ids.usd, currencyCode: 'USD', currencyDecimalPlaces: 2, balance: 100, currentExchangeRate: null },
   ],
 }
 const session: PosSession = {
-  id: id('8'), sessionNumber: 'SES-1', branchId: ids.branch, branchCode: 'MAIN', branchName: 'Main', registerId: id('9'), registerCode: 'POS', registerName: 'POS', cashierUserId: id('a'), cashierUsername: 'manager', status: 0, openedAtUtc: '2026-09-13T12:00:00Z', closedAtUtc: null, closedByUserId: null, closedByUsername: null, openingNotes: null, closingNotes: null, openingCounts: [],
+  id: id('8'), sessionNumber: 'SES-1', branchId: ids.branch, branchCode: 'MAIN', branchName: 'Main', registerId: id('9'), registerCode: 'POS', registerName: 'POS', cashierUserId: id('a'), cashierUsername: 'manager', status: 0, openedAtUtc: '2026-09-13T12:00:00Z', closedAtUtc: null, closedByUserId: null, closedByUsername: null, openingNotes: null, closingNotes: null, openingCounts: [
+    { moneyAccountId: ids.baseAccount, moneyAccountCode: 'CASH-IQD', moneyAccountName: 'IQD Cash', currencyId: ids.base, currencyCode: 'IQD', currencyDecimalPlaces: 0, amount: 0, exchangeRate: 1, baseAmount: 0 },
+    { moneyAccountId: ids.usdAccount, moneyAccountCode: 'CASH-USD', moneyAccountName: 'USD Cash', currencyId: ids.usd, currencyCode: 'USD', currencyDecimalPlaces: 2, amount: 0, exchangeRate: 1_310, baseAmount: 0 },
+  ],
 }
 
 beforeEach(() => {

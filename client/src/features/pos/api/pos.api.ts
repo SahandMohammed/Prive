@@ -67,9 +67,9 @@ export const posApi = {
       if (!result.meta.hasNextPage) return registers
     }
   },
-  createRegister: (body: { code: string; name: string }) =>
+  createRegister: (body: { code: string; name: string; cashboxMoneyAccountIds: string[] }) =>
     apiClient.post<PosRegister>('/pos/registers', body),
-  updateRegister: (id: string, body: { code: string; name: string; isActive: boolean }) =>
+  updateRegister: (id: string, body: { code: string; name: string; isActive: boolean; cashboxMoneyAccountIds: string[] }) =>
     apiClient.put<PosRegister>(`/pos/registers/${id}`, body),
 
   activeSession: async (): Promise<PosSession | null> =>

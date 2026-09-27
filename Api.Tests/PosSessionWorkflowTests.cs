@@ -20,7 +20,7 @@ public sealed partial class PosWorkflowTests
     var data = await SeedAsync(db);
 
     var report = await CreateSessionService(db).CloseSessionAsync(data.CashierId, data.SessionId,
-      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+      new([new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0)], null), default);
 
     Assert.Equal(data.CashierId, report.ClosedByUserId);
     Assert.Null((await db.PosSessions.SingleAsync(session => session.Id == data.SessionId)).ClosingNotes);
@@ -33,7 +33,7 @@ public sealed partial class PosWorkflowTests
     var data = await SeedAsync(db);
     await PromoteAsync(db, data.ViewerId);
     var service = CreateSessionService(db);
-    var counts = new List<PosClosingCountRequest> { new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0) };
+    var counts = new List<PosClosingCountRequest> { new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0) };
 
     var missing = await Assert.ThrowsAsync<BadRequestException>(() =>
       service.CloseSessionAsync(data.ViewerId, data.SessionId, new(counts, null), default));
@@ -79,7 +79,7 @@ public sealed partial class PosWorkflowTests
     var journalCount = await db.JournalEntries.CountAsync();
 
     var report = await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
-      new([new(data.IqdCurrencyId, 24_900), new(data.UsdCurrencyId, 0)], "Counted"), default);
+      new([new(data.IqdMoneyAccountId, 24_900), new(data.UsdMoneyAccountId, 0)], "Counted"), default);
     Assert.Equal(-100, report.Drawers.Single(row => row.CurrencyId == data.IqdCurrencyId).VarianceAmount);
     Assert.Equal(-100, report.Drawers.Single(row => row.CurrencyId == data.IqdCurrencyId).VarianceBaseAmount);
     Assert.Equal(new string('B', 200), report.BranchName);
@@ -112,7 +112,8 @@ public sealed partial class PosWorkflowTests
     await Assert.ThrowsAsync<ConflictException>(() => sessions.OpenSessionAsync(data.CashierId,
       new(session.RegisterId, [], null), default));
     await Assert.ThrowsAsync<ConflictException>(() => sessions.UpdateRegisterAsync(session.RegisterId,
-      new(session.RegisterCode, session.RegisterName, false), default));
+      new(session.RegisterCode, session.RegisterName, false,
+        session.OpeningCounts.Select(count => count.MoneyAccountId).ToList()), default));
     await Assert.ThrowsAsync<ForbiddenException>(() => sessions.GetXReportAsync(data.ViewerId, data.SessionId, default));
     await Assert.ThrowsAsync<ForbiddenException>(() => sessions.CloseSessionAsync(data.ViewerId,
       data.SessionId, new([], null), default));
@@ -124,15 +125,15 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(ErrorCodes.Pos.SessionRequired, missingSession.Code);
 
     var invalidClose = await Assert.ThrowsAsync<BadRequestException>(() => sessions.CloseSessionAsync(
-      data.CashierId, data.SessionId, new([new(data.IqdCurrencyId, 0)], null), default));
+      data.CashierId, data.SessionId, new([new(data.IqdMoneyAccountId, 0)], null), default));
     Assert.Equal(ErrorCodes.Pos.ClosingCountInvalid, invalidClose.Code);
     await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
-      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+      new([new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0)], null), default);
     var invalidOpen = await Assert.ThrowsAsync<BadRequestException>(() => sessions.OpenSessionAsync(
-      data.CashierId, new(session.RegisterId, [new(data.IqdCurrencyId, 0), new(data.IqdCurrencyId, 0)], null), default));
+      data.CashierId, new(session.RegisterId, [new(data.IqdMoneyAccountId, 0), new(data.IqdMoneyAccountId, 0)], null), default));
     Assert.Equal(ErrorCodes.Pos.OpeningCountInvalid, invalidOpen.Code);
     var reopened = await sessions.OpenSessionAsync(data.CashierId,
-      new(session.RegisterId, [new(data.IqdCurrencyId, 100), new(data.UsdCurrencyId, 10)], null), default);
+      new(session.RegisterId, [new(data.IqdMoneyAccountId, 100), new(data.UsdMoneyAccountId, 10)], null), default);
     var x = await sessions.GetXReportAsync(data.CashierId, reopened.Id, default);
     Assert.Equal(100, x.Drawers.Single(row => row.CurrencyId == data.IqdCurrencyId).ExpectedAmount);
     Assert.Equal(13_000, x.Drawers.Single(row => row.CurrencyId == data.UsdCurrencyId).ExpectedBaseAmount);
@@ -151,21 +152,30 @@ public sealed partial class PosWorkflowTests
     Assert.True((await sessions.GetRegisterAsync(seededSession.RegisterId, default)).HasOpenSession);
 
     await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
-      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+      new([new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0)], null), default);
     Assert.False((await sessions.GetRegistersAsync(new(), default)).Items
       .Single(register => register.Id == seededSession.RegisterId).HasOpenSession);
     Assert.False((await sessions.GetRegisterAsync(seededSession.RegisterId, default)).HasOpenSession);
 
-    var spare = await sessions.CreateRegisterAsync(new("SPARE", "Spare POS"), default);
+    var spareAccount = new MoneyAccountEntity
+    {
+      Code = "SPARE-IQD", Name = "Spare IQD", Type = MoneyAccountType.Cashbox,
+      BranchId = data.BranchId, CurrencyId = data.IqdCurrencyId,
+      AccountingAccount = new() { Code = "1113", Name = "Spare IQD", Classification = Api.Modules.Accounting.AccountClassification.Asset }
+    };
+    db.MoneyAccounts.Add(spareAccount);
+    db.MoneyAccountAccess.Add(new() { MoneyAccount = spareAccount, UserId = data.CashierId, AccessLevel = MoneyAccountAccessLevel.Operate });
+    await db.SaveChangesAsync();
+    var spare = await sessions.CreateRegisterAsync(new("SPARE", "Spare POS", [spareAccount.Id]), default);
     Assert.False(spare.HasOpenSession);
     var availableUpdate = await sessions.UpdateRegisterAsync(spare.Id,
-      new(spare.Code, "Updated Spare POS", true), default);
+      new(spare.Code, "Updated Spare POS", true, [spareAccount.Id]), default);
     Assert.False(availableUpdate.HasOpenSession);
 
     await sessions.OpenSessionAsync(data.CashierId,
-      new(spare.Id, [new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+      new(spare.Id, [new(spareAccount.Id, 0)], null), default);
     var occupiedUpdate = await sessions.UpdateRegisterAsync(spare.Id,
-      new(spare.Code, spare.Name, true), default);
+      new(spare.Code, spare.Name, true, [spareAccount.Id]), default);
     Assert.True(occupiedUpdate.HasOpenSession);
     Assert.True((await sessions.GetRegistersAsync(new(), default)).Items
       .Single(register => register.Id == spare.Id).HasOpenSession);
@@ -197,7 +207,7 @@ public sealed partial class PosWorkflowTests
     var registerPage = await sessions.GetRegistersAsync(new() { Page = 2, PageSize = 1 }, default);
     Assert.Equal(registers.Items[1].Id, Assert.Single(registerPage.Items).Id);
     var report = await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
-      new([new(data.IqdCurrencyId, 0), new(data.UsdCurrencyId, 0)], null), default);
+      new([new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0)], null), default);
     var reports = await sessions.GetZReportsAsync(data.CashierId, new() { Page = 0, PageSize = 0 }, default);
     Assert.Equal(1, reports.Page);
     Assert.Equal(20, reports.PageSize);
@@ -216,6 +226,123 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
+  public async Task Physical_opening_count_snapshots_exact_cashbox_without_financial_posting()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var sessions = CreateSessionService(db);
+    var seeded = await sessions.GetSessionAsync(data.CashierId, data.SessionId, default);
+    await sessions.CloseSessionAsync(data.CashierId, data.SessionId,
+      new([new(data.IqdMoneyAccountId, 0), new(data.UsdMoneyAccountId, 0)], null), default);
+    var ledgerCount = await db.MoneyLedgerEntries.CountAsync();
+    var journalCount = await db.JournalEntries.CountAsync();
+    var accountingBalance = await PosBalanceAsync(db, data.IqdMoneyAccountId);
+
+    var reopened = await sessions.OpenSessionAsync(data.CashierId,
+      new(seeded.RegisterId, [new(data.IqdMoneyAccountId, 200_000), new(data.UsdMoneyAccountId, 0)], null), default);
+
+    var snapshot = reopened.OpeningCounts.Single(count => count.MoneyAccountId == data.IqdMoneyAccountId);
+    Assert.Equal(200_000, snapshot.Amount);
+    Assert.Equal(data.IqdCurrencyId, snapshot.CurrencyId);
+    Assert.Equal(ledgerCount, await db.MoneyLedgerEntries.CountAsync());
+    Assert.Equal(journalCount, await db.JournalEntries.CountAsync());
+    Assert.Equal(accountingBalance, await PosBalanceAsync(db, data.IqdMoneyAccountId));
+  }
+
+  [Fact]
+  public async Task Register_configuration_rejects_duplicate_currency_and_owned_cashboxes()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var spare = new MoneyAccountEntity
+    {
+      Code = "SECOND-IQD",
+      Name = "Second IQD",
+      Type = MoneyAccountType.Cashbox,
+      BranchId = data.BranchId,
+      CurrencyId = data.IqdCurrencyId,
+      AccountingAccount = new()
+      {
+        Code = "1115",
+        Name = "Second IQD",
+        Classification = Api.Modules.Accounting.AccountClassification.Asset
+      }
+    };
+    db.MoneyAccounts.Add(spare);
+    await db.SaveChangesAsync();
+    var sessions = CreateSessionService(db);
+
+    var duplicateCurrency = await Assert.ThrowsAsync<BadRequestException>(() =>
+      sessions.CreateRegisterAsync(new("DUP-CURRENCY", "Duplicate Currency", [data.IqdMoneyAccountId, spare.Id]), default));
+    Assert.Equal(ErrorCodes.Pos.RegisterCashboxDuplicateCurrency, duplicateCurrency.Code);
+
+    var alreadyOwned = await Assert.ThrowsAsync<ConflictException>(() =>
+      sessions.CreateRegisterAsync(new("DUP-ACCOUNT", "Duplicate Account", [data.IqdMoneyAccountId]), default));
+    Assert.Equal(ErrorCodes.Pos.CashboxAlreadyAssigned, alreadyOwned.Code);
+  }
+
+  [Fact]
+  public async Task Pos_references_protect_cashbox_structure_deletion_and_active_use()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var finance = new FinanceService(db, Microsoft.Extensions.Options.Options.Create(new FinanceOptions()));
+    var account = await db.MoneyAccounts.AsNoTracking()
+      .SingleAsync(item => item.Id == data.IqdMoneyAccountId);
+
+    var structural = await Assert.ThrowsAsync<BadRequestException>(() => finance.UpdateMoneyAccountAsync(
+      account.Id,
+      new(account.Code, account.Name, MoneyAccountType.Bank, account.BranchId, account.CurrencyId, true),
+      data.CashierId,
+      default));
+    Assert.Equal(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed, structural.Code);
+
+    var deactivation = await Assert.ThrowsAsync<BadRequestException>(() => finance.UpdateMoneyAccountAsync(
+      account.Id,
+      new(account.Code, account.Name, account.Type, account.BranchId, account.CurrencyId, false),
+      data.CashierId,
+      default));
+    Assert.Equal(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed, deactivation.Code);
+
+    var deletion = await Assert.ThrowsAsync<BadRequestException>(() =>
+      finance.DeleteMoneyAccountAsync(account.Id, data.CashierId, default));
+    Assert.Equal(ErrorCodes.Finance.MoneyAccountStructuralChangeNotAllowed, deletion.Code);
+  }
+
+  [Fact]
+  public void Cashbox_model_has_database_enforced_branch_currency_and_ownership_invariants()
+  {
+    using var db = CreateDb();
+    var register = db.Model.FindEntityType(typeof(PosRegisterEntity))!;
+    var session = db.Model.FindEntityType(typeof(PosSessionEntity))!;
+    var account = db.Model.FindEntityType(typeof(MoneyAccountEntity))!;
+    var mapping = db.Model.FindEntityType(typeof(PosRegisterCashboxEntity))!;
+    var opening = db.Model.FindEntityType(typeof(PosSessionOpeningCountEntity))!;
+    var closing = db.Model.FindEntityType(typeof(PosSessionClosingCountEntity))!;
+
+    Assert.Contains(register.GetKeys(), key => PropertyNames(key.Properties).SequenceEqual(["Id", "BranchId"]));
+    Assert.Contains(session.GetKeys(), key => PropertyNames(key.Properties).SequenceEqual(["Id", "BranchId"]));
+    Assert.Contains(account.GetKeys(), key => PropertyNames(key.Properties).SequenceEqual(["Id", "BranchId", "CurrencyId"]));
+    Assert.Contains(mapping.GetIndexes(), index => index.GetDatabaseName() == PosRegisterCashboxEntityConfiguration.MoneyAccountUniqueIndexName
+      && index.IsUnique && PropertyNames(index.Properties).SequenceEqual(["MoneyAccountId"]));
+    Assert.Contains(mapping.GetIndexes(), index => index.GetDatabaseName() == "UX_pos_register_cashboxes_register_currency"
+      && index.IsUnique && PropertyNames(index.Properties).SequenceEqual(["PosRegisterId", "CurrencyId"]));
+    Assert.Contains(mapping.GetForeignKeys(), foreignKey =>
+      PropertyNames(foreignKey.Properties).SequenceEqual(["PosRegisterId", "BranchId"])
+      && PropertyNames(foreignKey.PrincipalKey.Properties).SequenceEqual(["Id", "BranchId"]));
+    Assert.Contains(mapping.GetForeignKeys(), foreignKey =>
+      PropertyNames(foreignKey.Properties).SequenceEqual(["MoneyAccountId", "BranchId", "CurrencyId"])
+      && PropertyNames(foreignKey.PrincipalKey.Properties).SequenceEqual(["Id", "BranchId", "CurrencyId"]));
+    Assert.All(new[] { opening, closing }, count =>
+    {
+      Assert.Contains(count.GetForeignKeys(), foreignKey =>
+        PropertyNames(foreignKey.Properties).SequenceEqual(["PosSessionId", "BranchId"]));
+      Assert.Contains(count.GetForeignKeys(), foreignKey =>
+        PropertyNames(foreignKey.Properties).SequenceEqual(["MoneyAccountId", "BranchId", "CurrencyId"]));
+    });
+  }
+
+  [Fact]
   public void Z_report_columns_accept_the_full_source_name_lengths()
   {
     using var db = CreateDb();
@@ -224,6 +351,9 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(db.Model.FindEntityType(typeof(MoneyAccountEntity))!.FindProperty("Name")!.GetMaxLength(),
       db.Model.FindEntityType(typeof(PosZPaymentSummaryEntity))!.FindProperty("MoneyAccountName")!.GetMaxLength());
   }
+
+  private static IEnumerable<string> PropertyNames(IEnumerable<Microsoft.EntityFrameworkCore.Metadata.IReadOnlyProperty> properties) =>
+    properties.Select(property => property.Name);
 
   [Theory]
   [InlineData(PostgresErrorCodes.SerializationFailure)]

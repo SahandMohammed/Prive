@@ -63,7 +63,7 @@ function CloseSessionForm({
     resolver: zodResolver(closingAnotherCashier ? posForceCloseSessionSchema : posCloseSessionSchema),
     defaultValues: {
       closingCounts: report.drawers.map((drawer) => ({
-        currencyId: drawer.currencyId,
+        moneyAccountId: drawer.moneyAccountId,
         countedAmount: drawer.expectedAmount,
       })),
       notes: '',
@@ -127,18 +127,21 @@ function CloseSessionForm({
           ) : (
             <div className="space-y-3">
               {rows.map((row, index) => (
-                <div key={row.currencyId} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[100px_repeat(3,minmax(0,1fr))] md:items-center">
-                  <div className="font-mono text-base font-bold">{row.currencyCode}</div>
+                <div key={row.moneyAccountId} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[minmax(150px,1fr)_repeat(3,minmax(0,1fr))] md:items-center">
+                  <div>
+                    <p className="font-mono text-base font-bold">{row.currencyCode} · {row.moneyAccountCode}</p>
+                    <p className="text-xs text-muted-foreground">{row.moneyAccountName}</p>
+                  </div>
                   <Value label="Expected" value={money(row.expectedAmount)} />
                   <label className="grid gap-1 text-xs uppercase tracking-wide text-muted-foreground">
                     Counted
-                    <input type="hidden" {...form.register(`closingCounts.${index}.currencyId`)} />
+                    <input type="hidden" {...form.register(`closingCounts.${index}.moneyAccountId`)} />
                     <Input
                       aria-label={`${row.currencyCode} counted amount`}
                       className="font-mono text-sm text-foreground"
                       type="number"
                       min="0"
-                      step="0.0001"
+                      step={10 ** -Math.max(0, Math.min(row.currencyDecimalPlaces, 4))}
                       {...form.register(`closingCounts.${index}.countedAmount`, { valueAsNumber: true })}
                     />
                     {form.formState.errors.closingCounts?.[index]?.countedAmount?.message && (

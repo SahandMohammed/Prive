@@ -45,9 +45,10 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<CustomerReceiptEntity>().HasQueryFilter(x => SelectedBranchId == null || x.MoneyAccount.BranchId == SelectedBranchId);
     modelBuilder.Entity<CustomerReceiptAllocationEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CustomerReceipt.MoneyAccount.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRegisterEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosRegisterCashboxEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosSessionEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosSessionOpeningCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSession.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosSessionClosingCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSession.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosSessionOpeningCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosSessionClosingCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosZReportEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosZPaymentSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosZDrawerSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
@@ -120,7 +121,8 @@ public sealed partial class AppDbContext
         RequireReference(entry.Metadata.ClrType, (Guid)entry.Property("Id").OriginalValue!);
       foreach (var fk in entry.Metadata.GetForeignKeys().Where(fk => fk.PrincipalEntityType.GetDeclaredQueryFilters().Any()))
       {
-        if (fk.Properties.Count != 1 || entry.Property(fk.Properties[0].Name).CurrentValue is not Guid id) continue;
+        var idIndex = fk.PrincipalKey.Properties.ToList().FindIndex(property => property.Name == "Id");
+        if (idIndex < 0 || entry.Property(fk.Properties[idIndex].Name).CurrentValue is not Guid id) continue;
         var type = fk.PrincipalEntityType.ClrType;
         if (entries.Any(candidate => candidate.Metadata.ClrType == type && candidate.State == EntityState.Added
           && (Guid)candidate.Property("Id").CurrentValue! == id)) continue;

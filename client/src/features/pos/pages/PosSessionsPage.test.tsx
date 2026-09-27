@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { posApi } from '../api/pos.api'
+import { MoneyAccountType } from '@/features/finance'
 import { PosSessionStatus } from '../types/pos.types'
 import type { PosSession, PosSetup } from '../types/pos.types'
 import { PosSessionsPage } from './PosSessionsPage'
@@ -10,6 +11,33 @@ import { PosSessionsPage } from './PosSessionsPage'
 vi.mock('@/features/auth', () => ({
   useCurrentUser: () => ({ data: { role: 'Owner', username: 'owner' } }),
   hasCapability: () => true,
+}))
+
+vi.mock('@/features/finance', () => ({
+  MoneyAccountType: { Cashbox: 0, Bank: 1 },
+  useMoneyAccounts: () => ({
+    data: {
+      data: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          code: 'MAIN-CASH-IQD',
+          name: 'Main IQD Cashbox',
+          currencyId: '33333333-3333-4333-8333-333333333333',
+          currencyCode: 'IQD',
+        },
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          code: 'SPARE-CASH-IQD',
+          name: 'Spare IQD Cashbox',
+          currencyId: '33333333-3333-4333-8333-333333333333',
+          currencyCode: 'IQD',
+        },
+      ],
+    },
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
 }))
 
 vi.mock('../api/pos.api', () => ({
@@ -37,7 +65,18 @@ const setup: PosSetup = {
   warehouses: [],
   categories: [],
   professionals: [],
-  moneyAccounts: [],
+  moneyAccounts: [{
+    id: '44444444-4444-4444-8444-444444444444',
+    code: 'MAIN-CASH-IQD',
+    name: 'Main IQD Cashbox',
+    type: MoneyAccountType.Cashbox,
+    branchId: '11111111-1111-4111-8111-111111111111',
+    currencyId: '33333333-3333-4333-8333-333333333333',
+    currencyCode: 'IQD',
+    currencyDecimalPlaces: 0,
+    balance: 0,
+    currentExchangeRate: 1,
+  }],
 }
 
 const register = {
@@ -47,6 +86,14 @@ const register = {
   branchId: setup.branches[0].id,
   isActive: true,
   hasOpenSession: false,
+  cashboxes: [{
+    moneyAccountId: '44444444-4444-4444-8444-444444444444',
+    moneyAccountCode: 'MAIN-CASH-IQD',
+    moneyAccountName: 'Main IQD Cashbox',
+    currencyId: setup.baseCurrencyId,
+    currencyCode: 'IQD',
+    currencyDecimalPlaces: 0,
+  }],
 }
 
 const meta = (page = 1, pageSize = 20, totalCount = 1) => ({
@@ -208,6 +255,8 @@ describe('POS session management UX', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
 
     expect(screen.getByRole('dialog', { name: 'Add POS register' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /MAIN-CASH-IQD.*assigned to Reception POS/ })).toBeDisabled()
+    expect(screen.getByRole('option', { name: /SPARE-CASH-IQD/ })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
     expect(await screen.findByText('Register code is required')).toBeInTheDocument()
     expect(screen.getByText('Register name is required')).toBeInTheDocument()
@@ -215,10 +264,17 @@ describe('POS session management UX', () => {
 
     fireEvent.change(screen.getByLabelText(/Register code/), { target: { value: 'DESK' } })
     fireEvent.change(screen.getByLabelText(/Register name/), { target: { value: 'Front desk' } })
+    fireEvent.change(screen.getByLabelText('IQD Cashbox'), {
+      target: { value: '55555555-5555-4555-8555-555555555555' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Add register' }))
 
     await waitFor(() => expect(posApi.createRegister).toHaveBeenCalledWith(
-      { code: 'DESK', name: 'Front desk' },
+      {
+        code: 'DESK',
+        name: 'Front desk',
+        cashboxMoneyAccountIds: ['55555555-5555-4555-8555-555555555555'],
+      },
       expect.anything(),
     ))
     await waitFor(() => expect(posApi.registers).toHaveBeenCalledTimes(2))
@@ -341,7 +397,7 @@ describe('POS session management UX', () => {
 
     await waitFor(() => expect(posApi.openSession).toHaveBeenCalledWith({
       registerId: register.id,
-      openingCounts: [],
+      openingCounts: [{ moneyAccountId: register.cashboxes[0].moneyAccountId, amount: 0 }],
       notes: null,
     }, expect.anything()))
 
@@ -350,14 +406,14 @@ describe('POS session management UX', () => {
     expect(workspaceWindow.opener).toBeNull()
   })
 
-  it('closes the prepared workspace when session validation fails', async () => {
+  it('does not prepare a workspace while the opening configuration is incomplete', async () => {
     mount()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Create new session' }))
     fireEvent.change(screen.getByLabelText('Register'), { target: { value: '' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Open Session' }))
-
-    await waitFor(() => expect(workspaceWindow.close).toHaveBeenCalledOnce())
+    expect(screen.getByRole('button', { name: 'Open Session' })).toBeDisabled()
+    expect(window.open).not.toHaveBeenCalled()
+    expect(workspaceWindow.close).not.toHaveBeenCalled()
     expect(posApi.openSession).not.toHaveBeenCalled()
   })
 
@@ -402,5 +458,9 @@ describe('POS session management UX', () => {
 
     expect(registers.getByText('In use')).toBeInTheDocument()
     expect(registers.getByRole('button', { name: 'Deactivate' })).toBeDisabled()
+    fireEvent.click(registers.getByRole('button', { name: 'Edit Reception POS' }))
+    expect(screen.getByLabelText('IQD Cashbox')).toBeDisabled()
+    expect(screen.getByLabelText(/Register code/)).toBeEnabled()
+    expect(screen.getByText(/assignments are locked while this Register has an open session/)).toBeInTheDocument()
   })
 })
