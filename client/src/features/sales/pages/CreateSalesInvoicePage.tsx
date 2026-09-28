@@ -1,13 +1,14 @@
 import { getSelectedBranchId } from '@/features/business'
 import { useEffect, useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowLeft, BookOpen, BriefcaseBusiness, History, Loader2, Package, PackageSearch, Pencil, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, Banknote, BookOpen, BriefcaseBusiness, History, Loader2, Package, PackageSearch, Pencil, ReceiptText, Save, Send, Trash2 } from 'lucide-react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { hasCapability, useCurrentUser } from '@/features/auth'
 import { useBranches, useCurrencies, useCurrentBusiness } from '@/features/business'
@@ -99,7 +100,7 @@ export function CreateSalesInvoicePage() {
   const products = useProducts().data?.data ?? []
   const form = useForm<InvoiceForm>({
     resolver: zodResolver(salesInvoiceSchema),
-    defaultValues: { customerId: '', invoiceDate: today(), branchId: getSelectedBranchId(), warehouseId: '', currencyId: '', exchangeRate: 1, notes: '', correctionReason: '', lines: [newServiceLine()] },
+    defaultValues: { customerId: '', invoiceDate: today(), branchId: getSelectedBranchId(), warehouseId: '', currencyId: '', exchangeRate: 1, notes: '', correctionReason: '', lines: [] },
   })
   const lineFields = useFieldArray({ control: form.control, name: 'lines' })
   const values = useWatch({ control: form.control })
@@ -173,6 +174,16 @@ export function CreateSalesInvoicePage() {
     form.setValue('exchangeRate', event.target.value === business?.baseCurrencyId ? 1 : null, { shouldDirty: true })
   }
 
+  const changeLineType = (index: number, lineType: SalesLineTypeValue) => {
+    const current = form.getValues(`lines.${index}`)
+    const replacement = lineType === SalesLineType.Service ? newServiceLine() : newProductLine()
+    lineFields.update(index, {
+      ...replacement,
+      description: current.description,
+      quantity: current.quantity,
+    })
+  }
+
   const submit = form.handleSubmit((value) => {
     if (isForeign && (!value.exchangeRate || value.exchangeRate <= 0)) {
       form.setError('exchangeRate', { message: 'Exchange rate is required for a foreign-currency sale' })
@@ -224,11 +235,13 @@ export function CreateSalesInvoicePage() {
 
   const cancelPostedEdit = () => {
     if (invoice) form.reset(invoiceToForm(invoice))
+    updatePosted.reset()
     setEditingPosted(false)
   }
 
   const startPostedEdit = () => {
     if (!invoice) return
+    updatePosted.reset()
     form.reset(invoiceToForm(invoice))
     if (invoice.posContext) {
       setPosPaymentMode(invoice.posContext.paymentMode)
@@ -260,81 +273,479 @@ export function CreateSalesInvoicePage() {
   if (id && invoiceQuery.isPending) return <div className="grid h-64 place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
   if (invoiceQuery.isError) return <p className="text-destructive">{invoiceQuery.error.message}</p>
 
-  return <div className="flex h-full flex-col space-y-6">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><Link to="/sales/invoices"><Button variant="ghost" size="icon"><ArrowLeft className="size-4" /></Button></Link><div><h1 className="text-2xl font-bold">Sales Invoice <span className="font-mono text-primary">{invoice?.documentNumber ?? 'New draft'}</span></h1><p className="text-sm text-muted-foreground">{posted ? 'Posted · corrections rebuild the invoice-owned financial and stock effects' : 'Draft · no Accounting or Inventory effect yet'}</p></div></div><div className="flex flex-wrap items-center gap-2">{invoice && <SalesStatusBadge status={invoice.status} />}{posted && invoice && <><Link to={`/inventory/ledger?documentNumber=${encodeURIComponent(invoice.documentNumber)}`}><Button variant="outline" size="sm"><PackageSearch className="size-4" />Stock ledger</Button></Link>{invoice.journalEntryId && <Link to={`/accounting/journal?search=${encodeURIComponent(invoice.documentNumber)}`}><Button variant="outline" size="sm"><BookOpen className="size-4" />Accounting journal</Button></Link>}{canEditPosted && !editingPosted && <Button type="button" variant="outline" size="sm" onClick={startPostedEdit}><Pencil className="size-4" />Edit</Button>}{canEditPosted && editingPosted && <Button type="button" variant="outline" size="sm" onClick={cancelPostedEdit}>Cancel edit</Button>}{canDeletePosted && <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 className="size-4" />Delete</Button>}</>}</div></div>
+  const requestError = posted
+    ? editingPosted ? updatePosted.error : null
+    : save.error ?? post.error ?? remove.error
+  const isBusy = save.isPending || post.isPending || remove.isPending || updatePosted.isPending
+  const isClosedPosSession = invoice?.posContext?.sessionStatus === 1
+  const pageTitle = posted
+    ? invoice?.documentNumber ?? 'Sales invoice'
+    : id
+      ? `Edit ${invoice?.documentNumber ?? 'sales invoice'}`
+      : 'New sales invoice'
 
-    <form onSubmit={submit} className="space-y-5">
-      {posted && editingPosted && <Card className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20"><CardHeader><CardTitle>Editing a posted invoice</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm text-muted-foreground">Saving replaces the financial, stock, and POS effects owned by this invoice. Its number, posting time, and POS identity remain unchanged.</p>{invoice?.posContext?.sessionStatus === 1 && <p className="text-sm text-muted-foreground">The original POS session will remain closed and its Z Report will be regenerated automatically.</p>}<Field label="Correction reason" error={form.formState.errors.correctionReason?.message}><Textarea rows={2} placeholder="Explain why this posted invoice is being corrected" {...form.register('correctionReason')} /></Field></CardContent></Card>}
-      <fieldset disabled={Boolean(posted && !editingPosted)} className="space-y-5 disabled:opacity-80">
-      <Card><CardHeader><CardTitle>Customer and fulfilment</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-4">
-        <Field label="Customer" error={form.formState.errors.customerId?.message}><Select {...form.register('customerId')}><option value="">Walk-in draft (customer required to post)</option>{selectableCustomers.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select></Field>
-        <Field label="Invoice date" error={form.formState.errors.invoiceDate?.message}><Input type="date" {...form.register('invoiceDate')} /></Field>
-        <Field label="Branch" error={form.formState.errors.branchId?.message}><Select {...form.register('branchId', { onChange: () => form.setValue('warehouseId', '', { shouldDirty: true }) })} disabled={Boolean(invoice?.posContext)}>{branches.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
-        <Field label={hasProductLines ? 'Product warehouse' : 'Warehouse (optional)'} error={form.formState.errors.warehouseId?.message}><Select {...form.register('warehouseId')}><option value="">{hasProductLines ? 'Select warehouse' : 'No Product fulfilment'}</option>{availableWarehouses.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
-        <Field label="Currency" error={form.formState.errors.currencyId?.message}><Select {...form.register('currencyId', { onChange: handleCurrencyChange })} disabled={Boolean(invoice?.posContext)}><option value="">Select currency</option>{currencies.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field>
-        {isForeign && <Field label={`Rate: 1 ${currencies.find((item) => item.id === selectedCurrencyId)?.code ?? ''} in ${business?.baseCurrencyCode ?? 'base currency'}`} error={form.formState.errors.exchangeRate?.message ?? effectiveRateQuery.error?.message}><Input type="number" min="0.000001" step="0.000001" {...form.register('exchangeRate', { setValueAs: (value) => value === '' ? null : Number(value) })} /></Field>}
-        <Field label="Notes" error={form.formState.errors.notes?.message}><Textarea rows={2} {...form.register('notes')} /></Field>
-      </CardContent></Card>
+  return (
+    <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col space-y-5">
+      <header className="sticky top-0 z-20 -mx-2 flex flex-col justify-between gap-4 border-b bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:flex-row lg:items-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/sales/invoices">
+            <Button variant="outline" size="icon-sm" aria-label="Back to Sales Invoices">
+              <ArrowLeft className="size-4" />
+            </Button>
+          </Link>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-2xl font-bold tracking-tight">{pageTitle}</h1>
+              {invoice && <SalesStatusBadge status={invoice.status} />}
+              {invoice?.posContext && <SourceBadge label="POS" />}
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {invoice?.posContext
+                ? `Sale ${invoice.posContext.documentNumber} · Session ${invoice.posContext.posSessionNumber ?? '—'}`
+                : posted
+                  ? 'Posted sales invoice'
+                  : id
+                    ? 'Draft sales invoice'
+                    : 'Create a draft sales invoice'}
+            </p>
+          </div>
+        </div>
 
-      <Card><CardHeader><CardTitle>Services and Products</CardTitle></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-sm"><thead><tr className={head}><th>Type</th><th>Service or Product</th><th>Description</th><th>Unit / stock</th><th className="text-right">Quantity</th><th className="text-right">Unit price</th><th className="text-right">Total</th><th /></tr></thead><tbody>{lineFields.fields.map((field, index) => {
-        const line = values.lines?.[index]
-        const isService = line?.lineType === SalesLineType.Service
-        const selectedProduct = selectableProducts.find((item) => item.id === line?.productId)
-        const unitOptions = productUnitOptions(selectedProduct)
-        const invoiceLine = invoice?.lines[index]
-        if (line?.unitOfMeasureId && !unitOptions.some((unit) => unit.id === line.unitOfMeasureId)) unitOptions.push({ id: line.unitOfMeasureId, name: invoiceLine?.unitCode ?? 'Unavailable unit', code: invoiceLine?.unitCode ?? '—', operation: invoiceLine?.conversionOperation ?? null, factor: invoiceLine?.conversionFactor ?? 1 })
-        const baseQuantity = selectedProduct && line?.unitOfMeasureId ? convertToBaseQuantity(selectedProduct, line.unitOfMeasureId, Number(line.quantity) || 0) ?? invoiceLine?.baseQuantity ?? null : null
-        const selectedUnitPriceBase = Number(line?.unitPriceBase) || 0
-        const stock = balances.find((item) => item.productId === selectedProduct?.id)?.quantity ?? 0
-        const lineTotal = (Number(line?.quantity) || 0) * (Number(line?.unitPrice) || 0)
-        const sourceRegistration = isService ? form.register(`lines.${index}.serviceId`) : form.register(`lines.${index}.productId`)
-        const unitRegistration = form.register(`lines.${index}.unitOfMeasureId`)
-        const priceRegistration = form.register(`lines.${index}.unitPrice`, { valueAsNumber: true })
-        return <tr key={field.id} className="border-b align-top"><td className="p-2"><LineTypeBadge lineType={line?.lineType ?? SalesLineType.Service} /><input type="hidden" {...form.register(`lines.${index}.lineType`, { valueAsNumber: true })} /></td><td className="p-2"><Select {...sourceRegistration} onChange={(event) => {
-          sourceRegistration.onChange(event)
-          if (isService) {
-            const selected = selectableServices.find((item) => item.id === event.target.value)
-            const basePrice = selected?.sellingPriceBase ?? 0
-            form.setValue(`lines.${index}.unitPriceBase`, basePrice, { shouldDirty: true })
-            form.setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
-            form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(basePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
-          } else {
-            const selected = selectableProducts.find((item) => item.id === event.target.value)
-            const basePrice = selected?.sellingPriceBase ?? 0
-            form.setValue(`lines.${index}.unitOfMeasureId`, selected?.unitOfMeasureId ?? '', { shouldDirty: true, shouldValidate: true })
-            form.setValue(`lines.${index}.unitPriceBase`, basePrice, { shouldDirty: true })
-            form.setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
-            form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(basePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
-          }
-        }}><option value="">Select {isService ? 'Service' : 'Product'}</option>{isService ? selectableServices.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>) : selectableProducts.map((item) => <option key={item.id} value={item.id}>{item.sku} — {item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select>{isService ? form.formState.errors.lines?.[index]?.serviceId?.message && <ErrorText value={form.formState.errors.lines[index]?.serviceId?.message} /> : form.formState.errors.lines?.[index]?.productId?.message && <ErrorText value={form.formState.errors.lines[index]?.productId?.message} />}</td><td className="p-2"><Input placeholder="Optional line note" {...form.register(`lines.${index}.description`)} /></td><td className="p-2">{isService ? <span className="text-muted-foreground">No stock movement</span> : <><Select {...unitRegistration} disabled={!selectedProduct} onChange={(event) => { const currentBaseUnitPrice = selectedProduct && line?.unitOfMeasureId ? convertUnitPriceToBasePrice(selectedProduct, line.unitOfMeasureId, selectedUnitPriceBase) : null; unitRegistration.onChange(event); const nextBasePrice = selectedProduct && currentBaseUnitPrice !== null ? convertBasePriceToUnitPrice(selectedProduct, event.target.value, currentBaseUnitPrice) : null; if (nextBasePrice !== null) { form.setValue(`lines.${index}.unitPriceBase`, round6(nextBasePrice), { shouldDirty: true }); form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(nextBasePrice / rate) : 0, { shouldDirty: true, shouldValidate: true }) } }}><option value="">Select unit</option>{unitOptions.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} — {unit.name}</option>)}</Select><p className="mt-1 text-xs text-muted-foreground">Available: <span className="font-mono">{values.warehouseId ? `${formatAmount(stock)} ${selectedProduct?.unitCode ?? ''}` : '—'}</span></p></>}</td><td className="p-2"><Input className="text-right" type="number" min="0.0001" step="0.0001" {...form.register(`lines.${index}.quantity`, { valueAsNumber: true })} />{selectedProduct && baseQuantity !== null && <p className="mt-1 text-right text-xs text-muted-foreground">Base: {formatAmount(baseQuantity)} {selectedProduct.unitCode}</p>}{form.formState.errors.lines?.[index]?.quantity?.message && <ErrorText value={form.formState.errors.lines[index]?.quantity?.message} />}</td><td className="p-2"><Input className="text-right" type="number" min="0" step="0.000001" disabled={isForeign && rate <= 0} {...priceRegistration} onChange={(event) => { priceRegistration.onChange(event); const transactionPrice = Number(event.target.value) || 0; form.setValue(`lines.${index}.unitPriceBase`, round6(transactionPrice * rate), { shouldDirty: true }); form.setValue(`lines.${index}.useMasterPrice`, false, { shouldDirty: true }) }} />{(isService || selectedProduct) && <p className="mt-1 text-right text-xs text-muted-foreground">Base: {formatMoney(selectedUnitPriceBase, business?.baseCurrencyDecimalPlaces)} {business?.baseCurrencyCode}{selectedProduct && line?.unitOfMeasureId ? ` / ${unitOptions.find((unit) => unit.id === line.unitOfMeasureId)?.code ?? selectedProduct.unitCode}` : ''}</p>}{form.formState.errors.lines?.[index]?.unitPrice?.message && <ErrorText value={form.formState.errors.lines[index]?.unitPrice?.message} />}</td><td className="p-2 text-right font-mono">{formatMoney(lineTotal, selectedCurrency?.decimalPlaces)}</td><td className="p-2"><Button type="button" variant="ghost" size="icon-sm" disabled={lineFields.fields.length === 1} onClick={() => lineFields.remove(index)}><Trash2 className="size-4" /></Button></td></tr>
-      })}</tbody></table></div><div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => lineFields.append(newServiceLine())}><BriefcaseBusiness className="size-4" />Add Service</Button><Button type="button" variant="outline" onClick={() => lineFields.append(newProductLine())}><Package className="size-4" />Add Product</Button></div><div className="min-w-72 space-y-1 text-right"><p className="text-sm text-muted-foreground">Subtotal <span className="ml-4 font-mono text-foreground">{formatMoney(subtotal, selectedCurrency?.decimalPlaces)} {selectedCurrency?.code ?? ''}</span></p><p className="text-lg font-semibold">Total <span className="ml-4 font-mono">{formatMoney(subtotal, selectedCurrency?.decimalPlaces)} {selectedCurrency?.code ?? ''}</span></p>{isForeign && <p className="text-sm font-semibold text-primary">Base equivalent <span className="ml-4 font-mono">{formatMoney(baseTotal, business?.baseCurrencyDecimalPlaces)} {business?.baseCurrencyCode}</span></p>}</div></div>{form.formState.errors.lines?.root?.message && <p className="mt-2 text-sm text-destructive">{form.formState.errors.lines.root.message}</p>}</CardContent></Card>
+        <div className="flex flex-wrap items-center gap-2">
+          {posted && invoice ? (
+            <>
+              <Link to={`/inventory/ledger?documentNumber=${encodeURIComponent(invoice.documentNumber)}`}>
+                <Button variant="outline" size="sm"><PackageSearch className="size-4" />Stock</Button>
+              </Link>
+              {invoice.journalEntryId && (
+                <Link to={`/accounting/journal?search=${encodeURIComponent(invoice.documentNumber)}`}>
+                  <Button variant="outline" size="sm"><BookOpen className="size-4" />Journal</Button>
+                </Link>
+              )}
+              {editingPosted ? (
+                <>
+                  <Button type="button" variant="outline" size="sm" onClick={cancelPostedEdit} disabled={isBusy}>Cancel</Button>
+                  <Button type="submit" form="sales-invoice-form" size="sm" disabled={updatePosted.isPending}>
+                    {updatePosted.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                    Save correction
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {canEditPosted && <Button type="button" size="sm" onClick={startPostedEdit}><Pencil className="size-4" />Edit</Button>}
+                  {canDeletePosted && <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 className="size-4" />Delete</Button>}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <Link to="/sales/invoices"><Button type="button" variant="outline" size="sm" disabled={isBusy}>Cancel</Button></Link>
+              {id && (
+                <Button type="button" variant="outline" size="sm" disabled={remove.isPending} onClick={() => { if (window.confirm('Delete this Draft Sales Invoice?')) remove.mutate(id, { onSuccess: () => navigate('/sales/invoices') }) }}>
+                  <Trash2 className="size-4" />Delete draft
+                </Button>
+              )}
+              <Button type="submit" form="sales-invoice-form" variant="outline" size="sm" disabled={save.isPending || post.isPending}>
+                {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Save draft
+              </Button>
+              {id && (
+                <Button type="button" size="sm" disabled={form.formState.isDirty || post.isPending} onClick={() => { if (window.confirm('Post this Sales Invoice? Receivable, Revenue, and Product Inventory effects will be permanent.')) post.mutate(id) }}>
+                  {post.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  Post invoice
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </header>
 
-      {posted && editingPosted && invoice?.posContext && <Card><CardHeader><CardTitle>POS settlement</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Sale {invoice.posContext.documentNumber} remains in session {invoice.posContext.posSessionNumber ?? '—'}. Only that session’s existing Cashboxes can be used.</p><Field label="Payment mode"><Select value={posPaymentMode} onChange={(event) => setPosPaymentMode(Number(event.target.value) as PosPaymentModeValue)}><option value={PosPaymentMode.Paid}>Paid</option><option value={PosPaymentMode.Partial}>Partial</option><option value={PosPaymentMode.Credit}>Credit</option></Select></Field>{posPaymentMode !== PosPaymentMode.Credit && <div className="grid gap-3 md:grid-cols-2">{invoice.posContext.sessionCashboxes.map((cashbox) => <Field key={cashbox.moneyAccountId} label={`${cashbox.moneyAccountCode} — ${cashbox.moneyAccountName} (${cashbox.currencyCode})`}><Input type="number" min="0" step="0.0001" value={tenderAmounts[cashbox.moneyAccountId] ?? 0} onChange={(event) => setTenderAmounts((current) => ({ ...current, [cashbox.moneyAccountId]: Number(event.target.value) || 0 }))} /></Field>)}</div>}{posPaymentMode === PosPaymentMode.Paid && <div className="grid gap-3 md:grid-cols-2"><Field label="Change Cashbox"><Select value={changeCashboxId} onChange={(event) => setChangeCashboxId(event.target.value)}><option value="">No change</option>{invoice.posContext.sessionCashboxes.map((cashbox) => <option key={cashbox.moneyAccountId} value={cashbox.moneyAccountId}>{cashbox.moneyAccountCode} — {cashbox.currencyCode}</option>)}</Select></Field><Field label="Change amount"><Input type="number" min="0" step="0.0001" value={changeAmount} onChange={(event) => setChangeAmount(Number(event.target.value) || 0)} /></Field></div>}</CardContent></Card>}
-    </fieldset>
+      <form id="sales-invoice-form" onSubmit={submit} className="space-y-5">
+        {requestError && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            {requestError.message}
+          </div>
+        )}
 
-    {posted && invoice && <Card><CardHeader><CardTitle>Customer receipts</CardTitle></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 rounded bg-muted p-4 text-sm sm:grid-cols-3"><Audit label="Payment state" value={paymentStatusLabel[invoice.paymentStatus]} /><Audit label="Received" value={`${formatAmount(invoice.receivedAmount)} ${invoice.currencyCode}`} /><Audit label="Outstanding" value={`${formatAmount(invoice.outstandingAmount)} ${invoice.currencyCode}`} /></div>{invoice.receipts.length === 0 ? <p className="text-sm text-muted-foreground">No posted Customer Receipts have been allocated to this invoice.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className={head}><th>Receipt</th><th>Date</th><th className="text-right">Applied</th><th className="text-right">Base applied</th></tr></thead><tbody>{invoice.receipts.map((receipt) => <tr key={receipt.customerReceiptId} className="border-b"><td className="p-2"><Link className="font-mono text-primary" to={`/finance/customer-receipts/${receipt.customerReceiptId}`}>{receipt.customerReceiptDocumentNumber}</Link></td><td className="p-2">{receipt.receiptDate}</td><td className="p-2 text-right font-mono">{formatAmount(receipt.amount)} {invoice.currencyCode}</td><td className="p-2 text-right font-mono">{formatAmount(receipt.baseAmount)} {invoice.baseCurrencyCode}</td></tr>)}</tbody></table></div>}</CardContent></Card>}
-    {invoice && <Card><CardContent className="grid gap-3 pt-6 text-sm sm:grid-cols-3"><Audit label="Created" value={`${invoice.createdByUsername} · ${formatTimestamp(invoice.createdAtUtc)}`} /><Audit label="Updated" value={formatTimestamp(invoice.updatedAtUtc)} /><Audit label="Posted" value={invoice.postedAtUtc ? formatTimestamp(invoice.postedAtUtc) : 'Not posted'} /></CardContent></Card>}
-    {posted && (canEditPosted || canDeletePosted) && <Card><CardHeader><CardTitle className="flex items-center gap-2"><History className="size-4" />Correction history</CardTitle></CardHeader><CardContent className="space-y-3">{history.isPending ? <p className="text-sm text-muted-foreground">Loading history…</p> : history.isError ? <p className="text-sm text-destructive">{history.error.message}</p> : history.data?.length ? history.data.map((entry) => <div key={entry.id} className="rounded-md border p-3"><p className="font-medium capitalize">Invoice {entry.action}</p><p className="text-sm text-muted-foreground">{entry.changedByUsername} · {formatTimestamp(entry.changedAtUtc)}</p>{entry.reason && <p className="mt-2 text-sm">Reason: {entry.reason}</p>}<div className="mt-3 grid gap-2 sm:grid-cols-2">{entry.beforeState !== null && <SnapshotDetails label="View before" value={entry.beforeState} />}{entry.afterState !== null && <SnapshotDetails label="View after" value={entry.afterState} />}</div></div>) : <p className="text-sm text-muted-foreground">No posted-invoice corrections have been recorded.</p>}</CardContent></Card>}
-    {posted && editingPosted && <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"><div>{updatePosted.error && <p className="text-sm text-destructive">{updatePosted.error.message}</p>}<p className="text-xs text-muted-foreground">The backend replaces only effects it can prove belong to this invoice. Linked independent transactions block the correction.</p></div><div className="flex gap-2"><Button type="button" variant="outline" onClick={cancelPostedEdit}>Cancel</Button><Button type="submit" disabled={updatePosted.isPending}>{updatePosted.isPending && <Loader2 className="size-4 animate-spin" />}Save correction</Button></div></div>}
-    {!posted && <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"><div>{(save.error ?? post.error ?? remove.error) && <p className="text-sm text-destructive">{(save.error ?? post.error ?? remove.error)?.message}</p>}<p className="text-xs text-muted-foreground">Posting requires an active Customer. It creates Accounts Receivable and Revenue, plus stock-out and COGS for Product lines.</p></div><div className="flex gap-2">{id && <Button type="button" variant="destructive" disabled={remove.isPending} onClick={() => { if (window.confirm('Delete this Draft Sales Invoice?')) remove.mutate(id, { onSuccess: () => navigate('/sales/invoices') }) }}>Delete</Button>}<Button type="submit" variant="outline" disabled={save.isPending || post.isPending}>{save.isPending && <Loader2 className="size-4 animate-spin" />}Save Draft</Button>{id && <Button type="button" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={form.formState.isDirty || post.isPending} onClick={() => { if (window.confirm('Post this Sales Invoice? Receivable, Revenue, and Product Inventory effects will be permanent.')) post.mutate(id) }}><Send className="size-4" />Post Invoice</Button>}</div></div>}
-    </form>
-    <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) { setDeleteReason(''); setDeleteReasonError('') } }}><DialogContent><DialogHeader><DialogTitle>Delete Invoice {invoice?.documentNumber}?</DialogTitle><DialogDescription>This will remove the financial, stock, and POS effects generated by this invoice. Its identity and audit history will be retained.{invoice?.posContext?.sessionStatus === 1 ? ' The original POS session will remain closed and its Z Report will be regenerated.' : ''}</DialogDescription></DialogHeader><Field label="Reason" error={deleteReasonError}><Textarea rows={3} value={deleteReason} onChange={(event) => { setDeleteReason(event.target.value); setDeleteReasonError('') }} placeholder="Explain why this posted invoice must be deleted" /></Field>{deletePosted.error && <p className="text-sm text-destructive">{deletePosted.error.message}</p>}<DialogFooter><DialogClose render={<Button variant="outline" />}>Cancel</DialogClose><Button type="button" variant="destructive" disabled={deletePosted.isPending} onClick={confirmPostedDelete}>{deletePosted.isPending && <Loader2 className="size-4 animate-spin" />}Delete Invoice</Button></DialogFooter></DialogContent></Dialog>
-  </div>
+        {posted && editingPosted && (
+          <Card className="border-amber-300 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
+            <CardContent className="grid gap-4 pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)] lg:items-end">
+              <div>
+                <p className="font-semibold text-amber-950 dark:text-amber-100">Posted invoice correction</p>
+                <p className="mt-1 text-sm text-amber-900/70 dark:text-amber-100/70">
+                  {isClosedPosSession
+                    ? 'The POS session stays closed and its Z Report is refreshed.'
+                    : 'The invoice number and posting date stay unchanged.'}
+                </p>
+              </div>
+              <Field label="Correction reason" error={form.formState.errors.correctionReason?.message}>
+                <Textarea rows={2} placeholder="Reason for this correction" {...form.register('correctionReason')} />
+              </Field>
+            </CardContent>
+          </Card>
+        )}
+
+        <fieldset disabled={Boolean(posted && !editingPosted)} className="space-y-5">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Invoice details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Field label="Customer" error={form.formState.errors.customerId?.message}>
+                <Select {...form.register('customerId')}>
+                  <option value="">Walk-in customer</option>
+                  {selectableCustomers.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}
+                </Select>
+              </Field>
+              <Field label="Invoice date" error={form.formState.errors.invoiceDate?.message}>
+                <Input type="date" {...form.register('invoiceDate')} />
+              </Field>
+              <Field label="Branch" error={form.formState.errors.branchId?.message}>
+                <Select {...form.register('branchId', { onChange: () => form.setValue('warehouseId', '', { shouldDirty: true }) })} disabled={Boolean(invoice?.posContext)}>
+                  {branches.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}
+                </Select>
+              </Field>
+              <Field label={hasProductLines ? 'Warehouse' : 'Warehouse (optional)'} error={form.formState.errors.warehouseId?.message}>
+                <Select {...form.register('warehouseId')}>
+                  <option value="">{hasProductLines ? 'Select warehouse' : 'No warehouse'}</option>
+                  {availableWarehouses.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Currency" error={form.formState.errors.currencyId?.message}>
+                <Select {...form.register('currencyId', { onChange: handleCurrencyChange })} disabled={Boolean(invoice?.posContext)}>
+                  <option value="">Select currency</option>
+                  {currencies.filter((item) => posted || item.isActive).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}
+                </Select>
+              </Field>
+              {isForeign && (
+                <Field label={`Exchange rate (${selectedCurrency?.code ?? ''} → ${business?.baseCurrencyCode ?? ''})`} error={form.formState.errors.exchangeRate?.message ?? effectiveRateQuery.error?.message}>
+                  <Input type="number" min="0.000001" step="0.000001" {...form.register('exchangeRate', { setValueAs: (value) => value === '' ? null : Number(value) })} />
+                </Field>
+              )}
+              <div className={isForeign ? 'sm:col-span-2' : 'sm:col-span-2 xl:col-span-3'}>
+                <Field label="Notes" error={form.formState.errors.notes?.message}>
+                  <Textarea rows={2} placeholder="Optional note" {...form.register('notes')} />
+                </Field>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-col items-stretch justify-between gap-3 pb-3 sm:flex-row sm:items-center">
+              <div>
+                <CardTitle className="text-base">Items</CardTitle>
+                <CardDescription>{lineFields.fields.length} {lineFields.fields.length === 1 ? 'line' : 'lines'}</CardDescription>
+              </div>
+              {(!posted || editingPosted) && (
+                <div className="grid grid-cols-2 gap-2 sm:w-auto">
+                  <Button type="button" variant="outline" size="sm" className="min-w-36 justify-center" onClick={() => lineFields.append(newServiceLine())}><BriefcaseBusiness className="size-4" />Add service</Button>
+                  <Button type="button" variant="outline" size="sm" className="min-w-36 justify-center" onClick={() => lineFields.append(newProductLine())}><Package className="size-4" />Add product</Button>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table className="min-w-[1120px] table-fixed">
+                  <colgroup>
+                    <col className="w-[150px]" />
+                    <col className="w-[28%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[140px]" />
+                    <col className="w-[56px]" />
+                  </colgroup>
+                  <TableHeader>
+                    <TableRow className={head}>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Unit / stock</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Unit price</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lineFields.fields.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-32 text-center">
+                          <p className="font-medium">No items added</p>
+                          <p className="mt-1 text-sm text-muted-foreground">Add a service or product to begin.</p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {lineFields.fields.map((field, index) => {
+                      const line = values.lines?.[index]
+                      const isService = line?.lineType === SalesLineType.Service
+                      const selectedProduct = selectableProducts.find((item) => item.id === line?.productId)
+                      const unitOptions = productUnitOptions(selectedProduct)
+                      const invoiceLine = invoice?.lines[index]
+                      if (line?.unitOfMeasureId && !unitOptions.some((unit) => unit.id === line.unitOfMeasureId)) unitOptions.push({ id: line.unitOfMeasureId, name: invoiceLine?.unitCode ?? 'Unavailable unit', code: invoiceLine?.unitCode ?? '—', operation: invoiceLine?.conversionOperation ?? null, factor: invoiceLine?.conversionFactor ?? 1 })
+                      const baseQuantity = selectedProduct && line?.unitOfMeasureId ? convertToBaseQuantity(selectedProduct, line.unitOfMeasureId, Number(line.quantity) || 0) ?? invoiceLine?.baseQuantity ?? null : null
+                      const selectedUnitPriceBase = Number(line?.unitPriceBase) || 0
+                      const stock = balances.find((item) => item.productId === selectedProduct?.id)?.quantity ?? 0
+                      const lineTotal = (Number(line?.quantity) || 0) * (Number(line?.unitPrice) || 0)
+                      const sourceRegistration = isService ? form.register(`lines.${index}.serviceId`) : form.register(`lines.${index}.productId`)
+                      const unitRegistration = form.register(`lines.${index}.unitOfMeasureId`)
+                      const priceRegistration = form.register(`lines.${index}.unitPrice`, { valueAsNumber: true })
+                      return (
+                        <TableRow key={field.id} className="align-middle">
+                          <TableCell>
+                            <Select
+                              aria-label={`Item type for line ${index + 1}`}
+                              className="font-medium"
+                              value={line?.lineType ?? SalesLineType.Service}
+                              onChange={(event) => changeLineType(index, Number(event.target.value) as SalesLineTypeValue)}
+                            >
+                              <option value={SalesLineType.Service}>Service</option>
+                              <option value={SalesLineType.Product}>Product</option>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select {...sourceRegistration} onChange={(event) => {
+                              sourceRegistration.onChange(event)
+                              if (isService) {
+                                const selected = selectableServices.find((item) => item.id === event.target.value)
+                                const basePrice = selected?.sellingPriceBase ?? 0
+                                form.setValue(`lines.${index}.unitPriceBase`, basePrice, { shouldDirty: true })
+                                form.setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
+                                form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(basePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
+                              } else {
+                                const selected = selectableProducts.find((item) => item.id === event.target.value)
+                                const basePrice = selected?.sellingPriceBase ?? 0
+                                form.setValue(`lines.${index}.unitOfMeasureId`, selected?.unitOfMeasureId ?? '', { shouldDirty: true, shouldValidate: true })
+                                form.setValue(`lines.${index}.unitPriceBase`, basePrice, { shouldDirty: true })
+                                form.setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
+                                form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(basePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
+                              }
+                            }}>
+                              <option value="">Select {isService ? 'service' : 'product'}</option>
+                              {isService
+                                ? selectableServices.map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)
+                                : selectableProducts.map((item) => <option key={item.id} value={item.id}>{item.sku} — {item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}
+                            </Select>
+                            {isService
+                              ? form.formState.errors.lines?.[index]?.serviceId?.message && <ErrorText value={form.formState.errors.lines[index]?.serviceId?.message} />
+                              : form.formState.errors.lines?.[index]?.productId?.message && <ErrorText value={form.formState.errors.lines[index]?.productId?.message} />}
+                          </TableCell>
+                          <TableCell><Input placeholder="Optional" {...form.register(`lines.${index}.description`)} /></TableCell>
+                          <TableCell>
+                            {isService ? (
+                              <div className="flex h-9 items-center rounded-md border border-dashed bg-muted/20 px-3 text-xs text-muted-foreground">Not applicable</div>
+                            ) : (
+                              <>
+                                <Select {...unitRegistration} disabled={!selectedProduct} onChange={(event) => {
+                                  const currentBaseUnitPrice = selectedProduct && line?.unitOfMeasureId ? convertUnitPriceToBasePrice(selectedProduct, line.unitOfMeasureId, selectedUnitPriceBase) : null
+                                  unitRegistration.onChange(event)
+                                  const nextBasePrice = selectedProduct && currentBaseUnitPrice !== null ? convertBasePriceToUnitPrice(selectedProduct, event.target.value, currentBaseUnitPrice) : null
+                                  if (nextBasePrice !== null) {
+                                    form.setValue(`lines.${index}.unitPriceBase`, round6(nextBasePrice), { shouldDirty: true })
+                                    form.setValue(`lines.${index}.unitPrice`, rate > 0 ? round6(nextBasePrice / rate) : 0, { shouldDirty: true, shouldValidate: true })
+                                  }
+                                }}>
+                                  <option value="">Select unit</option>
+                                  {unitOptions.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} — {unit.name}</option>)}
+                                </Select>
+                                <p className="mt-1 min-h-4 text-xs text-muted-foreground">Stock <span className="font-mono text-foreground">{values.warehouseId ? `${formatAmount(stock)} ${selectedProduct?.unitCode ?? ''}` : '—'}</span></p>
+                              </>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Input className="text-right" type="number" min="0.0001" step="0.0001" {...form.register(`lines.${index}.quantity`, { valueAsNumber: true })} />
+                            <p className="mt-1 min-h-4 text-right text-xs text-muted-foreground">{selectedProduct && baseQuantity !== null ? `${formatAmount(baseQuantity)} ${selectedProduct.unitCode}` : '\u00a0'}</p>
+                            {form.formState.errors.lines?.[index]?.quantity?.message && <ErrorText value={form.formState.errors.lines[index]?.quantity?.message} />}
+                          </TableCell>
+                          <TableCell>
+                            <Input className="text-right" type="number" min="0" step="0.000001" disabled={isForeign && rate <= 0} {...priceRegistration} onChange={(event) => {
+                              priceRegistration.onChange(event)
+                              const transactionPrice = Number(event.target.value) || 0
+                              form.setValue(`lines.${index}.unitPriceBase`, round6(transactionPrice * rate), { shouldDirty: true })
+                              form.setValue(`lines.${index}.useMasterPrice`, false, { shouldDirty: true })
+                            }} />
+                            <p className="mt-1 min-h-4 text-right text-xs text-muted-foreground">{isService || selectedProduct ? `${formatMoney(selectedUnitPriceBase, business?.baseCurrencyDecimalPlaces)} ${business?.baseCurrencyCode ?? ''}${selectedProduct && line?.unitOfMeasureId ? ` / ${unitOptions.find((unit) => unit.id === line.unitOfMeasureId)?.code ?? selectedProduct.unitCode}` : ''}` : '\u00a0'}</p>
+                            {form.formState.errors.lines?.[index]?.unitPrice?.message && <ErrorText value={form.formState.errors.lines[index]?.unitPrice?.message} />}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-medium">{formatMoney(lineTotal, selectedCurrency?.decimalPlaces)}</TableCell>
+                          <TableCell>
+                            <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove line" onClick={() => lineFields.remove(index)}><Trash2 className="size-4" /></Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {form.formState.errors.lines?.root?.message && <p className="border-t px-6 py-3 text-sm text-destructive">{form.formState.errors.lines.root.message}</p>}
+              <div className="flex justify-end border-t bg-muted/25 px-6 py-4">
+                <div className="w-full max-w-sm space-y-1">
+                  <SummaryRow label="Subtotal" value={`${formatMoney(subtotal, selectedCurrency?.decimalPlaces)} ${selectedCurrency?.code ?? ''}`} />
+                  {isForeign && <SummaryRow label="Base total" value={`${formatMoney(baseTotal, business?.baseCurrencyDecimalPlaces)} ${business?.baseCurrencyCode ?? ''}`} />}
+                  <div className="mt-1 flex w-full items-baseline justify-between gap-8 border-t pt-2 text-base font-semibold">
+                    <span>Total</span>
+                    <span className="font-mono text-lg">{formatMoney(subtotal, selectedCurrency?.decimalPlaces)} {selectedCurrency?.code ?? ''}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {invoice?.posContext && (
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base"><Banknote className="size-4" />POS settlement</CardTitle>
+                  <CardDescription>{invoice.posContext.documentNumber} · {invoice.posContext.posSessionNumber ?? 'No session number'}</CardDescription>
+                </div>
+                <SourceBadge label={isClosedPosSession ? 'Closed session' : 'Open session'} muted={!isClosedPosSession} />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {editingPosted ? (
+                  <>
+                    <div className="max-w-sm">
+                      <Field label="Payment mode">
+                        <Select value={posPaymentMode} onChange={(event) => setPosPaymentMode(Number(event.target.value) as PosPaymentModeValue)}>
+                          <option value={PosPaymentMode.Paid}>Paid</option>
+                          <option value={PosPaymentMode.Partial}>Partial</option>
+                          <option value={PosPaymentMode.Credit}>Credit</option>
+                        </Select>
+                      </Field>
+                    </div>
+                    {posPaymentMode !== PosPaymentMode.Credit && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {invoice.posContext.sessionCashboxes.map((cashbox) => (
+                          <Field key={cashbox.moneyAccountId} label={`${cashbox.moneyAccountCode} · ${cashbox.currencyCode}`}>
+                            <Input type="number" min="0" step="0.0001" value={tenderAmounts[cashbox.moneyAccountId] ?? 0} onChange={(event) => setTenderAmounts((current) => ({ ...current, [cashbox.moneyAccountId]: Number(event.target.value) || 0 }))} />
+                          </Field>
+                        ))}
+                      </div>
+                    )}
+                    {posPaymentMode === PosPaymentMode.Paid && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Field label="Change cashbox">
+                          <Select value={changeCashboxId} onChange={(event) => setChangeCashboxId(event.target.value)}>
+                            <option value="">No change</option>
+                            {invoice.posContext.sessionCashboxes.map((cashbox) => <option key={cashbox.moneyAccountId} value={cashbox.moneyAccountId}>{cashbox.moneyAccountCode} — {cashbox.currencyCode}</option>)}
+                          </Select>
+                        </Field>
+                        <Field label="Change amount">
+                          <Input type="number" min="0" step="0.0001" value={changeAmount} onChange={(event) => setChangeAmount(Number(event.target.value) || 0)} />
+                        </Field>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Audit label="Payment mode" value={posPaymentModeLabel[invoice.posContext.paymentMode]} />
+                    {invoice.posContext.tenders.map((tender) => <Audit key={tender.moneyAccountId} label={tender.moneyAccountCode} value={`${formatAmount(tender.tenderedAmount)} ${tender.currencyCode}`} />)}
+                    {invoice.posContext.change && <Audit label="Change" value={`${formatAmount(invoice.posContext.change.amount)} ${invoice.posContext.change.currencyCode}`} />}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </fieldset>
+
+        {posted && invoice && (
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base"><ReceiptText className="size-4" />Payments</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 rounded-lg bg-muted/40 p-4 sm:grid-cols-3">
+                <Audit label="Status" value={paymentStatusLabel[invoice.paymentStatus]} />
+                <Audit label="Received" value={`${formatAmount(invoice.receivedAmount)} ${invoice.currencyCode}`} />
+                <Audit label="Outstanding" value={`${formatAmount(invoice.outstandingAmount)} ${invoice.currencyCode}`} />
+              </div>
+              {invoice.receipts.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Receipt</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Applied</TableHead><TableHead className="text-right">Base applied</TableHead></TableRow></TableHeader>
+                    <TableBody>{invoice.receipts.map((receipt) => (
+                      <TableRow key={receipt.customerReceiptId}>
+                        <TableCell><Link className="font-mono font-medium text-primary" to={`/finance/customer-receipts/${receipt.customerReceiptId}`}>{receipt.customerReceiptDocumentNumber}</Link></TableCell>
+                        <TableCell>{receipt.receiptDate}</TableCell>
+                        <TableCell className="text-right font-mono">{formatAmount(receipt.amount)} {invoice.currencyCode}</TableCell>
+                        <TableCell className="text-right font-mono">{formatAmount(receipt.baseAmount)} {invoice.baseCurrencyCode}</TableCell>
+                      </TableRow>
+                    ))}</TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {posted && (canEditPosted || canDeletePosted) && (
+          <Card>
+            <CardHeader className="pb-4"><CardTitle className="flex items-center gap-2 text-base"><History className="size-4" />History</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {history.isPending ? <p className="text-sm text-muted-foreground">Loading…</p>
+                : history.isError ? <p className="text-sm text-destructive">{history.error.message}</p>
+                  : history.data?.length ? history.data.map((entry) => (
+                    <div key={entry.id} className="rounded-lg border p-4">
+                      <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-start">
+                        <div><p className="font-medium capitalize">{entry.action}</p>{entry.reason && <p className="mt-1 text-sm">{entry.reason}</p>}</div>
+                        <p className="text-xs text-muted-foreground">{entry.changedByUsername} · {formatTimestamp(entry.changedAtUtc)}</p>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">{entry.beforeState !== null && <SnapshotDetails label="Before" value={entry.beforeState} />}{entry.afterState !== null && <SnapshotDetails label="After" value={entry.afterState} />}</div>
+                    </div>
+                  )) : <p className="text-sm text-muted-foreground">No corrections yet.</p>}
+            </CardContent>
+          </Card>
+        )}
+
+        {invoice && (
+          <div className="grid gap-3 border-t pt-4 text-sm sm:grid-cols-3">
+            <Audit label="Created" value={`${invoice.createdByUsername} · ${formatTimestamp(invoice.createdAtUtc)}`} />
+            <Audit label="Updated" value={formatTimestamp(invoice.updatedAtUtc)} />
+            <Audit label="Posted" value={invoice.postedAtUtc ? formatTimestamp(invoice.postedAtUtc) : '—'} />
+          </div>
+        )}
+      </form>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) { setDeleteReason(''); setDeleteReasonError(''); deletePosted.reset() } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {invoice?.documentNumber}?</DialogTitle>
+            <DialogDescription>
+              Generated financial, stock, and POS effects will be removed.{isClosedPosSession ? ' The session stays closed and its Z Report is refreshed.' : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <Field label="Reason" error={deleteReasonError}>
+            <Textarea rows={3} value={deleteReason} onChange={(event) => { setDeleteReason(event.target.value); setDeleteReasonError('') }} placeholder="Reason for deletion" />
+          </Field>
+          {deletePosted.error && <p className="text-sm text-destructive">{deletePosted.error.message}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button type="button" variant="destructive" disabled={deletePosted.isPending} onClick={confirmPostedDelete}>
+              {deletePosted.isPending && <Loader2 className="size-4 animate-spin" />}
+              Delete invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) { return <label className="grid content-start gap-1.5 text-sm font-medium">{label}{children}{error && <span className="text-xs font-normal text-destructive">{error}</span>}</label> }
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" {...props} /> }
-function Audit({ label, value }: { label: string; value: string }) { return <div><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1">{value}</p></div> }
+function Select({ className = '', ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className={`h-9 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props} /> }
+function Audit({ label, value }: { label: string; value: string }) { return <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div> }
 function ErrorText({ value }: { value?: string }) { return value ? <p className="mt-1 text-xs text-destructive">{value}</p> : null }
-function LineTypeBadge({ lineType }: { lineType: SalesLineTypeValue }) { const service = lineType === SalesLineType.Service; return <span className={service ? 'inline-flex items-center gap-1 rounded bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700' : 'inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700'}>{service ? <BriefcaseBusiness className="size-3" /> : <Package className="size-3" />}{service ? 'Service' : 'Product'}</span> }
-function SnapshotDetails({ label, value }: { label: string; value: unknown }) { return <details className="rounded bg-muted p-2 text-xs"><summary className="cursor-pointer font-medium">{label}</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(value, null, 2)}</pre></details> }
+function SourceBadge({ label, muted = false }: { label: string; muted?: boolean }) { return <span className={muted ? 'rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground' : 'rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary'}>{label}</span> }
+function SummaryRow({ label, value }: { label: string; value: string }) { return <div className="flex w-full items-center justify-between gap-8 text-sm"><span className="text-muted-foreground">{label}</span><span className="font-mono">{value}</span></div> }
+function SnapshotDetails({ label, value }: { label: string; value: unknown }) { return <details className="rounded-md border bg-muted/30 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium">{label}</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(value, null, 2)}</pre></details> }
 const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10000) / 10000
 const round6 = (value: number) => Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000
 const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 const formatMoney = (value: number, decimals = 4) => value.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 const formatTimestamp = (value: string) => new Date(value).toLocaleString()
 const paymentStatusLabel = { [SalesInvoicePaymentStatus.Unpaid]: 'Unpaid', [SalesInvoicePaymentStatus.PartiallyPaid]: 'Partially Paid', [SalesInvoicePaymentStatus.Paid]: 'Paid' }
-const head = 'border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-wider dark:border-slate-800 dark:bg-slate-800/60 [&>th]:p-2'
+const posPaymentModeLabel = { [PosPaymentMode.Paid]: 'Paid', [PosPaymentMode.Partial]: 'Partial', [PosPaymentMode.Credit]: 'Credit' }
+const head = 'border-b bg-muted/40 text-xs uppercase tracking-wide hover:bg-muted/40'
 
 function convertSnapshotBasePriceToUnitPrice(basePrice: number, operation: 0 | 1 | null, factor: number) {
   if (operation === null) return basePrice
