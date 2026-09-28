@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Api.Modules.Inventory;
+using Api.Modules.Pos;
 using Api.Shared.Pagination;
 
 namespace Api.Modules.Sales;
@@ -26,6 +28,13 @@ public sealed class SalesInvoiceListQuery : PaginationRequest
   public Guid? BranchId { get; init; }
   public Guid? CurrencyId { get; init; }
   public SalesInvoiceStatus? Status { get; init; }
+}
+
+public sealed class DeletedSalesInvoiceListQuery : PaginationRequest
+{
+  public string? Search { get; init; }
+  public DateOnly? FromDate { get; init; }
+  public DateOnly? ToDate { get; init; }
 }
 
 public sealed record ServiceCategoryRequest(
@@ -61,6 +70,28 @@ public sealed record SalesInvoiceDraftRequest(
   decimal? ExchangeRate,
   [MaxLength(1000)] string? Notes,
   [Required, MinLength(1)] List<SalesInvoiceLineRequest> Lines);
+
+public sealed record SalesInvoicePosSettlementRequest(
+  [Required, EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode,
+  [Required] List<PosTenderRequest> Tenders,
+  PosChangeRequest? Change);
+
+public sealed record UpdatePostedSalesInvoiceRequest(
+  [Required, MinLength(1), MaxLength(1000)] string Reason,
+  [Required] DateTime ExpectedUpdatedAtUtc,
+  Guid? CustomerId,
+  [Required] DateOnly InvoiceDate,
+  [Required] Guid BranchId,
+  Guid? WarehouseId,
+  [Required] Guid CurrencyId,
+  decimal? ExchangeRate,
+  [MaxLength(1000)] string? Notes,
+  [Required, MinLength(1)] List<SalesInvoiceLineRequest> Lines,
+  SalesInvoicePosSettlementRequest? PosSettlement);
+
+public sealed record DeletePostedSalesInvoiceRequest(
+  [Required, MinLength(1), MaxLength(1000)] string Reason,
+  [Required] DateTime ExpectedUpdatedAtUtc);
 
 public sealed record ServiceCategoryResponse(Guid Id, string Name, bool IsActive);
 
@@ -130,6 +161,20 @@ public sealed record SalesInvoiceReceiptResponse(
   decimal BaseAmount,
   Guid? JournalEntryId);
 
+public sealed record SalesInvoicePosContextResponse(
+  Guid SaleId,
+  string DocumentNumber,
+  Guid? PosSessionId,
+  string? PosSessionNumber,
+  PosSessionStatus? SessionStatus,
+  PosSaleStatus SaleStatus,
+  PosPaymentMode PaymentMode,
+  DateTime CompletedAtUtc,
+  List<Guid> SessionCashboxMoneyAccountIds,
+  List<PosSessionCountResponse> SessionCashboxes,
+  List<PosTenderResponse> Tenders,
+  PosChangeResponse? Change);
+
 public sealed record SalesInvoiceResponse(
   Guid Id,
   string DocumentNumber,
@@ -163,7 +208,35 @@ public sealed record SalesInvoiceResponse(
   SalesInvoicePaymentStatus PaymentStatus,
   List<SalesInvoiceReceiptResponse> Receipts,
   List<Guid> StockMovementIds,
-  List<SalesInvoiceLineResponse> Lines);
+  List<SalesInvoiceLineResponse> Lines,
+  SalesInvoicePosContextResponse? PosContext);
+
+public sealed record SalesInvoiceHistoryResponse(
+  Guid Id,
+  string Action,
+  string? Reason,
+  Guid ChangedByUserId,
+  string ChangedByUsername,
+  DateTime ChangedAtUtc,
+  JsonElement? BeforeState,
+  JsonElement? AfterState);
+
+public sealed record DeletedSalesInvoiceResponse(
+  Guid Id,
+  string DocumentNumber,
+  DateOnly InvoiceDate,
+  Guid BranchId,
+  string BranchName,
+  Guid? CustomerId,
+  string? CustomerName,
+  decimal Total,
+  decimal BaseTotal,
+  DateTime? PostedAtUtc,
+  DateTime DeletedAtUtc,
+  Guid DeletedByUserId,
+  string DeletedByUsername,
+  string DeleteReason,
+  bool IsPosSale);
 
 public enum SalesInvoicePaymentStatus
 {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FilePlus2 } from 'lucide-react'
+import { FilePlus2, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
@@ -8,10 +8,12 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useBranches, useCurrencies } from '@/features/business'
 import { useContacts } from '@/features/contacts'
+import { hasCapability, useCurrentUser } from '@/features/auth'
 import { useSalesInvoices } from '../hooks/useSales'
 import { SalesInvoiceStatus } from '../types/sales.types'
 
 export function SalesInvoicesPage() {
+  const canViewDeleted = hasCapability(useCurrentUser().data?.role, 'deletePostedInvoice')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [search, setSearch] = useState('')
@@ -39,7 +41,7 @@ export function SalesInvoicesPage() {
   const rows = query.data?.data ?? []
 
   return <div className="flex h-full flex-col space-y-6">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h1 className="text-2xl font-bold tracking-tight">Sales Invoices</h1><p className="mt-1 text-sm text-muted-foreground">Draft sales have no effect. Posting creates Accounts Receivable, Revenue, and Product stock/COGS where applicable.</p></div><Link to="/sales/invoices/new"><Button className="bg-primarytext-primary-foregroundhover:bg-primary/90"><FilePlus2 className="size-4" />New Sales Invoice</Button></Link></div>
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h1 className="text-2xl font-bold tracking-tight">Sales Invoices</h1><p className="mt-1 text-sm text-muted-foreground">Draft sales have no effect. Posting creates Accounts Receivable, Revenue, and Product stock/COGS where applicable.</p></div><div className="flex gap-2">{canViewDeleted && <Link to="/sales/invoices-deleted"><Button variant="outline"><Trash2 className="size-4" />Deleted</Button></Link>}<Link to="/sales/invoices/new"><Button className="bg-primarytext-primary-foregroundhover:bg-primary/90"><FilePlus2 className="size-4" />New Sales Invoice</Button></Link></div></div>
     <div className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-4">
       <Input aria-label="Search Sales Invoices" placeholder="Document number or customer" value={search} onChange={(event) => { setSearch(event.target.value); resetPage() }} />
       <Select aria-label="Customer filter" value={customerId} onChange={(event) => { setCustomerId(event.target.value); resetPage() }}><option value="">All customers</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>

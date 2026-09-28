@@ -282,7 +282,7 @@ public sealed class DashboardService
 
     // 1. POS Sales
     var posSales = await _db.PosSales.AsNoTracking()
-      .Where(p => p.SalesInvoice.BranchId == branchId)
+      .Where(p => p.SalesInvoice.BranchId == branchId && !p.SalesInvoice.IsDeleted)
       .OrderByDescending(p => p.CompletedAtUtc)
       .Take(safeLimit)
       .Select(p => new DashboardRecentTransactionResponse(
@@ -441,10 +441,18 @@ public sealed class DashboardService
   {
     var branchId = RequireBranchId();
     var safeLimit = Math.Clamp(limit, 1, 50);
+    var deletedInvoiceIds = _db.SalesInvoices.IgnoreQueryFilters()
+      .Where(invoice => invoice.BranchId == branchId && invoice.IsDeleted)
+      .Select(invoice => invoice.Id);
+    var deletedPosSaleIds = _db.PosSales.IgnoreQueryFilters()
+      .Where(sale => sale.SalesInvoice.BranchId == branchId && sale.SalesInvoice.IsDeleted)
+      .Select(sale => sale.Id);
 
     var loggedActivities = await _db.ActivityLogs.AsNoTracking()
       .Include(a => a.User)
-      .Where(a => a.BranchId == branchId)
+      .Where(a => a.BranchId == branchId
+        && (a.EntityType != "Sales Invoice" || !deletedInvoiceIds.Contains(a.EntityId))
+        && (a.EntityType != "POS Sale" || !deletedPosSaleIds.Contains(a.EntityId)))
       .OrderByDescending(a => a.TimestampUtc)
       .Take(safeLimit)
       .Select(a => new DashboardRecentActivityResponse(
@@ -469,7 +477,9 @@ public sealed class DashboardService
     // POS Sales
     var recentPos = await _db.PosSales.AsNoTracking()
       .Include(p => p.CashierUser)
-      .Where(p => p.SalesInvoice.BranchId == branchId && !seenDocNumbers.Contains(p.DocumentNumber))
+      .Where(p => p.SalesInvoice.BranchId == branchId
+        && !p.SalesInvoice.IsDeleted
+        && !seenDocNumbers.Contains(p.DocumentNumber))
       .OrderByDescending(p => p.CompletedAtUtc)
       .Take(safeLimit)
       .Select(p => new DashboardRecentActivityResponse(

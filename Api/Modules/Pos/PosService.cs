@@ -20,15 +20,20 @@ public sealed class PosService
 {
   private readonly AppDbContext _db;
   private readonly SalesService _sales;
-  private readonly FinanceService _finance;
+  private readonly PosSettlementService _settlements;
   private readonly PosSessionService _sessions;
 
-  public PosService(AppDbContext db, SalesService sales, FinanceService finance, PosSessionService sessions)
+  public PosService(
+    AppDbContext db,
+    SalesService sales,
+    FinanceService finance,
+    PosSessionService sessions,
+    PosSettlementService? settlements = null)
   {
     _db = db;
     _sales = sales;
-    _finance = finance;
     _sessions = sessions;
+    _settlements = settlements ?? new PosSettlementService(db, finance, sessions);
   }
 
   public async Task<PosSetupResponse> GetSetupAsync(Guid userId, CancellationToken ct)
@@ -235,7 +240,7 @@ public sealed class PosService
   {
     var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
-    var query = _db.PosSales.AsNoTracking().AsQueryable();
+    var query = _db.PosSales.AsNoTracking().Where(sale => !sale.SalesInvoice.IsDeleted);
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
       var search = request.Search.Trim().ToLower();
@@ -423,119 +428,14 @@ public sealed class PosService
       .ToList();
     var saleTotal = salesLines.Sum(line => Money(line.Quantity * line.UnitPrice));
 
-    var moneyAccountIds = request.Tenders.Select(tender => tender.MoneyAccountId)
-      .Append(request.Change?.MoneyAccountId ?? Guid.Empty)
-      .Where(id => id != Guid.Empty).Distinct().ToList();
-    foreach (var accountId in moneyAccountIds)
-      await _finance.EnsureAccessAsync(accountId, userId, MoneyAccountAccessLevel.Operate, ct);
-
-    var accounts = await _db.MoneyAccounts.Include(account => account.AccountingAccount)
-      .Include(account => account.Currency)
-      .Where(account => moneyAccountIds.Contains(account.Id))
-      .ToDictionaryAsync(account => account.Id, ct);
-    if (accounts.Count != moneyAccountIds.Count)
-      throw new BadRequestException(ErrorCodes.Pos.MoneyAccountInvalid, "Every tender and change line must use an existing Money Account.");
-    foreach (var account in accounts.Values)
-    {
-      FinanceService.EnsureActive(account);
-      if (!account.Currency.IsActive)
-        throw new BadRequestException(ErrorCodes.Pos.MoneyAccountInvalid,
-          $"Money Account '{account.Code}' uses an inactive currency.");
-      if (account.BranchId != request.BranchId)
-        throw new BadRequestException(ErrorCodes.Pos.MoneyAccountBranchMismatch,
-          $"Money Account '{account.Code}' does not belong to the selected POS branch.");
-      if (account.Type != MoneyAccountType.Cashbox
-        || !session.OpeningCounts.Any(count => count.MoneyAccountId == account.Id))
-        throw new BadRequestException(ErrorCodes.Pos.SessionCashboxNotAllowed,
-          $"Cashbox '{account.Code}' is not part of this POS Session's exact Cashbox snapshot.");
-    }
-
-    var rates = new Dictionary<Guid, decimal>();
-    foreach (var currencyId in accounts.Values.Select(account => account.CurrencyId).Distinct())
-      rates[currencyId] = await _finance.ResolveCurrentRateAsync(currencyId, business.BaseCurrencyId, rateAtUtc, ct);
-
-    var tenders = request.Tenders.Select((tender, index) =>
-    {
-      var account = accounts[tender.MoneyAccountId];
-      var rate = rates[account.CurrencyId];
-      return new TenderPosting(index + 1, tender, account, rate, Money(tender.Amount * rate));
-    }).ToList();
-    var tenderedBase = Money(tenders.Sum(tender => tender.BaseAmount));
-
-    var changeDueBase = 0m;
-    ChangePosting? change = null;
-    switch (request.PaymentMode)
-    {
-      case PosPaymentMode.Paid:
-        if (tenderedBase < saleTotal)
-          throw new BadRequestException(ErrorCodes.Pos.Underpayment,
-            $"POS Sale is underpaid by {Money(saleTotal - tenderedBase)} {business.BaseCurrency.Code}.");
-        changeDueBase = Money(tenderedBase - saleTotal);
-        break;
-      case PosPaymentMode.Partial:
-        if (tenderedBase <= 0 || tenderedBase >= saleTotal)
-          throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
-            "A partial POS Sale must receive more than zero and less than the Sale total.");
-        break;
-      case PosPaymentMode.Credit:
-        if (tenderedBase != 0)
-          throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
-            "A credit POS Sale cannot include payment. Choose Partial when money is received now.");
-        break;
-      default:
-        throw new BadRequestException(ErrorCodes.Pos.TenderInvalid, "Select a valid POS payment mode.");
-    }
-
-    if (request.PaymentMode != PosPaymentMode.Paid && request.Change is not null)
-      throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue,
-        "Change can only be recorded for a fully paid POS Sale.");
-    if (request.PaymentMode == PosPaymentMode.Paid && changeDueBase == 0 && request.Change is not null)
-      throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue, "Do not record change when tender exactly settles the Sale.");
-    if (request.PaymentMode == PosPaymentMode.Paid && changeDueBase > 0 && request.Change is null)
-      throw new BadRequestException(ErrorCodes.Pos.ChangeRequired,
-        $"Record {changeDueBase} {business.BaseCurrency.Code} of change before completing the Sale.");
-    if (request.Change is not null)
-    {
-      var account = accounts[request.Change.MoneyAccountId];
-      if (baseCashbox is null || account.Id != baseCashbox.MoneyAccountId)
-        throw new BadRequestException(ErrorCodes.Pos.BaseCashboxRequired,
-          $"Change must be returned from this session's configured {business.BaseCurrency.Code} Cashbox.");
-      var rate = rates[account.CurrencyId];
-      var baseAmount = Money(request.Change.Amount * rate);
-      if (baseAmount != changeDueBase)
-        throw new BadRequestException(ErrorCodes.Pos.ChangeMismatch,
-          $"Recorded change must equal {changeDueBase} {business.BaseCurrency.Code}.");
-
-      var currentBalance = await _finance.BalanceAsync(account.Id, ct);
-      var sameAccountTender = tenders.Where(tender => tender.Account.Id == account.Id)
-        .Sum(tender => tender.Request.Amount);
-      if (currentBalance + sameAccountTender < request.Change.Amount)
-        throw new BadRequestException(ErrorCodes.Pos.ChangeBalanceInsufficient,
-          $"Money Account '{account.Code}' cannot cover the recorded change.");
-      change = new ChangePosting(request.Change, account, rate, baseAmount);
-    }
-
-    var settlementLines = tenders.Select(tender => new JournalLineEntity
-    {
-      AccountId = tender.Account.AccountingAccountId,
-      Description = $"Tender received in {tender.Account.Code}",
-      CurrencyId = tender.Account.CurrencyId,
-      ExchangeRate = tender.ExchangeRate,
-      OriginalDebitAmount = tender.Request.Amount,
-      DebitBaseAmount = tender.BaseAmount
-    }).ToList();
-    if (change is not null)
-    {
-      settlementLines.Add(new JournalLineEntity
-      {
-        AccountId = change.Account.AccountingAccountId,
-        Description = $"Change returned from {change.Account.Code}",
-        CurrencyId = change.Account.CurrencyId,
-        ExchangeRate = change.ExchangeRate,
-        OriginalCreditAmount = change.Request.Amount,
-        CreditBaseAmount = change.BaseAmount
-      });
-    }
+    var settlement = await _settlements.PrepareAsync(new PosSettlementRequest(
+      request.BranchId,
+      request.PosSessionId,
+      request.CustomerId,
+      saleTotal,
+      request.PaymentMode,
+      request.Tenders,
+      request.Change), userId, management: false, ct, session, business, rateAtUtc);
 
     var documentNumber = await NextDocumentNumberAsync(ct);
     var invoiceRequest = new SalesInvoiceDraftRequest(
@@ -548,7 +448,7 @@ public sealed class PosService
       "Immediate POS sale",
       salesLines);
     var invoice = await _sales.PrepareImmediateSaleAsync(
-      invoiceRequest, documentNumber, userId, settlementLines, ct);
+      invoiceRequest, documentNumber, userId, settlement.JournalLines, ct);
     var completedAt = invoice.PostedAtUtc!.Value;
     var sale = new PosSaleEntity
     {
@@ -562,59 +462,7 @@ public sealed class PosService
       RequestFingerprint = fingerprint
     };
 
-    foreach (var tender in tenders)
-    {
-      var ledger = FinanceService.LedgerEntry(
-        tender.Account,
-        date,
-        MoneyLedgerSourceType.PosSale,
-        sale.Id,
-        documentNumber,
-        tender.Request.Amount,
-        tender.BaseAmount,
-        business.BaseCurrencyId,
-        tender.ExchangeRate,
-        invoice.JournalEntry!.Id,
-        userId,
-        "POS tender",
-        completedAt);
-      _db.MoneyLedgerEntries.Add(ledger);
-      sale.Tenders.Add(new PosTenderEntity
-      {
-        Sequence = tender.Sequence,
-        MoneyAccountId = tender.Account.Id,
-        TenderedAmount = tender.Request.Amount,
-        ExchangeRate = tender.ExchangeRate,
-        BaseAmount = tender.BaseAmount,
-        MoneyLedgerEntry = ledger
-      });
-    }
-    if (change is not null)
-    {
-      var ledger = FinanceService.LedgerEntry(
-        change.Account,
-        date,
-        MoneyLedgerSourceType.PosSale,
-        sale.Id,
-        documentNumber,
-        -change.Request.Amount,
-        -change.BaseAmount,
-        business.BaseCurrencyId,
-        change.ExchangeRate,
-        invoice.JournalEntry!.Id,
-        userId,
-        "POS change",
-        completedAt);
-      _db.MoneyLedgerEntries.Add(ledger);
-      sale.Change = new PosChangeEntity
-      {
-        MoneyAccountId = change.Account.Id,
-        Amount = change.Request.Amount,
-        ExchangeRate = change.ExchangeRate,
-        BaseAmount = change.BaseAmount,
-        MoneyLedgerEntry = ledger
-      };
-    }
+    _settlements.AddEffects(settlement, sale, invoice, date, userId, completedAt);
     _db.PosSales.Add(sale);
 
     await _db.SaveChangesAsync(ct);
@@ -624,6 +472,7 @@ public sealed class PosService
   }
 
   private IQueryable<PosSaleEntity> SaleQuery() => _db.PosSales.AsNoTracking()
+    .Where(sale => !sale.SalesInvoice.IsDeleted)
     .Include(sale => sale.CashierUser)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Branch)
@@ -809,11 +658,19 @@ public sealed class PosService
 
   private async Task<PosSaleResponse?> FindIdempotentSaleAsync(Guid clientRequestId, string fingerprint, CancellationToken ct)
   {
-    var existing = await _db.PosSales.AsNoTracking().SingleOrDefaultAsync(sale => sale.ClientRequestId == clientRequestId, ct);
+    var query = _db.PosSales.IgnoreQueryFilters().AsNoTracking()
+      .Include(sale => sale.SalesInvoice)
+      .Where(sale => sale.ClientRequestId == clientRequestId);
+    if (_db.SelectedBranchId is Guid branchId)
+      query = query.Where(sale => sale.SalesInvoice.BranchId == branchId);
+    var existing = await query.SingleOrDefaultAsync(ct);
     if (existing is null) return null;
     if (!string.Equals(existing.RequestFingerprint, fingerprint, StringComparison.Ordinal))
       throw new ConflictException(ErrorCodes.Pos.IdempotencyKeyReused,
         "This client request ID was already used with different checkout data.");
+    if (existing.SalesInvoice.IsDeleted)
+      throw new ConflictException(ErrorCodes.Pos.IdempotencyKeyReused,
+        "This client request ID belongs to a deleted POS Sale and cannot be reused.");
     return await GetSaleAsync(existing.Id, ct);
   }
 
@@ -855,16 +712,4 @@ public sealed class PosService
     ErrorCodes.Pos.BusinessNotConfigured,
     "Complete Business Setup before using POS.");
 
-  private sealed record TenderPosting(
-    int Sequence,
-    PosTenderRequest Request,
-    MoneyAccountEntity Account,
-    decimal ExchangeRate,
-    decimal BaseAmount);
-
-  private sealed record ChangePosting(
-    PosChangeRequest Request,
-    MoneyAccountEntity Account,
-    decimal ExchangeRate,
-    decimal BaseAmount);
 }

@@ -50,6 +50,112 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
+  public async Task Posted_pos_correction_replaces_settlement_and_preserves_sale_identity()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var pos = CreateService(db);
+    var sale = await pos.CompleteSaleAsync(
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      data.CashierId,
+      default);
+    var original = await db.PosSales.AsNoTracking().SingleAsync(item => item.Id == sale.Id);
+    var originalTenderId = sale.Tenders.Single().Id;
+    (await db.Users.FindAsync(data.CashierId))!.Role = UserRole.Manager;
+    await db.SaveChangesAsync();
+    var sales = new SalesService(db, SalesOptions());
+    var invoice = await sales.GetInvoiceAsync(sale.SalesInvoiceId, default);
+    var finance = new FinanceService(db, Options.Create(new FinanceOptions()));
+    var sessions = new PosSessionService(db, finance);
+    var corrections = new SalesInvoiceCorrectionService(
+      db, sales, new PosSettlementService(db, finance, sessions), sessions);
+
+    var corrected = await corrections.UpdateAsync(invoice.Id,
+      new UpdatePostedSalesInvoiceRequest(
+        "Correct POS service price",
+        invoice.UpdatedAtUtc,
+        data.CustomerId,
+        invoice.InvoiceDate,
+        data.BranchId,
+        invoice.WarehouseId,
+        data.IqdCurrencyId,
+        null,
+        invoice.Notes,
+        [new SalesInvoiceLineRequest(
+          SalesLineType.Service,
+          data.ServiceId,
+          null,
+          null,
+          "Classic Haircut",
+          1,
+          20_000,
+          data.ProfessionalId)],
+        new SalesInvoicePosSettlementRequest(
+          PosPaymentMode.Paid,
+          [new PosTenderRequest(data.IqdMoneyAccountId, 20_000)],
+          null)),
+      data.CashierId,
+      default);
+
+    var rebuilt = await db.PosSales.AsNoTracking()
+      .Include(item => item.Tenders)
+      .SingleAsync(item => item.Id == sale.Id);
+    Assert.Equal(sale.SalesInvoiceId, corrected.Id);
+    Assert.Equal(sale.DocumentNumber, corrected.DocumentNumber);
+    Assert.Equal(original.Id, rebuilt.Id);
+    Assert.Equal(original.PosSessionId, rebuilt.PosSessionId);
+    Assert.Equal(original.CashierUserId, rebuilt.CashierUserId);
+    Assert.Equal(original.CompletedAtUtc, rebuilt.CompletedAtUtc);
+    Assert.Equal(original.ClientRequestId, rebuilt.ClientRequestId);
+    Assert.Equal(original.RequestFingerprint, rebuilt.RequestFingerprint);
+    Assert.NotEqual(originalTenderId, rebuilt.Tenders.Single().Id);
+    Assert.Equal(20_000, rebuilt.Tenders.Single().BaseAmount);
+    Assert.Equal(20_000, await PosBalanceAsync(db, data.IqdMoneyAccountId));
+    Assert.Single(await db.MoneyLedgerEntries.Where(entry => entry.SourceDocumentId == sale.Id).ToListAsync());
+    Assert.Single(await db.ActivityLogs.Where(log => log.EntityId == sale.SalesInvoiceId && log.Action == "edited").ToListAsync());
+  }
+
+  [Fact]
+  public async Task Posted_pos_delete_preserves_wrapper_and_hides_sale_from_operational_queries()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var pos = CreateService(db);
+    var sale = await pos.CompleteSaleAsync(
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      data.CashierId,
+      default);
+    var original = await db.PosSales.AsNoTracking().SingleAsync(item => item.Id == sale.Id);
+    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
+    var sales = new SalesService(db, SalesOptions());
+    var finance = new FinanceService(db, Options.Create(new FinanceOptions()));
+    var sessions = new PosSessionService(db, finance);
+    var corrections = new SalesInvoiceCorrectionService(
+      db, sales, new PosSettlementService(db, finance, sessions), sessions);
+
+    await corrections.DeleteAsync(invoice.Id,
+      new DeletePostedSalesInvoiceRequest("Duplicate POS sale", invoice.UpdatedAtUtc),
+      data.CashierId,
+      default);
+
+    var wrapper = await db.PosSales.IgnoreQueryFilters().AsNoTracking()
+      .SingleAsync(item => item.Id == sale.Id);
+    Assert.Equal(original.Id, wrapper.Id);
+    Assert.Equal(original.DocumentNumber, wrapper.DocumentNumber);
+    Assert.Equal(original.PosSessionId, wrapper.PosSessionId);
+    Assert.Equal(original.CashierUserId, wrapper.CashierUserId);
+    Assert.Equal(original.CompletedAtUtc, wrapper.CompletedAtUtc);
+    Assert.Equal(original.ClientRequestId, wrapper.ClientRequestId);
+    Assert.Equal(original.RequestFingerprint, wrapper.RequestFingerprint);
+    Assert.Empty((await pos.GetSalesAsync(new PosSaleListQuery { Page = 1, PageSize = 20 }, default)).Items);
+    Assert.False(await db.PosTenders.AnyAsync(tender => tender.PosSaleId == sale.Id));
+    Assert.False(await db.PosChanges.AnyAsync(change => change.PosSaleId == sale.Id));
+    Assert.False(await db.MoneyLedgerEntries.AnyAsync(entry => entry.SourceDocumentId == sale.Id));
+    Assert.False(await db.JournalEntries.AnyAsync(entry => entry.Id == sale.JournalEntryId));
+    Assert.Single(await db.ActivityLogs.Where(log => log.EntityId == sale.SalesInvoiceId && log.Action == "deleted").ToListAsync());
+  }
+
+  [Fact]
   public async Task Product_and_service_share_one_sale_and_reuse_weighted_average_cogs()
   {
     await using var db = CreateDb();

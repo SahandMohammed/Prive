@@ -21,6 +21,7 @@ public static class SalesModule
       .Validate(options => !string.IsNullOrWhiteSpace(options.InventoryAccountCode), "Sales:InventoryAccountCode is required.")
       .ValidateOnStart();
     services.AddScoped<SalesService>();
+    services.AddScoped<SalesInvoiceCorrectionService>();
     return services;
   }
 }

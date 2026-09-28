@@ -45,6 +45,7 @@ export const salesInvoiceSchema = z.object({
   currencyId: requiredId,
   exchangeRate: z.number().positive('Exchange rate must be greater than zero').nullable(),
   notes: z.string().max(1000, 'Maximum 1000 characters'),
+  correctionReason: z.string().max(1000, 'Maximum 1000 characters'),
   lines: z.array(salesLineSchema).min(1, 'Add at least one Service or Product'),
 }).superRefine((invoice, context) => {
   if (invoice.lines.some((line) => line.lineType === SalesLineType.Product)

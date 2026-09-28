@@ -220,6 +220,10 @@ public static class ErrorCodes
     public const string InsufficientStock = "SALES_INSUFFICIENT_STOCK";
     public const string AccountMappingInvalid = "SALES_ACCOUNT_MAPPING_INVALID";
     public const string JournalDirectReversalNotAllowed = "SALES_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+    public const string InvoiceHasReceipt = "SALES_INVOICE_HAS_RECEIPT";
+    public const string InvoiceHasRefundOrVoid = "SALES_INVOICE_HAS_REFUND_OR_VOID";
+    public const string InvoiceHasDependentTransaction = "SALES_INVOICE_HAS_DEPENDENT_TRANSACTION";
+    public const string ConcurrencyConflict = "SALES_INVOICE_CONCURRENCY_CONFLICT";
   }
 
   public static class Pos

@@ -298,13 +298,15 @@ public sealed class SalesService
     return invoice;
   }
 
-  private async Task PreparePostingEffectsAsync(
+  internal async Task PreparePostingEffectsAsync(
     SalesInvoiceEntity invoice,
     InvoiceValidation validation,
     Guid userId,
     IReadOnlyCollection<JournalLineEntity>? settlementLines,
     string journalDescription,
-    CancellationToken ct)
+    CancellationToken ct,
+    DateTime? postedAtUtc = null,
+    bool preserveInvoiceTimestamps = false)
   {
     var productLines = invoice.Lines.Where(line => line.LineType == SalesLineType.Product).ToList();
     var settlementBase = settlementLines is null
@@ -355,7 +357,7 @@ public sealed class SalesService
       }
     }
 
-    var postedAt = DateTime.UtcNow;
+    var postedAt = postedAtUtc ?? DateTime.UtcNow;
     var journalLines = settlementLines?.ToList() ?? [];
     if (receivableBase > 0)
     {
@@ -471,8 +473,11 @@ public sealed class SalesService
     }
 
     invoice.Status = SalesInvoiceStatus.Posted;
-    invoice.PostedAtUtc = postedAt;
-    invoice.UpdatedAtUtc = postedAt;
+    if (!preserveInvoiceTimestamps)
+    {
+      invoice.PostedAtUtc = postedAt;
+      invoice.UpdatedAtUtc = postedAt;
+    }
   }
 
   private async Task ValidateServiceAsync(ServiceRequest request, Guid? currentCategoryId, CancellationToken ct)
@@ -492,7 +497,7 @@ public sealed class SalesService
       throw new BadRequestException(ErrorCodes.Sales.ServiceRevenueAccountInvalid, "Select an active Revenue posting account.");
   }
 
-  private async Task<InvoiceValidation> ValidateInvoiceAsync(
+  internal async Task<InvoiceValidation> ValidateInvoiceAsync(
     SalesInvoiceDraftRequest request,
     bool requireCustomer,
     CancellationToken ct,
@@ -636,7 +641,7 @@ public sealed class SalesService
       productUnits);
   }
 
-  private static void Apply(
+  internal static void Apply(
     SalesInvoiceEntity invoice,
     SalesInvoiceDraftRequest request,
     Guid baseCurrencyId,
@@ -652,7 +657,7 @@ public sealed class SalesService
     invoice.Notes = Trim(request.Notes);
   }
 
-  private void ReplaceLines(
+  internal void ReplaceLines(
     SalesInvoiceEntity invoice,
     List<SalesInvoiceLineRequest> requests,
     InvoiceValidation validation)
@@ -704,7 +709,7 @@ public sealed class SalesService
     }
   }
 
-  private static void Recalculate(SalesInvoiceEntity invoice)
+  internal static void Recalculate(SalesInvoiceEntity invoice)
   {
     foreach (var line in invoice.Lines)
     {
@@ -826,8 +831,10 @@ public sealed class SalesService
     .Include(invoice => invoice.Currency)
     .Include(invoice => invoice.BaseCurrency)
     .Include(invoice => invoice.CreatedByUser)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts).ThenInclude(count => count.MoneyAccount)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts).ThenInclude(count => count.Currency)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(invoice => invoice.PosRefunds)
     .Include(invoice => invoice.Movements)
     .Include(invoice => invoice.ReceiptAllocations).ThenInclude(allocation => allocation.CustomerReceipt)
@@ -867,6 +874,64 @@ public sealed class SalesService
       : receivedAmount <= 0
         ? SalesInvoicePaymentStatus.Unpaid
         : SalesInvoicePaymentStatus.PartiallyPaid;
+    SalesInvoicePosContextResponse? posContext = null;
+    if (invoice.PosSale is not null)
+    {
+      var sale = invoice.PosSale;
+      var tenders = sale.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosTenderResponse(
+        tender.Id,
+        tender.Sequence,
+        tender.MoneyAccountId,
+        tender.MoneyAccount.Code,
+        tender.MoneyAccount.Name,
+        tender.MoneyAccount.CurrencyId,
+        tender.MoneyAccount.Currency.Code,
+        tender.TenderedAmount,
+        tender.ExchangeRate,
+        tender.BaseAmount,
+        tender.MoneyLedgerEntryId)).ToList();
+      var change = sale.Change is null ? null : new PosChangeResponse(
+        sale.Change.Id,
+        sale.Change.MoneyAccountId,
+        sale.Change.MoneyAccount.Code,
+        sale.Change.MoneyAccount.Name,
+        sale.Change.MoneyAccount.CurrencyId,
+        sale.Change.MoneyAccount.Currency.Code,
+        sale.Change.Amount,
+        sale.Change.ExchangeRate,
+        sale.Change.BaseAmount,
+        sale.Change.MoneyLedgerEntryId);
+      var settledBase = Money(tenders.Sum(tender => tender.BaseAmount) - (change?.BaseAmount ?? 0m));
+      var mode = settledBase <= 0
+        ? PosPaymentMode.Credit
+        : settledBase < invoice.BaseTotal
+          ? PosPaymentMode.Partial
+          : PosPaymentMode.Paid;
+      posContext = new SalesInvoicePosContextResponse(
+        sale.Id,
+        sale.DocumentNumber,
+        sale.PosSessionId,
+        sale.PosSession?.SessionNumber,
+        sale.PosSession?.Status,
+        sale.Status,
+        mode,
+        sale.CompletedAtUtc,
+        sale.PosSession?.OpeningCounts.Select(count => count.MoneyAccountId).ToList() ?? [],
+        sale.PosSession?.OpeningCounts.OrderBy(count => count.Currency.Code)
+          .Select(count => new PosSessionCountResponse(
+            count.MoneyAccountId,
+            count.MoneyAccount.Code,
+            count.MoneyAccount.Name,
+            count.CurrencyId,
+            count.Currency.Code,
+            count.Currency.DecimalPlaces,
+            count.Amount,
+            count.ExchangeRate,
+            count.BaseAmount))
+          .ToList() ?? [],
+        tenders,
+        change);
+    }
 
     return new SalesInvoiceResponse(
     invoice.Id,
@@ -923,7 +988,8 @@ public sealed class SalesService
       line.IsPriceOverridden,
       line.LineSubtotal,
       line.LineAmount,
-      line.BaseLineAmount)).ToList());
+      line.BaseLineAmount)).ToList(),
+    posContext);
   }
 
   private static ServiceResponse ToServiceResponse(ServiceEntity service) => new(
@@ -956,7 +1022,7 @@ public sealed class SalesService
   private static NotFoundException InvoiceNotFound() =>
     new(ErrorCodes.Sales.InvoiceNotFound, "Sales Invoice not found.");
 
-  private sealed record InvoiceValidation(
+  internal sealed record InvoiceValidation(
     Guid BaseCurrencyId,
     decimal ExchangeRate,
     Dictionary<Guid, ServiceEntity> Services,

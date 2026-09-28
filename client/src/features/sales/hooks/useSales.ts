@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { salesApi } from '../api/sales.api'
-import type { SalesInvoiceDraftInput, SalesInvoiceFilters, ServiceCategoryInput, ServiceInput } from '../types/sales.types'
+import type { DeletedSalesInvoiceFilters, PostedSalesInvoiceInput, SalesInvoiceDraftInput, SalesInvoiceFilters, ServiceCategoryInput, ServiceInput } from '../types/sales.types'
 
 export const SALES_CATEGORIES_KEY = ['sales', 'service-categories'] as const
 export const SALES_SERVICES_KEY = ['sales', 'services'] as const
@@ -75,4 +75,49 @@ export function usePostSalesInvoice() {
 export function useDeleteSalesInvoice() {
   const client = useQueryClient()
   return useMutation({ mutationFn: salesApi.deleteInvoice, onSuccess: () => client.invalidateQueries({ queryKey: SALES_INVOICES_KEY }) })
+}
+
+export function useUpdatePostedSalesInvoice(id?: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PostedSalesInvoiceInput) => salesApi.updatePostedInvoice(id!, body),
+    onSuccess: (invoice) => {
+      client.setQueryData([...SALES_INVOICES_KEY, invoice.id], invoice)
+      client.invalidateQueries({ queryKey: ['inventory'] })
+      client.invalidateQueries({ queryKey: ['accounting'] })
+      client.invalidateQueries({ queryKey: ['finance'] })
+      client.invalidateQueries({ queryKey: ['pos'] })
+      return client.invalidateQueries({ queryKey: SALES_INVOICES_KEY })
+    },
+  })
+}
+
+export function useDeletePostedSalesInvoice(id?: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { reason: string; expectedUpdatedAtUtc: string }) => salesApi.deletePostedInvoice(id!, body),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: [...SALES_INVOICES_KEY, id] })
+      client.invalidateQueries({ queryKey: ['inventory'] })
+      client.invalidateQueries({ queryKey: ['accounting'] })
+      client.invalidateQueries({ queryKey: ['finance'] })
+      client.invalidateQueries({ queryKey: ['pos'] })
+      return client.invalidateQueries({ queryKey: SALES_INVOICES_KEY })
+    },
+  })
+}
+
+export function useSalesInvoiceHistory(id?: string, enabled = true) {
+  return useQuery({
+    queryKey: [...SALES_INVOICES_KEY, id, 'history'],
+    queryFn: () => salesApi.invoiceHistory(id!),
+    enabled: Boolean(id) && enabled,
+  })
+}
+
+export function useDeletedSalesInvoices(filters: DeletedSalesInvoiceFilters) {
+  return useQuery({
+    queryKey: [...SALES_INVOICES_KEY, 'deleted', filters],
+    queryFn: () => salesApi.deletedInvoices(filters),
+  })
 }

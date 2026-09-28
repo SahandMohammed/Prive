@@ -12,6 +12,7 @@ using Api.Modules.Accounting;
 using Api.Modules.Branch;
 using Api.Modules.Contact;
 using Api.Modules.Currency;
+using Api.Modules.Dashboard;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Sales;
@@ -23,6 +24,68 @@ namespace Api.Tests;
 
 public sealed class BranchScopeTests
 {
+  [Fact]
+  public async Task Activity_logs_allow_adds_but_reject_existing_modification_and_deletion_without_branch_context()
+  {
+    var options = Options();
+    var branch = new BranchEntity { Code = "MAIN", Name = "Main" };
+    var user = new UserEntity { Username = "auditor", PasswordHash = "test", Role = UserRole.SuperAdmin };
+    await using (var seed = new AppDbContext(options))
+    {
+      seed.AddRange(branch, user);
+      await seed.SaveChangesAsync();
+    }
+
+    Guid activityId;
+    await using (var add = new AppDbContext(options))
+    {
+      var activity = new ActivityLogEntity
+      {
+        BranchId = branch.Id,
+        UserId = user.Id,
+        Action = "edited",
+        EntityType = "Sales Invoice",
+        EntityId = Guid.NewGuid(),
+        DocumentNumber = "SI-TEST",
+        Description = "Manual audit",
+        Reason = "Test",
+        BeforeState = "{}",
+        AfterState = "{}"
+      };
+      add.ActivityLogs.Add(activity);
+      await add.SaveChangesAsync();
+      activityId = activity.Id;
+    }
+
+    await using (var modify = new AppDbContext(options))
+    {
+      var activity = await modify.ActivityLogs.SingleAsync(log => log.Id == activityId);
+      activity.Reason = "Changed";
+      await Assert.ThrowsAsync<InvalidOperationException>(() => modify.SaveChangesAsync());
+    }
+
+    using (var delete = new AppDbContext(options))
+    {
+      var activity = delete.ActivityLogs.Single(log => log.Id == activityId);
+      delete.ActivityLogs.Remove(activity);
+      Assert.Throws<InvalidOperationException>(() => delete.SaveChanges());
+    }
+
+    await using (var automatic = new AppDbContext(options, new BranchContext { BranchId = branch.Id }))
+    {
+      automatic.SalesInvoices.Add(new SalesInvoiceEntity
+      {
+        DocumentNumber = "SI-AUTO",
+        BranchId = branch.Id,
+        CurrencyId = Guid.NewGuid(),
+        BaseCurrencyId = Guid.NewGuid(),
+        CreatedByUserId = user.Id
+      });
+      await automatic.SaveChangesAsync();
+      Assert.True(await automatic.ActivityLogs.AnyAsync(log => log.DocumentNumber == "SI-AUTO" && log.Action == "created"));
+    }
+  }
+
   [Fact]
   public async Task Access_uses_active_assignments_and_privileged_roles_and_rechecks_revocation()
   {

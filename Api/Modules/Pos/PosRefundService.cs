@@ -38,7 +38,8 @@ public sealed class PosRefundService
   public async Task<PagedResult<PosRefundSummaryResponse>> GetSaleRefundsAsync(
     Guid saleId, PosRefundListQuery request, CancellationToken ct)
   {
-    if (!await _db.PosSales.AsNoTracking().AnyAsync(sale => sale.Id == saleId, ct)) throw SaleNotFound();
+    if (!await _db.PosSales.AsNoTracking()
+      .AnyAsync(sale => sale.Id == saleId && !sale.SalesInvoice.IsDeleted, ct)) throw SaleNotFound();
     return await _db.PosRefunds.AsNoTracking()
       .Where(refund => refund.PosSaleId == saleId && refund.Status == PosRefundStatus.Posted)
       .OrderBy(refund => refund.PostedAtUtc)
@@ -458,6 +459,7 @@ public sealed class PosRefundService
   private IQueryable<PosSaleEntity> RefundableSaleQuery(bool trackChanges)
   {
     var query = _db.PosSales
+      .Where(sale => !sale.SalesInvoice.IsDeleted)
       .Include(sale => sale.CashierUser)
       .Include(sale => sale.Tenders)
       .Include(sale => sale.Change)

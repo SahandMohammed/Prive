@@ -13,8 +13,13 @@ namespace Api.Modules.Sales;
 public sealed class SalesController : ControllerBase
 {
   private readonly SalesService _service;
+  private readonly SalesInvoiceCorrectionService _corrections;
 
-  public SalesController(SalesService service) => _service = service;
+  public SalesController(SalesService service, SalesInvoiceCorrectionService corrections)
+  {
+    _service = service;
+    _corrections = corrections;
+  }
 
   [HttpGet("service-categories")]
   [ProducesResponseType(typeof(ApiResponse<List<ServiceCategoryResponse>>), StatusCodes.Status200OK)]
@@ -89,11 +94,26 @@ public sealed class SalesController : ControllerBase
     return Ok(ApiResponse<List<SalesInvoiceListResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
+  [HttpGet("invoices/deleted")]
+  [Authorize(Roles = "SuperAdmin")]
+  [ProducesResponseType(typeof(ApiResponse<List<DeletedSalesInvoiceResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetDeletedInvoices([FromQuery] DeletedSalesInvoiceListQuery query, CancellationToken ct)
+  {
+    var result = await _corrections.GetDeletedAsync(query, ct);
+    return Ok(ApiResponse<List<DeletedSalesInvoiceResponse>>.Ok(result.Items, result.ToMetadata()));
+  }
+
   [HttpGet("invoices/{id:guid}", Name = nameof(GetInvoice))]
   [ProducesResponseType(typeof(ApiResponse<SalesInvoiceResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetInvoice(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<SalesInvoiceResponse>.Ok(await _service.GetInvoiceAsync(id, ct)));
+
+  [HttpGet("invoices/{id:guid}/history")]
+  [ProducesResponseType(typeof(ApiResponse<List<SalesInvoiceHistoryResponse>>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetInvoiceHistory(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<List<SalesInvoiceHistoryResponse>>.Ok(await _corrections.GetHistoryAsync(id, ct)));
 
   [HttpPost("invoices")]
   [ProducesResponseType(typeof(ApiResponse<SalesInvoiceResponse>), StatusCodes.Status201Created)]
@@ -109,11 +129,31 @@ public sealed class SalesController : ControllerBase
   public async Task<IActionResult> UpdateInvoice(Guid id, [FromBody] SalesInvoiceDraftRequest request, CancellationToken ct) =>
     Ok(ApiResponse<SalesInvoiceResponse>.Ok(await _service.UpdateInvoiceAsync(id, request, ct)));
 
+  [HttpPut("invoices/{id:guid}/posted")]
+  [ProducesResponseType(typeof(ApiResponse<SalesInvoiceResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> UpdatePostedInvoice(
+    Guid id,
+    [FromBody] UpdatePostedSalesInvoiceRequest request,
+    CancellationToken ct) =>
+    Ok(ApiResponse<SalesInvoiceResponse>.Ok(await _corrections.UpdateAsync(id, request, GetUserId(), ct)));
+
   [HttpDelete("invoices/{id:guid}")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   public async Task<IActionResult> DeleteInvoice(Guid id, CancellationToken ct)
   {
     await _service.DeleteInvoiceAsync(id, ct);
+    return NoContent();
+  }
+
+  [HttpDelete("invoices/{id:guid}/posted")]
+  [Authorize(Roles = "SuperAdmin")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeletePostedInvoice(
+    Guid id,
+    [FromBody] DeletePostedSalesInvoiceRequest request,
+    CancellationToken ct)
+  {
+    await _corrections.DeleteAsync(id, request, GetUserId(), ct);
     return NoContent();
   }
 

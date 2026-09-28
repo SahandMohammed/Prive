@@ -61,6 +61,11 @@ public sealed class SalesInvoiceEntity
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime? PostedAtUtc { get; set; }
+  public bool IsDeleted { get; set; }
+  public DateTime? DeletedAtUtc { get; set; }
+  public Guid? DeletedByUserId { get; set; }
+  public UserEntity? DeletedByUser { get; set; }
+  public string? DeleteReason { get; set; }
   public Guid? JournalEntryId { get; set; }
   public JournalEntryEntity? JournalEntry { get; set; }
   public Guid? AccountsReceivableAccountId { get; set; }

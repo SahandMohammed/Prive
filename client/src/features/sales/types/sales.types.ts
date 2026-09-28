@@ -48,6 +48,14 @@ export interface SalesInvoiceFilters {
   status?: string
 }
 
+export interface DeletedSalesInvoiceFilters {
+  page: number
+  pageSize: number
+  search?: string
+  fromDate?: string
+  toDate?: string
+}
+
 export interface SalesInvoiceSummary {
   id: string
   documentNumber: string
@@ -104,6 +112,54 @@ export interface SalesInvoiceReceipt {
   journalEntryId: string | null
 }
 
+export const PosPaymentMode = { Paid: 0, Partial: 1, Credit: 2 } as const
+export type PosPaymentMode = typeof PosPaymentMode[keyof typeof PosPaymentMode]
+
+export interface SalesInvoicePosCashbox {
+  moneyAccountId: string
+  moneyAccountCode: string
+  moneyAccountName: string
+  currencyId: string
+  currencyCode: string
+  currencyDecimalPlaces: number
+  amount: number
+  exchangeRate: number
+  baseAmount: number
+}
+
+export interface SalesInvoicePosTender {
+  id: string
+  sequence: number
+  moneyAccountId: string
+  moneyAccountCode: string
+  moneyAccountName: string
+  currencyId: string
+  currencyCode: string
+  tenderedAmount: number
+  exchangeRate: number
+  baseAmount: number
+  moneyLedgerEntryId: string
+}
+
+export interface SalesInvoicePosChange extends Omit<SalesInvoicePosTender, 'sequence' | 'tenderedAmount'> {
+  amount: number
+}
+
+export interface SalesInvoicePosContext {
+  saleId: string
+  documentNumber: string
+  posSessionId: string | null
+  posSessionNumber: string | null
+  sessionStatus: number | null
+  saleStatus: number
+  paymentMode: PosPaymentMode
+  completedAtUtc: string
+  sessionCashboxMoneyAccountIds: string[]
+  sessionCashboxes: SalesInvoicePosCashbox[]
+  tenders: SalesInvoicePosTender[]
+  change: SalesInvoicePosChange | null
+}
+
 export interface SalesInvoice extends SalesInvoiceSummary {
   branchCode: string
   warehouseCode: string | null
@@ -119,6 +175,7 @@ export interface SalesInvoice extends SalesInvoiceSummary {
   receipts: SalesInvoiceReceipt[]
   stockMovementIds: string[]
   lines: SalesInvoiceLine[]
+  posContext: SalesInvoicePosContext | null
 }
 
 export interface SalesInvoiceDraftInput {
@@ -139,4 +196,43 @@ export interface SalesInvoiceDraftInput {
     unitPrice: number
     useMasterPrice: boolean
   }[]
+}
+
+export interface PostedSalesInvoiceInput extends SalesInvoiceDraftInput {
+  reason: string
+  expectedUpdatedAtUtc: string
+  posSettlement: {
+    paymentMode: PosPaymentMode
+    tenders: { moneyAccountId: string; amount: number }[]
+    change: { moneyAccountId: string; amount: number } | null
+  } | null
+}
+
+export interface SalesInvoiceHistory {
+  id: string
+  action: string
+  reason: string | null
+  changedByUserId: string
+  changedByUsername: string
+  changedAtUtc: string
+  beforeState: unknown | null
+  afterState: unknown | null
+}
+
+export interface DeletedSalesInvoice {
+  id: string
+  documentNumber: string
+  invoiceDate: string
+  branchId: string
+  branchName: string
+  customerId: string | null
+  customerName: string | null
+  total: number
+  baseTotal: number
+  postedAtUtc: string | null
+  deletedAtUtc: string
+  deletedByUserId: string
+  deletedByUsername: string
+  deleteReason: string
+  isPosSale: boolean
 }

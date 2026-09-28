@@ -25,7 +25,7 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<StockAdjustmentDocumentEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<WarehouseTransferDocumentEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PurchaseInvoiceEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<SalesInvoiceEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<SalesInvoiceEntity>().HasQueryFilter(x => !x.IsDeleted && (SelectedBranchId == null || x.BranchId == SelectedBranchId));
     modelBuilder.Entity<MoneyAccountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<JournalEntryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<ExpenseDocumentEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
@@ -34,7 +34,7 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<WarehouseTransferLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.Document.BranchId == SelectedBranchId);
     modelBuilder.Entity<StockMovementEntity>().HasQueryFilter(x => SelectedBranchId == null || x.Warehouse.BranchId == SelectedBranchId);
     modelBuilder.Entity<PurchaseInvoiceLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PurchaseInvoice.BranchId == SelectedBranchId);
-    modelBuilder.Entity<SalesInvoiceLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId);
+    modelBuilder.Entity<SalesInvoiceLineEntity>().HasQueryFilter(x => !x.SalesInvoice.IsDeleted && (SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId));
     modelBuilder.Entity<JournalLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.JournalEntry.BranchId == SelectedBranchId);
     modelBuilder.Entity<ExpenseLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.ExpenseDocument.BranchId == SelectedBranchId);
     modelBuilder.Entity<MoneyAccountAccessEntity>().HasQueryFilter(x => SelectedBranchId == null || x.MoneyAccount.BranchId == SelectedBranchId);
@@ -72,6 +72,7 @@ public sealed partial class AppDbContext
 
   public override int SaveChanges(bool acceptAllChangesOnSuccess)
   {
+    EnsureActivityLogsAreAppendOnly();
     ValidateBranchWritesAsync(CancellationToken.None).GetAwaiter().GetResult();
     RecordAutomaticActivityLogs();
     return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -79,9 +80,17 @@ public sealed partial class AppDbContext
 
   public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
   {
+    EnsureActivityLogsAreAppendOnly();
     await ValidateBranchWritesAsync(cancellationToken);
     RecordAutomaticActivityLogs();
     return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+  }
+
+  private void EnsureActivityLogsAreAppendOnly()
+  {
+    if (ChangeTracker.Entries<ActivityLogEntity>()
+      .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+      throw new InvalidOperationException("Activity logs are append-only and cannot be modified or deleted.");
   }
 
   private async Task ValidateBranchWritesAsync(CancellationToken ct)

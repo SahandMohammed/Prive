@@ -15,5 +15,8 @@ public sealed class ActivityLogEntity
   public Guid EntityId { get; set; }
   public string DocumentNumber { get; set; } = string.Empty;
   public string? Description { get; set; }
+  public string? Reason { get; set; }
+  public string? BeforeState { get; set; }
+  public string? AfterState { get; set; }
   public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
 }

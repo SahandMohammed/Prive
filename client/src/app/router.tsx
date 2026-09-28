@@ -27,7 +27,7 @@ import {
   GeneralLedgerPage,
   TrialBalancePage,
 } from '@/features/accounting'
-import { ServicesPage, SalesInvoicesPage, CreateSalesInvoicePage } from '@/features/sales'
+import { ServicesPage, SalesInvoicesPage, CreateSalesInvoicePage, DeletedSalesInvoicesPage } from '@/features/sales'
 import { PurchaseInvoicePage, PurchaseInvoicesPage } from '@/features/purchases'
 import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
 import {
@@ -119,6 +119,10 @@ export const router = createBrowserRouter([
           { path: '/sales/invoices', element: <SalesInvoicesPage /> },
           { path: '/sales/invoices/new', element: <CreateSalesInvoicePage /> },
           { path: '/sales/invoices/:id', element: <CreateSalesInvoicePage /> },
+          {
+            element: <CapabilityRoute capability="deletePostedInvoice" />,
+            children: [{ path: '/sales/invoices-deleted', element: <DeletedSalesInvoicesPage /> }],
+          },
 
           // Purchases
           { path: '/purchases', element: <Navigate to="/purchases/invoices" replace /> },

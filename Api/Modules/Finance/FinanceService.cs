@@ -1114,7 +1114,7 @@ public sealed class FinanceService
       .Select(group => new { SalesInvoiceId = group.Key, Amount = group.Sum(allocation => allocation.Amount) })
       .ToDictionaryAsync(item => item.SalesInvoiceId, item => item.Amount, ct);
     var posSettlements = await _db.PosSales.AsNoTracking()
-      .Where(sale => invoiceIds.Contains(sale.SalesInvoiceId))
+      .Where(sale => !sale.SalesInvoice.IsDeleted && invoiceIds.Contains(sale.SalesInvoiceId))
       .Select(sale => new
       {
         sale.SalesInvoiceId,

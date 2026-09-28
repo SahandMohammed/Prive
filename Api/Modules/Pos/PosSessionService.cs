@@ -7,7 +7,6 @@ using Api.Shared.Pagination;
 using Api.Shared.Persistence;
 using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Api.Modules.Pos;
 
@@ -269,8 +268,9 @@ public sealed class PosSessionService
       .Select(session => new PosSessionListResponse(
         session.Id, session.SessionNumber, session.RegisterId, session.Register.Code, session.Register.Name,
         session.CashierUserId, session.CashierUser.Username, session.Status, session.OpenedAtUtc, session.ClosedAtUtc,
-        session.Sales.Count,
-        session.Sales.Sum(sale => (decimal?)sale.SalesInvoice.BaseTotal) ?? 0m,
+        session.Sales.Count(sale => !sale.SalesInvoice.IsDeleted),
+        session.Sales.Where(sale => !sale.SalesInvoice.IsDeleted)
+          .Sum(sale => (decimal?)sale.SalesInvoice.BaseTotal) ?? 0m,
         session.ClosingCounts.Sum(count => (decimal?)count.VarianceBaseAmount) ?? 0m,
         session.ZReport != null ? session.ZReport.BaseCurrencyCode : business.BaseCurrency.Code))
       .ToPagedResultAsync(request, ct);
@@ -311,7 +311,7 @@ public sealed class PosSessionService
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
 
-    if (_db.Database.IsRelational())
+    if (UsesPostgres())
       await _db.Database.ExecuteSqlInterpolatedAsync(
         $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
 
@@ -360,93 +360,24 @@ public sealed class PosSessionService
     session.ClosingNotes = closingNotes;
     session.UpdatedAtUtc = closedAt;
 
-    var z = new PosZReportEntity
-    {
-      ReportNumber = await NextZReportNumberAsync(ct),
-      PosSessionId = session.Id,
-      BranchId = session.BranchId,
-      BranchCode = session.Branch.Code,
-      BranchName = session.Branch.Name,
-      RegisterId = session.RegisterId,
-      RegisterCode = session.Register.Code,
-      RegisterName = session.Register.Name,
-      CashierUserId = session.CashierUserId,
-      CashierUsername = session.CashierUser.Username,
-      ClosedByUserId = userId,
-      ClosedByUsername = closer.Username,
-      BaseCurrencyId = business.BaseCurrencyId,
-      BaseCurrencyCode = business.BaseCurrency.Code,
-      OpenedAtUtc = session.OpenedAtUtc,
-      ClosedAtUtc = closedAt,
-      GeneratedAtUtc = closedAt,
-      SaleCount = x.SaleCount,
-      ServiceSalesBase = x.ServiceSalesBase,
-      ProductSalesBase = x.ProductSalesBase,
-      GrossSalesBase = x.GrossSalesBase,
-      RefundCount = x.RefundCount,
-      ServiceRefundsBase = x.ServiceRefundsBase,
-      ProductRefundsBase = x.ProductRefundsBase,
-      RefundTotalBase = x.RefundTotalBase,
-      NetSalesBase = x.NetSalesBase
-    };
-
-    foreach (var payment in x.Payments)
-    {
-      z.PaymentSummaries.Add(new PosZPaymentSummaryEntity
-      {
-        MoneyAccountId = payment.MoneyAccountId,
-        MoneyAccountCode = payment.MoneyAccountCode,
-        MoneyAccountName = payment.MoneyAccountName,
-        MoneyAccountType = payment.MoneyAccountType,
-        CurrencyId = payment.CurrencyId,
-        CurrencyCode = payment.CurrencyCode,
-        TenderedAmount = payment.TenderedAmount,
-        ChangeAmount = payment.ChangeAmount,
-        RefundAmount = payment.RefundAmount,
-        NetAmount = payment.NetAmount,
-        TenderedBaseAmount = payment.TenderedBaseAmount,
-        ChangeBaseAmount = payment.ChangeBaseAmount,
-        RefundBaseAmount = payment.RefundBaseAmount,
-        NetBaseAmount = payment.NetBaseAmount
-      });
-    }
-
-    foreach (var drawer in x.Drawers)
-    {
-      var close = session.ClosingCounts.Single(count => count.MoneyAccountId == drawer.MoneyAccountId);
-      z.DrawerSummaries.Add(new PosZDrawerSummaryEntity
-      {
-        MoneyAccountId = drawer.MoneyAccountId,
-        MoneyAccountCode = drawer.MoneyAccountCode,
-        MoneyAccountName = drawer.MoneyAccountName,
-        CurrencyId = drawer.CurrencyId,
-        CurrencyCode = drawer.CurrencyCode,
-        CurrencyDecimalPlaces = drawer.CurrencyDecimalPlaces,
-        OpeningAmount = drawer.OpeningAmount,
-        TenderedAmount = drawer.TenderedAmount,
-        ChangeAmount = drawer.ChangeAmount,
-        RefundAmount = drawer.RefundAmount,
-        ExpectedAmount = drawer.ExpectedAmount,
-        CountedAmount = close.CountedAmount,
-        VarianceAmount = close.VarianceAmount,
-        ExchangeRate = close.ExchangeRate,
-        OpeningBaseAmount = drawer.OpeningBaseAmount,
-        TenderedBaseAmount = drawer.TenderedBaseAmount,
-        ChangeBaseAmount = drawer.ChangeBaseAmount,
-        RefundBaseAmount = drawer.RefundBaseAmount,
-        ExpectedBaseAmount = close.ExpectedBaseAmount,
-        CountedBaseAmount = close.CountedBaseAmount,
-        VarianceBaseAmount = close.VarianceBaseAmount,
-        CashInAmount = drawer.CashInAmount,
-        CashOutAmount = drawer.CashOutAmount,
-        CashDropAmount = drawer.CashDropAmount,
-        AdjustmentAmount = drawer.AdjustmentAmount,
-        CashInBaseAmount = drawer.CashInBaseAmount,
-        CashOutBaseAmount = drawer.CashOutBaseAmount,
-        CashDropBaseAmount = drawer.CashDropBaseAmount,
-        AdjustmentBaseAmount = drawer.AdjustmentBaseAmount
-      });
-    }
+    var z = CreateZReport(session, x, new PosZReportIdentity(
+      Guid.NewGuid(),
+      await NextZReportNumberAsync(ct),
+      session.BranchId,
+      session.Branch.Code,
+      session.Branch.Name,
+      session.RegisterId,
+      session.Register.Code,
+      session.Register.Name,
+      session.CashierUserId,
+      session.CashierUser.Username,
+      userId,
+      closer.Username,
+      business.BaseCurrencyId,
+      business.BaseCurrency.Code,
+      session.OpenedAtUtc,
+      closedAt),
+      closedAt);
 
     _db.PosZReports.Add(z);
     await _db.SaveChangesAsync(ct);
@@ -515,7 +446,7 @@ public sealed class PosSessionService
       throw new BadRequestException(ErrorCodes.Pos.SessionAccessDenied,
         "The checkout branch must match the active branch workspace.");
     // Lock before reading status so checkout and closing serialize on the same row.
-    if (_db.Database.IsRelational())
+    if (UsesPostgres())
       await _db.Database.ExecuteSqlInterpolatedAsync(
         $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
     var session = await _db.PosSessions.Include(item => item.OpeningCounts)
@@ -539,7 +470,7 @@ public sealed class PosSessionService
     if (branchId != selectedBranchId)
       throw new BadRequestException(ErrorCodes.Pos.SessionAccessDenied,
         "The POS Session must belong to the active branch workspace.");
-    if (_db.Database.IsRelational())
+    if (UsesPostgres())
       await _db.Database.ExecuteSqlInterpolatedAsync(
         $"SELECT \"Id\" FROM pos_sessions WHERE \"Id\" = {sessionId} AND \"BranchId\" = {branchId} FOR UPDATE", ct);
     var session = await _db.PosSessions.Include(item => item.OpeningCounts)
@@ -551,6 +482,39 @@ public sealed class PosSessionService
       throw new ForbiddenException(ErrorCodes.Pos.SessionAccessDenied,
         "Only a Manager, Owner, or SuperAdmin may manage POS drawer movements.");
     return session;
+  }
+
+  internal async Task<PosSessionEntity?> FindSessionForInvoiceCorrectionAsync(
+    Guid sessionId,
+    Guid branchId,
+    CancellationToken ct)
+  {
+    if (RequireBranch() != branchId) return null;
+    return await SessionReportQuery()
+      .Include(session => session.ZReport).ThenInclude(report => report!.PaymentSummaries)
+      .Include(session => session.ZReport).ThenInclude(report => report!.DrawerSummaries)
+      .SingleOrDefaultAsync(session => session.Id == sessionId && session.BranchId == branchId, ct);
+  }
+
+  internal PosZReportEntity RegenerateClosedSessionZReport(
+    PosSessionEntity session,
+    PosZReportIdentity identity,
+    DateTimeOffset generatedAtUtc)
+  {
+    var x = BuildXReport(session, identity.BaseCurrencyId, identity.BaseCurrencyCode);
+    var closingCounts = session.ClosingCounts.ToDictionary(count => count.MoneyAccountId);
+    foreach (var drawer in x.Drawers)
+    {
+      var close = closingCounts[drawer.MoneyAccountId];
+      close.ExpectedAmount = drawer.ExpectedAmount;
+      close.VarianceAmount = Money(close.CountedAmount - drawer.ExpectedAmount);
+      close.ExpectedBaseAmount = Money(drawer.ExpectedAmount * close.ExchangeRate);
+      close.CountedBaseAmount = Money(close.CountedAmount * close.ExchangeRate);
+      close.VarianceBaseAmount = Money((close.CountedAmount - drawer.ExpectedAmount) * close.ExchangeRate);
+    }
+
+    session.UpdatedAtUtc = generatedAtUtc;
+    return CreateZReport(session, x, identity, generatedAtUtc);
   }
 
   private async Task<PosSessionEntity> GetReportSessionAsync(Guid userId, Guid id, bool trackChanges, CancellationToken ct)
@@ -567,7 +531,9 @@ public sealed class PosSessionService
 
   private PosXReportResponse BuildXReport(PosSessionEntity session, Guid baseCurrencyId, string baseCurrencyCode)
   {
-    var sales = session.Sales.Where(sale => sale.Status == PosSaleStatus.Completed).ToList();
+    var sales = session.Sales
+      .Where(sale => !sale.SalesInvoice.IsDeleted && sale.Status == PosSaleStatus.Completed)
+      .ToList();
     var refunds = session.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).ToList();
     var serviceSales = Money(sales.SelectMany(sale => sale.SalesInvoice.Lines)
       .Where(line => line.LineType == SalesLineType.Service).Sum(line => line.BaseLineAmount));
@@ -644,6 +610,104 @@ public sealed class PosSessionService
       ToSessionResponse(session), DateTimeOffset.UtcNow, sales.Count, serviceSales, productSales, gross,
       refunds.Count, serviceRefunds, productRefunds, refundTotal, Money(gross - refundTotal),
       baseCurrencyId, baseCurrencyCode, payments, drawers);
+  }
+
+  private static PosZReportEntity CreateZReport(
+    PosSessionEntity session,
+    PosXReportResponse x,
+    PosZReportIdentity identity,
+    DateTimeOffset generatedAtUtc)
+  {
+    var z = new PosZReportEntity
+    {
+      Id = identity.Id,
+      ReportNumber = identity.ReportNumber,
+      PosSession = session,
+      PosSessionId = session.Id,
+      BranchId = identity.BranchId,
+      BranchCode = identity.BranchCode,
+      BranchName = identity.BranchName,
+      RegisterId = identity.RegisterId,
+      RegisterCode = identity.RegisterCode,
+      RegisterName = identity.RegisterName,
+      CashierUserId = identity.CashierUserId,
+      CashierUsername = identity.CashierUsername,
+      ClosedByUserId = identity.ClosedByUserId,
+      ClosedByUsername = identity.ClosedByUsername,
+      BaseCurrencyId = identity.BaseCurrencyId,
+      BaseCurrencyCode = identity.BaseCurrencyCode,
+      OpenedAtUtc = identity.OpenedAtUtc,
+      ClosedAtUtc = identity.ClosedAtUtc,
+      GeneratedAtUtc = generatedAtUtc,
+      SaleCount = x.SaleCount,
+      ServiceSalesBase = x.ServiceSalesBase,
+      ProductSalesBase = x.ProductSalesBase,
+      GrossSalesBase = x.GrossSalesBase,
+      RefundCount = x.RefundCount,
+      ServiceRefundsBase = x.ServiceRefundsBase,
+      ProductRefundsBase = x.ProductRefundsBase,
+      RefundTotalBase = x.RefundTotalBase,
+      NetSalesBase = x.NetSalesBase
+    };
+
+    foreach (var payment in x.Payments)
+      z.PaymentSummaries.Add(new PosZPaymentSummaryEntity
+      {
+        MoneyAccountId = payment.MoneyAccountId,
+        MoneyAccountCode = payment.MoneyAccountCode,
+        MoneyAccountName = payment.MoneyAccountName,
+        MoneyAccountType = payment.MoneyAccountType,
+        CurrencyId = payment.CurrencyId,
+        CurrencyCode = payment.CurrencyCode,
+        TenderedAmount = payment.TenderedAmount,
+        ChangeAmount = payment.ChangeAmount,
+        RefundAmount = payment.RefundAmount,
+        NetAmount = payment.NetAmount,
+        TenderedBaseAmount = payment.TenderedBaseAmount,
+        ChangeBaseAmount = payment.ChangeBaseAmount,
+        RefundBaseAmount = payment.RefundBaseAmount,
+        NetBaseAmount = payment.NetBaseAmount
+      });
+
+    foreach (var drawer in x.Drawers)
+    {
+      var close = session.ClosingCounts.Single(count => count.MoneyAccountId == drawer.MoneyAccountId);
+      z.DrawerSummaries.Add(new PosZDrawerSummaryEntity
+      {
+        MoneyAccountId = drawer.MoneyAccountId,
+        MoneyAccountCode = drawer.MoneyAccountCode,
+        MoneyAccountName = drawer.MoneyAccountName,
+        CurrencyId = drawer.CurrencyId,
+        CurrencyCode = drawer.CurrencyCode,
+        CurrencyDecimalPlaces = drawer.CurrencyDecimalPlaces,
+        OpeningAmount = drawer.OpeningAmount,
+        TenderedAmount = drawer.TenderedAmount,
+        ChangeAmount = drawer.ChangeAmount,
+        RefundAmount = drawer.RefundAmount,
+        ExpectedAmount = drawer.ExpectedAmount,
+        CountedAmount = close.CountedAmount,
+        VarianceAmount = close.VarianceAmount,
+        ExchangeRate = close.ExchangeRate,
+        OpeningBaseAmount = drawer.OpeningBaseAmount,
+        TenderedBaseAmount = drawer.TenderedBaseAmount,
+        ChangeBaseAmount = drawer.ChangeBaseAmount,
+        RefundBaseAmount = drawer.RefundBaseAmount,
+        ExpectedBaseAmount = close.ExpectedBaseAmount,
+        CountedBaseAmount = close.CountedBaseAmount,
+        VarianceBaseAmount = close.VarianceBaseAmount,
+        CashInAmount = drawer.CashInAmount,
+        CashOutAmount = drawer.CashOutAmount,
+        CashDropAmount = drawer.CashDropAmount,
+        AdjustmentAmount = drawer.AdjustmentAmount,
+        CashInBaseAmount = drawer.CashInBaseAmount,
+        CashOutBaseAmount = drawer.CashOutBaseAmount,
+        CashDropBaseAmount = drawer.CashDropBaseAmount,
+        AdjustmentBaseAmount = drawer.AdjustmentBaseAmount
+      });
+    }
+
+    session.ZReport = z;
+    return z;
   }
 
   private IQueryable<PosSessionEntity> SessionQuery() => _db.PosSessions
@@ -826,6 +890,7 @@ public sealed class PosSessionService
   }
 
   private static string NormalizeCode(string value) => value.Trim().ToUpperInvariant();
+  private bool UsesPostgres() => _db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL";
   private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
   private static decimal Money(decimal value) => Math.Round(value, 4, MidpointRounding.AwayFromZero);
   private static NotFoundException RegisterNotFound() =>
@@ -833,3 +898,21 @@ public sealed class PosSessionService
   private static NotFoundException SessionNotFound() =>
     new(ErrorCodes.Pos.SessionNotFound, "POS Session was not found.");
 }
+
+internal sealed record PosZReportIdentity(
+  Guid Id,
+  string ReportNumber,
+  Guid BranchId,
+  string BranchCode,
+  string BranchName,
+  Guid RegisterId,
+  string RegisterCode,
+  string RegisterName,
+  Guid CashierUserId,
+  string CashierUsername,
+  Guid ClosedByUserId,
+  string ClosedByUsername,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  DateTimeOffset OpenedAtUtc,
+  DateTimeOffset ClosedAtUtc);

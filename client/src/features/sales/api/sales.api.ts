@@ -3,6 +3,10 @@ import type {
   SalesInvoice,
   SalesInvoiceDraftInput,
   SalesInvoiceFilters,
+  PostedSalesInvoiceInput,
+  SalesInvoiceHistory,
+  DeletedSalesInvoice,
+  DeletedSalesInvoiceFilters,
   SalesInvoiceSummary,
   Service,
   ServiceCategory,
@@ -39,4 +43,9 @@ export const salesApi = {
   updateInvoice: (id: string, body: SalesInvoiceDraftInput) => apiClient.put<SalesInvoice>(`/sales/invoices/${id}`, body),
   deleteInvoice: (id: string) => apiClient.delete<void>(`/sales/invoices/${id}`),
   postInvoice: (id: string) => apiClient.post<SalesInvoice>(`/sales/invoices/${id}/post`),
+  updatePostedInvoice: (id: string, body: PostedSalesInvoiceInput) => apiClient.put<SalesInvoice>(`/sales/invoices/${id}/posted`, body),
+  deletePostedInvoice: (id: string, body: { reason: string; expectedUpdatedAtUtc: string }) => apiClient.delete<void>(`/sales/invoices/${id}/posted`, body),
+  invoiceHistory: (id: string) => apiClient.get<SalesInvoiceHistory[]>(`/sales/invoices/${id}/history`),
+  deletedInvoices: (filters: DeletedSalesInvoiceFilters) =>
+    apiClient.getPaginated<DeletedSalesInvoice>(`/sales/invoices/deleted?${queryString(filters)}`),
 }

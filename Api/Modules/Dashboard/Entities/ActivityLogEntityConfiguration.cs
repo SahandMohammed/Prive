@@ -13,6 +13,9 @@ public sealed class ActivityLogEntityConfiguration : IEntityTypeConfiguration<Ac
     builder.Property(x => x.EntityType).HasMaxLength(64).IsRequired();
     builder.Property(x => x.DocumentNumber).HasMaxLength(64).IsRequired();
     builder.Property(x => x.Description).HasMaxLength(256);
+    builder.Property(x => x.Reason).HasMaxLength(1000);
+    builder.Property(x => x.BeforeState).HasColumnType("jsonb");
+    builder.Property(x => x.AfterState).HasColumnType("jsonb");
     builder.Property(x => x.TimestampUtc).IsRequired();
 
     builder.HasOne(x => x.Branch)

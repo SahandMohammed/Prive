@@ -46,7 +46,9 @@ public sealed class SalesInvoiceEntityConfiguration : IEntityTypeConfiguration<S
     builder.Property(invoice => invoice.Total).HasPrecision(19, 4).IsRequired();
     builder.Property(invoice => invoice.BaseTotal).HasPrecision(19, 4).IsRequired();
     builder.Property(invoice => invoice.Status).HasConversion<string>().HasMaxLength(16).IsRequired().IsConcurrencyToken();
+    builder.Property(invoice => invoice.UpdatedAtUtc).IsConcurrencyToken();
     builder.Property(invoice => invoice.Notes).HasMaxLength(1000);
+    builder.Property(invoice => invoice.DeleteReason).HasMaxLength(1000);
     builder.HasIndex(invoice => new { invoice.InvoiceDate, invoice.Status });
     builder.HasIndex(invoice => invoice.CustomerId);
     builder.HasIndex(invoice => invoice.BranchId);
@@ -58,6 +60,7 @@ public sealed class SalesInvoiceEntityConfiguration : IEntityTypeConfiguration<S
     builder.HasOne(invoice => invoice.Currency).WithMany().HasForeignKey(invoice => invoice.CurrencyId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(invoice => invoice.BaseCurrency).WithMany().HasForeignKey(invoice => invoice.BaseCurrencyId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(invoice => invoice.CreatedByUser).WithMany().HasForeignKey(invoice => invoice.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(invoice => invoice.DeletedByUser).WithMany().HasForeignKey(invoice => invoice.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(invoice => invoice.JournalEntry).WithOne(entry => entry.SourceSalesInvoice).HasForeignKey<SalesInvoiceEntity>(invoice => invoice.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
     builder.HasIndex(invoice => invoice.JournalEntryId).IsUnique().HasFilter("\"JournalEntryId\" IS NOT NULL");
     builder.HasIndex(invoice => invoice.AccountsReceivableAccountId);
