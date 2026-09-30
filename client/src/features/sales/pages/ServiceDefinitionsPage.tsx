@@ -143,7 +143,7 @@ function ServicesTab() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+          className="gap-1.5"
           onClick={openCreate}
         >
           <Plus className="size-4" />
@@ -339,7 +339,7 @@ function ServiceCategoriesTab() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+          className="gap-1.5"
           onClick={openCreate}
         >
           <Plus className="size-4" />

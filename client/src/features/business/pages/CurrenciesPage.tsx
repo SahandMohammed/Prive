@@ -66,7 +66,7 @@ export function CurrenciesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Currencies</h1>
           <p className="mt-1 text-sm text-slate-500">Manage currencies available to the business. Exchange rates are configured separately.</p>
         </div>
-        <Button className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90" onClick={openCreateDialog}>
+        <Button className="gap-1.5" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 stroke-[2.5]" />
           Add currency
         </Button>
@@ -148,7 +148,7 @@ export function CurrenciesPage() {
             {saveCurrency.isError && <p className="text-sm text-destructive">{saveCurrency.error.message}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog} disabled={saveCurrency.isPending}>Cancel</Button>
-              <Button type="submit" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={saveCurrency.isPending}>{saveCurrency.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add currency'}</Button>
+              <Button type="submit" disabled={saveCurrency.isPending}>{saveCurrency.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add currency'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -199,7 +199,7 @@ function EmptyRow({ onAdd }: { onAdd: () => void }) {
             <p className="font-medium text-slate-800 dark:text-slate-200">No currencies found</p>
             <p className="mt-1 text-sm text-slate-500">Create your first currency to get started.</p>
           </div>
-          <Button size="sm" className="bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={onAdd}>
+          <Button size="sm" onClick={onAdd}>
             <Plus className="h-4 w-4" /> Add currency
           </Button>
         </div>

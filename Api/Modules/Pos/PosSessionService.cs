@@ -416,7 +416,7 @@ public sealed class PosSessionService
         report.RegisterId, report.RegisterCode, report.RegisterName,
         report.CashierUserId, report.CashierUsername, report.OpenedAtUtc, report.ClosedAtUtc,
         report.SaleCount, report.GrossSalesBase,
-        report.RefundCount, report.RefundTotalBase, report.NetSalesBase ?? report.GrossSalesBase,
+        report.RefundCount, report.RefundTotalBase, report.NetSalesBase,
         report.DrawerSummaries.Sum(drawer => (decimal?)drawer.VarianceBaseAmount) ?? 0m,
         report.BaseCurrencyCode))
       .ToPagedResultAsync(request, ct);
@@ -748,7 +748,7 @@ public sealed class PosSessionService
     report.OpenedAtUtc, report.ClosedAtUtc, report.GeneratedAtUtc,
     report.SaleCount, report.ServiceSalesBase, report.ProductSalesBase, report.GrossSalesBase,
     report.RefundCount, report.ServiceRefundsBase, report.ProductRefundsBase,
-    report.RefundTotalBase, report.NetSalesBase ?? report.GrossSalesBase,
+    report.RefundTotalBase, report.NetSalesBase,
     report.BaseCurrencyId, report.BaseCurrencyCode,
     report.PaymentSummaries.OrderBy(summary => summary.CurrencyCode).ThenBy(summary => summary.MoneyAccountCode)
       .Select(summary => new PosPaymentSummaryResponse(

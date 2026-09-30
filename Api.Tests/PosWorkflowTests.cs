@@ -21,7 +21,7 @@ namespace Api.Tests;
 public sealed partial class PosWorkflowTests
 {
   [Fact]
-  public async Task Service_only_walk_in_posts_money_and_revenue_without_inventory_or_receivable()
+  public async Task Service_only_walk_in_posts_receivable_and_separate_payment_journals()
   {
     await using var db = CreateDb();
     var data = await SeedAsync(db);
@@ -34,16 +34,21 @@ public sealed partial class PosWorkflowTests
       default);
 
     Assert.Equal("POS-000001", sale.DocumentNumber);
-    Assert.Null(sale.CustomerId);
+    Assert.Equal((await db.Branches.SingleAsync(item => item.Id == data.BranchId)).WalkInCustomerId, sale.CustomerId);
     Assert.Equal(25_000, sale.Total);
     Assert.Equal(25_000, sale.SettledBaseAmount);
     Assert.Equal(stockCount, await db.StockMovements.CountAsync());
     Assert.Equal(25_000, await PosBalanceAsync(db, data.IqdMoneyAccountId));
     var journal = await db.JournalEntries.Include(entry => entry.Lines)
       .SingleAsync(entry => entry.Id == sale.JournalEntryId);
-    Assert.Equal(data.IqdMoneyGlId, journal.Lines.Single(line => line.DebitBaseAmount == 25_000).AccountId);
+    Assert.Equal(data.ReceivableGlId, journal.Lines.Single(line => line.DebitBaseAmount == 25_000).AccountId);
     Assert.Equal(data.ServiceRevenueGlId, journal.Lines.Single(line => line.CreditBaseAmount == 25_000).AccountId);
-    Assert.DoesNotContain(journal.Lines, line => line.AccountId == data.ReceivableGlId);
+    Assert.DoesNotContain(journal.Lines, line => line.AccountId == data.IqdMoneyGlId);
+    var paymentId = (await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId;
+    var paymentJournal = await db.JournalEntries.Include(entry => entry.Lines)
+      .SingleAsync(entry => entry.SourcePayment!.Id == paymentId);
+    Assert.Equal(data.IqdMoneyGlId, paymentJournal.Lines.Single(line => line.DebitBaseAmount == 25_000).AccountId);
+    Assert.Equal(data.ReceivableGlId, paymentJournal.Lines.Single(line => line.CreditBaseAmount == 25_000).AccountId);
     var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
     Assert.Equal(SalesInvoicePaymentStatus.Paid, invoice.PaymentStatus);
     Assert.Equal(0, invoice.OutstandingAmount);
@@ -74,7 +79,7 @@ public sealed partial class PosWorkflowTests
       new UpdatePostedSalesInvoiceRequest(
         "Correct POS service price",
         invoice.UpdatedAtUtc,
-        data.CustomerId,
+        invoice.CustomerId,
         invoice.InvoiceDate,
         data.BranchId,
         invoice.WarehouseId,
@@ -111,7 +116,7 @@ public sealed partial class PosWorkflowTests
     Assert.NotEqual(originalTenderId, rebuilt.Tenders.Single().Id);
     Assert.Equal(20_000, rebuilt.Tenders.Single().BaseAmount);
     Assert.Equal(20_000, await PosBalanceAsync(db, data.IqdMoneyAccountId));
-    Assert.Single(await db.MoneyLedgerEntries.Where(entry => entry.SourceDocumentId == sale.Id).ToListAsync());
+    Assert.Single(await db.MoneyLedgerEntries.Where(entry => entry.SourceDocumentId == rebuilt.PaymentId).ToListAsync());
     Assert.Single(await db.ActivityLogs.Where(log => log.EntityId == sale.SalesInvoiceId && log.Action == "edited").ToListAsync());
   }
 
@@ -150,7 +155,7 @@ public sealed partial class PosWorkflowTests
     Assert.Empty((await pos.GetSalesAsync(new PosSaleListQuery { Page = 1, PageSize = 20 }, default)).Items);
     Assert.False(await db.PosTenders.AnyAsync(tender => tender.PosSaleId == sale.Id));
     Assert.False(await db.PosChanges.AnyAsync(change => change.PosSaleId == sale.Id));
-    Assert.False(await db.MoneyLedgerEntries.AnyAsync(entry => entry.SourceDocumentId == sale.Id));
+    Assert.False(await db.MoneyLedgerEntries.AnyAsync(entry => entry.SourceDocumentId == original.PaymentId));
     Assert.False(await db.JournalEntries.AnyAsync(entry => entry.Id == sale.JournalEntryId));
     Assert.Single(await db.ActivityLogs.Where(log => log.EntityId == sale.SalesInvoiceId && log.Action == "deleted").ToListAsync());
   }
@@ -262,8 +267,9 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(13_000, usd.BaseAmount);
     Assert.Equal(10, await PosBalanceAsync(db, data.UsdMoneyAccountId));
     Assert.Equal(12_000, await PosBalanceAsync(db, data.IqdMoneyAccountId));
+    var paymentId = (await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId;
     var usdLedger = await db.MoneyLedgerEntries.SingleAsync(entry =>
-      entry.SourceDocumentId == sale.Id && entry.MoneyAccountId == data.UsdMoneyAccountId);
+      entry.SourceDocumentId == paymentId && entry.MoneyAccountId == data.UsdMoneyAccountId);
     Assert.Equal(data.UsdCurrencyId, usdLedger.CurrencyId);
     Assert.Equal(data.IqdCurrencyId, usdLedger.BaseCurrencyId);
     Assert.Equal(10, usdLedger.Amount);
@@ -271,7 +277,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(13_000, usdLedger.BaseAmount);
     var usdGlId = (await db.MoneyAccounts.SingleAsync(account => account.Id == data.UsdMoneyAccountId)).AccountingAccountId;
     var journal = await db.JournalEntries.Include(entry => entry.Lines)
-      .SingleAsync(entry => entry.Id == sale.JournalEntryId);
+      .SingleAsync(entry => entry.SourcePayment!.Id == paymentId);
     var usdSettlement = journal.Lines.Single(line => line.AccountId == usdGlId);
     Assert.Equal(10, usdSettlement.OriginalDebitAmount);
     Assert.Equal(13_000, usdSettlement.DebitBaseAmount);
@@ -387,7 +393,8 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(1, invoice.ExchangeRate);
     Assert.Equal(26_000, invoice.BaseTotal);
 
-    var ledger = await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceDocumentId == sale.Id);
+    var paymentId = (await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId;
+    var ledger = await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceDocumentId == paymentId);
     Assert.Equal(data.UsdMoneyAccountId, ledger.MoneyAccountId);
     Assert.Equal(data.UsdCurrencyId, ledger.CurrencyId);
     Assert.Equal(data.IqdCurrencyId, ledger.BaseCurrencyId);
@@ -422,11 +429,12 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(25_000, sale.SettledBaseAmount);
     Assert.Equal(100, await PosBalanceAsync(db, data.UsdMoneyAccountId));
     Assert.Equal(95_000, await PosBalanceAsync(db, data.IqdMoneyAccountId));
-    var movements = await db.MoneyLedgerEntries.Where(entry => entry.SourceDocumentId == sale.Id)
+    var paymentId = (await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId;
+    var movements = await db.MoneyLedgerEntries.Where(entry => entry.SourceDocumentId == paymentId)
       .OrderBy(entry => entry.Amount).ToListAsync();
     Assert.Equal([-105_000m, 100m], movements.Select(entry => entry.Amount).ToArray());
-    Assert.All(movements, entry => Assert.Equal(MoneyLedgerSourceType.PosSale, entry.SourceType));
-    Assert.All(movements, entry => Assert.Equal(sale.DocumentNumber, entry.DocumentNumber));
+    Assert.All(movements, entry => Assert.Equal(MoneyLedgerSourceType.Payment, entry.SourceType));
+    Assert.All(movements, entry => Assert.StartsWith("PAY-", entry.DocumentNumber));
     var journal = await db.JournalEntries.Include(entry => entry.Lines).SingleAsync(entry => entry.Id == sale.JournalEntryId);
     Assert.Equal(journal.Lines.Sum(line => line.DebitBaseAmount), journal.Lines.Sum(line => line.CreditBaseAmount));
     Assert.Equal(25_000, journal.Lines.Single(line => line.AccountId == data.ServiceRevenueGlId).CreditBaseAmount);
@@ -504,7 +512,8 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(InventoryDocumentType.PosSale, inventory.Items[0].SourceDocumentType);
     Assert.Equal(sale.Id, inventory.Items[0].SourceDocumentId);
     Assert.Equal(sale.Lines.Single().Id, inventory.Items[0].SourceDocumentLineId);
-    Assert.Equal(sale.Id, (await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceType == MoneyLedgerSourceType.PosSale)).SourceDocumentId);
+    var paymentId = (await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId;
+    Assert.Equal(paymentId, (await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceType == MoneyLedgerSourceType.Payment)).SourceDocumentId);
     var finance = new FinanceService(db, Options.Create(new FinanceOptions
     {
       AccountsPayableAccountCode = "23214",
@@ -648,6 +657,11 @@ public sealed partial class PosWorkflowTests
       Id = db.SelectedBranchId!.Value,
       Code = "MAIN", Name = "Main", Address = "A", City = "C", Region = "R", Country = "IQ", IsMainBranch = true
     };
+    var walkInCustomer = new ContactEntity
+    {
+      Name = "Walk-in Customer", IsCustomer = true, IsActive = true, SystemRole = ContactSystemRole.WalkInCustomer
+    };
+    branch.WalkInCustomer = walkInCustomer;
     var customer = new ContactEntity { Name = "Customer", IsCustomer = true, IsActive = true };
     var warehouse = new WarehouseEntity { Code = "MAIN", Name = "Main Warehouse", Branch = branch };
     var productCategory = new ProductCategoryEntity { Name = "Products" };
@@ -692,7 +706,7 @@ public sealed partial class PosWorkflowTests
       Branch = branch, Currency = iqd,
       AccountingAccount = new() { Code = "1114", Name = "Outside IQD", Classification = AccountClassification.Asset }
     };
-    db.AddRange(cashier, viewer, outsider, professionalUser, professional, iqd, usd, business, branch, customer, warehouse,
+    db.AddRange(cashier, viewer, outsider, professionalUser, professional, iqd, usd, business, branch, walkInCustomer, customer, warehouse,
       productCategory, serviceCategory, unit, receivable, inventory, productRevenue, serviceRevenue, cogs,
       iqdMoneyGl, usdMoneyGl, product, salonService, iqdAccount, usdAccount, viewerAccount, outsideAccount);
     await db.SaveChangesAsync();

@@ -143,7 +143,7 @@ export function AppLayout() {
             {hasCapability(user?.role, 'pos') && <button
               type="button"
               onClick={() => navigate('/pos')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-950 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="size-3.5 stroke-[2.5]" />
               <span>{t('common.newOrder')}</span>
@@ -172,7 +172,7 @@ export function AppLayout() {
             {/* User Avatar Circle */}
             <div
               onClick={() => navigate('/users')}
-              className="size-8 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-bold text-xs flex items-center justify-center shrink-0 cursor-pointer shadow-xs hover:ring-2 hover:ring-neutral-400 transition-all"
+              className="size-8 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0 cursor-pointer shadow-xs hover:ring-2 hover:ring-primary/40 transition-all"
               title={user?.username ?? 'Account'}
             >
               {userInitials}

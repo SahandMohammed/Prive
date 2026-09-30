@@ -17,6 +17,8 @@ import {
   SupplierPaymentPage,
   CustomerReceiptsPage,
   CustomerReceiptPage,
+  CustomerAccountPage,
+  PaymentPage,
 } from '@/features/finance'
 import {
   AccountingDashboard,
@@ -97,6 +99,8 @@ export const router = createBrowserRouter([
           { path: '/finance/customer-receipts', element: <CustomerReceiptsPage /> },
           { path: '/finance/customer-receipts/new', element: <CustomerReceiptPage /> },
           { path: '/finance/customer-receipts/:id', element: <CustomerReceiptPage /> },
+          { path: '/finance/customers/:customerId/account', element: <CustomerAccountPage /> },
+          { path: '/finance/payments/:id', element: <PaymentPage /> },
 
           // Expenses
           { path: '/expenses', element: <ExpensesPage /> },

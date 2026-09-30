@@ -150,7 +150,7 @@ public sealed class PosRefundService
       .SingleOrDefaultAsync(item => item.Id == saleId, ct) ?? throw SaleNotFound();
     if (sale.Status != PosSaleStatus.Completed || sale.SalesInvoice.Status != SalesInvoiceStatus.Posted)
       throw new BadRequestException(ErrorCodes.Pos.RefundNothingAvailable,
-        "Only a completed POS Sale with a posted Sales Invoice can be refunded.");
+        "Only a completed POS Sale with an active Sales Invoice can be refunded.");
     if (sale.SalesInvoice.BranchId != branchId)
       throw new ForbiddenException(ErrorCodes.Branch.ScopeMismatch,
         "The POS Sale belongs to a different branch workspace.");
@@ -467,8 +467,8 @@ public sealed class PosRefundService
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Branch)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Warehouse)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
-      .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.ReceiptAllocations)
-        .ThenInclude(allocation => allocation.CustomerReceipt)
+      .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.PaymentAllocations)
+        .ThenInclude(allocation => allocation.Payment)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
         .ThenInclude(line => line.Service)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
@@ -488,7 +488,7 @@ public sealed class PosRefundService
 
   private IQueryable<PosRefundEntity> RefundQuery() => _db.PosRefunds.AsNoTracking()
     .Include(refund => refund.PosSale)
-    .Include(refund => refund.SalesInvoice)
+    .Include(refund => refund.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(refund => refund.Branch)
     .Include(refund => refund.PosSession)
     .Include(refund => refund.Customer)
@@ -504,13 +504,10 @@ public sealed class PosRefundService
     var refundedBase = Money(postedRefunds.Sum(refund => refund.TotalRefundBase));
     var remainingBase = Math.Max(Money(sale.SalesInvoice.BaseTotal - refundedBase), 0);
     var refundState = RefundState(refundedBase, sale.SalesInvoice.BaseTotal);
-    var settledBase = Money(sale.Tenders.Sum(tender => tender.BaseAmount) - (sale.Change?.BaseAmount ?? 0));
-    var receiptsBase = Money(sale.SalesInvoice.ReceiptAllocations
-      .Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-      .Sum(allocation => allocation.BaseAmount));
+    var collectedBase = Money(sale.SalesInvoice.PaymentAllocations.Sum(allocation => allocation.BaseAmount));
     var priorReceivableReversal = Money(postedRefunds.Sum(refund => refund.ReceivableReversalBase));
     var outstandingBase = Math.Max(
-      Money(sale.SalesInvoice.BaseTotal - settledBase - receiptsBase - priorReceivableReversal), 0);
+      Money(sale.SalesInvoice.BaseTotal - collectedBase - priorReceivableReversal), 0);
 
     var lines = sale.SalesInvoice.Lines.OrderBy(line => line.LineType).ThenBy(line => line.Id).Select(line =>
     {
@@ -531,7 +528,7 @@ public sealed class PosRefundService
 
     return new PosRefundabilityResponse(
       sale.Id, sale.DocumentNumber, sale.SalesInvoiceId, sale.SalesInvoice.DocumentNumber,
-      sale.SalesInvoice.BranchId, sale.SalesInvoice.CustomerId, sale.SalesInvoice.Customer?.Name,
+      sale.SalesInvoice.BranchId, sale.SalesInvoice.CustomerId, sale.SalesInvoice.Customer.Name,
       sale.SalesInvoice.WarehouseId, sale.CompletedAtUtc, sale.CashierUser.Username,
       sale.SalesInvoice.BaseTotal, refundedBase, remainingBase, outstandingBase, refundState,
       sale.SalesInvoice.BaseCurrencyId, sale.SalesInvoice.BaseCurrency.Code, lines,
@@ -543,7 +540,8 @@ public sealed class PosRefundService
     refund.SalesInvoiceId, refund.SalesInvoice.DocumentNumber,
     refund.BranchId, refund.Branch.Code, refund.Branch.Name,
     refund.PosSessionId, refund.PosSession.SessionNumber,
-    refund.CustomerId, refund.Customer?.Name, refund.Reason, refund.Notes, refund.IsVoid, refund.Status,
+    refund.SalesInvoice.CustomerId, refund.SalesInvoice.Customer.Name,
+    refund.Reason, refund.Notes, refund.IsVoid, refund.Status,
     refund.TotalRefundBase, refund.ReceivableReversalBase, refund.CashRefundBase,
     refund.SalesInvoice.BaseCurrencyId, refund.SalesInvoice.BaseCurrency.Code,
     refund.CreatedByUserId, refund.CreatedByUser.Username,

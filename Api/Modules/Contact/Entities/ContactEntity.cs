@@ -8,6 +8,7 @@ public sealed class ContactEntity : Api.Shared.Persistence.IBranchCatalogEntity
   public ContactKind Kind { get; set; } = ContactKind.Individual;
   public bool IsCustomer { get; set; }
   public bool IsSupplier { get; set; }
+  public ContactSystemRole? SystemRole { get; set; }
   public string? PrimaryPhoneNumber { get; set; }
   public string? PrimaryPhoneNormalized { get; set; }
   public string? SecondaryPhoneNumber { get; set; }
@@ -32,4 +33,9 @@ public enum ContactRole
   Customer = 0,
   Supplier = 1,
   Both = 2
+}
+
+public enum ContactSystemRole
+{
+  WalkInCustomer = 0
 }

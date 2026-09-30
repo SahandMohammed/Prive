@@ -308,6 +308,16 @@ public sealed record CustomerReceiptDraftRequest(
   [MaxLength(1000)] string? Notes,
   [Required, MinLength(1)] List<CustomerReceiptAllocationRequest> Allocations);
 
+public sealed record CorrectCustomerReceiptRequest(
+  [Required] DateOnly ReceiptDate,
+  [Required] Guid MoneyAccountId,
+  decimal? ExchangeRate,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal TotalAmount,
+  [MaxLength(1000)] string? Notes,
+  [Required, MinLength(1)] List<CustomerReceiptAllocationRequest> Allocations,
+  [Required, MinLength(1), MaxLength(1000)] string Reason,
+  [Required] DateTime ExpectedUpdatedAtUtc);
+
 public sealed record CustomerReceiptAllocationResponse(
   Guid Id,
   Guid SalesInvoiceId,
@@ -360,8 +370,9 @@ public sealed record CustomerReceiptResponse(
   DateTime CreatedAtUtc,
   DateTime UpdatedAtUtc,
   DateTime? PostedAtUtc,
-  Guid? JournalEntryId,
-  Guid? MoneyLedgerEntryId,
+  Guid? PaymentId,
+  string? PaymentDocumentNumber,
+  Guid? PaymentJournalEntryId,
   List<CustomerReceiptAllocationResponse> Allocations);
 
 public sealed record OutstandingSalesInvoiceResponse(
@@ -374,7 +385,156 @@ public sealed record OutstandingSalesInvoiceResponse(
   string CurrencyCode,
   decimal ExchangeRate,
   decimal OriginalTotal,
-  decimal ReceivedAmount,
+  decimal CollectedAmount,
   decimal OutstandingAmount);
 
 public sealed record FinanceCustomerResponse(Guid Id, string Name);
+
+public sealed record PaymentAllocationResponse(
+  Guid Id,
+  Guid SalesInvoiceId,
+  string SalesInvoiceDocumentNumber,
+  decimal Amount,
+  decimal BaseAmount);
+
+public sealed record PaymentMoneyLineResponse(
+  Guid Id,
+  int Sequence,
+  Guid MoneyAccountId,
+  string MoneyAccountCode,
+  string MoneyAccountName,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Amount,
+  decimal ExchangeRate,
+  decimal BaseAmount,
+  PaymentMoneyDirection Direction,
+  Guid MoneyLedgerEntryId);
+
+public sealed record PaymentResponse(
+  Guid Id,
+  string DocumentNumber,
+  Guid BranchId,
+  Guid CustomerId,
+  string CustomerName,
+  DateOnly PaymentDate,
+  Guid CurrencyId,
+  string CurrencyCode,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  decimal Amount,
+  decimal BaseAmount,
+  PaymentOrigin Origin,
+  Guid? SourceSalesInvoiceId,
+  Guid? OriginSourceId,
+  string? OriginSourceDocumentNumber,
+  string? Notes,
+  Guid JournalEntryId,
+  Guid CreatedByUserId,
+  string CreatedByUsername,
+  DateTime CreatedAtUtc,
+  DateTime UpdatedAtUtc,
+  IReadOnlyList<PaymentAllocationResponse> Allocations,
+  IReadOnlyList<PaymentMoneyLineResponse> MoneyLines);
+
+public sealed record InvoicePaymentRequest(
+  [Required] DateOnly PaymentDate,
+  [Required] Guid MoneyAccountId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount,
+  decimal? ExchangeRate,
+  [MaxLength(1000)] string? Notes);
+
+public sealed record UpdateInvoicePaymentRequest(
+  [Required] DateOnly PaymentDate,
+  [Required] Guid MoneyAccountId,
+  [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount,
+  decimal? ExchangeRate,
+  [MaxLength(1000)] string? Notes,
+  [Required, MinLength(1), MaxLength(1000)] string Reason,
+  [Required] DateTime ExpectedUpdatedAtUtc);
+
+public sealed record DeletePaymentRequest(
+  [Required, MinLength(1), MaxLength(1000)] string Reason,
+  [Required] DateTime ExpectedUpdatedAtUtc);
+
+internal sealed record PaymentAllocationCommand(Guid SalesInvoiceId, decimal Amount);
+internal sealed record PaymentMoneyLineCommand(
+  Guid MoneyAccountId,
+  decimal Amount,
+  decimal ExchangeRate,
+  PaymentMoneyDirection Direction);
+
+internal sealed record CreatePaymentCommand(
+  Guid BranchId,
+  Guid CustomerId,
+  DateOnly PaymentDate,
+  Guid CurrencyId,
+  PaymentOrigin Origin,
+  Guid? SourceSalesInvoiceId,
+  string? Notes,
+  IReadOnlyList<PaymentAllocationCommand> Allocations,
+  IReadOnlyList<PaymentMoneyLineCommand> MoneyLines);
+
+public sealed record CustomerAccountCurrencySummary(
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal TotalReceivable,
+  decimal TotalCollected,
+  decimal NetBalance,
+  decimal Outstanding,
+  decimal Credit);
+
+public sealed record CustomerAccountSummaryResponse(
+  Guid CustomerId,
+  string CustomerName,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  decimal TotalReceivable,
+  decimal TotalCollected,
+  decimal NetBalance,
+  decimal Outstanding,
+  decimal Credit,
+  IReadOnlyList<CustomerAccountCurrencySummary> Currencies);
+
+public sealed class CustomerAccountStatementQuery
+{
+  [Required] public DateOnly FromDate { get; init; }
+  [Required] public DateOnly ToDate { get; init; }
+  public int PageNumber { get; init; } = 1;
+  public int PageSize { get; init; } = 25;
+}
+
+public enum CustomerAccountEntryType
+{
+  Invoice,
+  Payment,
+  RefundReceivableAdjustment
+}
+
+public sealed record CustomerAccountStatementEntryResponse(
+  CustomerAccountEntryType EntryType,
+  DateOnly EventDate,
+  DateTime CreatedAtUtc,
+  Guid SourceId,
+  string DocumentNumber,
+  string Origin,
+  Guid? RelatedSourceId,
+  string? RelatedDocumentNumber,
+  Guid CurrencyId,
+  string CurrencyCode,
+  decimal Amount,
+  decimal BaseAmount,
+  decimal SignedBaseBalanceImpact,
+  decimal RunningBaseBalance);
+
+public sealed record CustomerAccountStatementResponse(
+  Guid CustomerId,
+  string CustomerName,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  DateOnly FromDate,
+  DateOnly ToDate,
+  decimal OpeningBalance,
+  decimal ClosingBalance,
+  IReadOnlyList<CustomerAccountStatementEntryResponse> Entries,
+  PaginationMetadata Pagination);

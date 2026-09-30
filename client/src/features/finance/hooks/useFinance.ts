@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { financeApi } from '../api/finance.api'
 import type {
   CustomerReceiptInput,
+  CustomerStatementFilters,
   SetDollarRateInput,
   ExchangeRateInput,
   MoneyAccountAccessInput,
@@ -214,6 +215,27 @@ export function useCustomerReceipt(id?: string) {
     queryKey: [...FINANCE_KEY, 'customer-receipt', id],
     queryFn: () => financeApi.customerReceipt(id!),
     enabled: Boolean(id),
+  })
+}
+export function usePayment(id?: string) {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'payment', id],
+    queryFn: () => financeApi.payment(id!),
+    enabled: Boolean(id),
+  })
+}
+export function useCustomerAccountSummary(customerId?: string) {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'customer-account', 'summary', customerId],
+    queryFn: () => financeApi.customerAccountSummary(customerId!),
+    enabled: Boolean(customerId),
+  })
+}
+export function useCustomerStatement(customerId: string | undefined, filters: CustomerStatementFilters) {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'customer-account', 'statement', customerId, filters],
+    queryFn: () => financeApi.customerStatement(customerId!, filters),
+    enabled: Boolean(customerId && filters.fromDate && filters.toDate),
   })
 }
 export function useOutstandingSalesInvoices(customerId?: string, currencyId?: string) {

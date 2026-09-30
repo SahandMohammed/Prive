@@ -37,7 +37,7 @@ Use TanStack Query for backend data, caching, synchronization, and mutations. Us
 
 Use React Hook Form with Zod for forms. Mirror API DTOs in types; keep mapping explicit if UI needs a different shape. All environment access goes through the validated `lib/env` layer, never direct `import.meta.env` reads.
 
-Use existing shadcn components from `src/components/ui/`, lucide icons, `cn()` for class merging, and semantic Tailwind theme tokens. Tailwind v4 customization is in `src/index.css`; do not add a legacy Tailwind config merely for a new feature.
+Use existing shadcn components from `src/components/ui/`, lucide icons, `cn()` for class merging, and semantic Tailwind theme tokens based on the official brand color system (`docs/design/color-system.md`). Tailwind v4 customization is in `src/index.css`; do not add a legacy Tailwind config merely for a new feature.
 
 ## Authentication and routing
 

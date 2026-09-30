@@ -81,7 +81,7 @@ export function SupplierPaymentsPage() {
           </p>
         </div>
         <Link to="/finance/supplier-payments/new">
-          <Button className="gap-1.5 bg-primary font-medium text-white shadow-xs hover:bg-primary/90">
+          <Button className="gap-1.5">
             <Plus className="size-4 stroke-[2.5]" />
             New Supplier Payment
           </Button>
@@ -304,7 +304,7 @@ export function SupplierPaymentsPage() {
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             size="xs"
-                            className="gap-1 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                            className="gap-1"
                             disabled={actions.post.isPending}
                             onClick={() => {
                               if (

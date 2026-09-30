@@ -2,7 +2,7 @@ export * from './pages/BusinessSettingsPage'
 export * from './pages/BranchesPage'
 export * from './pages/CurrenciesPage'
 export { useAllBranches, useBranches, useCurrencies, useCurrentBusiness } from './hooks/useBusiness'
-export type { Branch, Currency } from './types/business.types'
+export type { Branch, Business, Currency } from './types/business.types'
 
 export { BranchSelector } from './components/BranchSelector'
 export { BranchWorkspace } from './components/BranchWorkspace'

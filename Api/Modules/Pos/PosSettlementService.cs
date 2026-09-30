@@ -1,5 +1,4 @@
 using Api.Infrastructure.Http;
-using Api.Modules.Accounting;
 using Api.Modules.Business;
 using Api.Modules.Finance;
 using Api.Modules.Sales;
@@ -142,56 +141,18 @@ public sealed class PosSettlementService
       change = new PosChangePosting(request.Change, account, rate, baseAmount);
     }
 
-    var settlementLines = tenders.Select(tender => new JournalLineEntity
-    {
-      AccountId = tender.Account.AccountingAccountId,
-      Description = $"Tender received in {tender.Account.Code}",
-      CurrencyId = tender.Account.CurrencyId,
-      ExchangeRate = tender.ExchangeRate,
-      OriginalDebitAmount = tender.Request.Amount,
-      DebitBaseAmount = tender.BaseAmount
-    }).ToList();
-    if (change is not null)
-    {
-      settlementLines.Add(new JournalLineEntity
-      {
-        AccountId = change.Account.AccountingAccountId,
-        Description = $"Change returned from {change.Account.Code}",
-        CurrencyId = change.Account.CurrencyId,
-        ExchangeRate = change.ExchangeRate,
-        OriginalCreditAmount = change.Request.Amount,
-        CreditBaseAmount = change.BaseAmount
-      });
-    }
-
-    return new PosSettlementPreparation(session, business, tenders, change, settlementLines);
+    return new PosSettlementPreparation(session, business, tenders, change);
   }
 
   internal void AddEffects(
     PosSettlementPreparation preparation,
     PosSaleEntity sale,
-    SalesInvoiceEntity invoice,
-    DateOnly movementDate,
-    Guid userId,
-    DateTime postedAtUtc)
+    PaymentEntity payment)
   {
     foreach (var tender in preparation.Tenders)
     {
-      var ledger = FinanceService.LedgerEntry(
-        tender.Account,
-        movementDate,
-        MoneyLedgerSourceType.PosSale,
-        sale.Id,
-        sale.DocumentNumber,
-        tender.Request.Amount,
-        tender.BaseAmount,
-        preparation.Business.BaseCurrencyId,
-        tender.ExchangeRate,
-        invoice.JournalEntry!.Id,
-        userId,
-        "POS tender",
-        postedAtUtc);
-      _db.MoneyLedgerEntries.Add(ledger);
+      var moneyLine = payment.MoneyLines.Single(line =>
+        line.Sequence == tender.Sequence && line.Direction == PaymentMoneyDirection.Collection);
       var tenderEntity = new PosTenderEntity
       {
         Sequence = tender.Sequence,
@@ -199,7 +160,8 @@ public sealed class PosSettlementService
         TenderedAmount = tender.Request.Amount,
         ExchangeRate = tender.ExchangeRate,
         BaseAmount = tender.BaseAmount,
-        MoneyLedgerEntry = ledger
+        PaymentMoneyLine = moneyLine,
+        PaymentMoneyLineId = moneyLine.Id
       };
       sale.Tenders.Add(tenderEntity);
       _db.PosTenders.Add(tenderEntity);
@@ -207,28 +169,15 @@ public sealed class PosSettlementService
     if (preparation.Change is null) return;
 
     var change = preparation.Change;
-    var changeLedger = FinanceService.LedgerEntry(
-      change.Account,
-      movementDate,
-      MoneyLedgerSourceType.PosSale,
-      sale.Id,
-      sale.DocumentNumber,
-      -change.Request.Amount,
-      -change.BaseAmount,
-      preparation.Business.BaseCurrencyId,
-      change.ExchangeRate,
-      invoice.JournalEntry!.Id,
-      userId,
-      "POS change",
-      postedAtUtc);
-    _db.MoneyLedgerEntries.Add(changeLedger);
+    var changeLine = payment.MoneyLines.Single(line => line.Direction == PaymentMoneyDirection.Change);
     var changeEntity = new PosChangeEntity
     {
       MoneyAccountId = change.Account.Id,
       Amount = change.Request.Amount,
       ExchangeRate = change.ExchangeRate,
       BaseAmount = change.BaseAmount,
-      MoneyLedgerEntry = changeLedger
+      PaymentMoneyLine = changeLine,
+      PaymentMoneyLineId = changeLine.Id
     };
     sale.Change = changeEntity;
     _db.PosChanges.Add(changeEntity);
@@ -273,8 +222,7 @@ internal sealed record PosSettlementPreparation(
   PosSessionEntity Session,
   BusinessEntity Business,
   List<PosTenderPosting> Tenders,
-  PosChangePosting? Change,
-  List<JournalLineEntity> JournalLines);
+  PosChangePosting? Change);
 
 internal sealed record PosTenderPosting(
   int Sequence,

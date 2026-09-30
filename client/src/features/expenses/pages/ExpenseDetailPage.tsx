@@ -243,7 +243,7 @@ export function ExpenseDetailPage() {
 
           {isPosted && (
             <Link to="/expenses/new">
-              <Button className="bg-primarytext-primary-foregroundhover:bg-primary/90">
+              <Button>
                 <FilePlus2 className="size-4 mr-1.5" />
                 New Expense
               </Button>

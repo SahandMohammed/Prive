@@ -312,7 +312,7 @@ export function CustomerReceiptInvoiceDialog({
 
                       {/* Received So Far */}
                       <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-500">
-                        {invoice.receivedAmount.toLocaleString(undefined, {
+                        {invoice.collectedAmount.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 4,
                         })}
@@ -406,7 +406,7 @@ export function CustomerReceiptInvoiceDialog({
           <Button
             type="button"
             size="sm"
-            className="gap-1.5 bg-primary font-medium text-white hover:bg-primary/90"
+            className="gap-1.5"
             disabled={selectedCount === 0 || totalAllocated <= 0}
             onClick={handleApply}
           >

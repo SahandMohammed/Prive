@@ -150,7 +150,7 @@ public sealed class PosZReportEntityConfiguration : IEntityTypeConfiguration<Pos
     builder.Property(report => report.ServiceRefundsBase).HasPrecision(19, 4).IsRequired();
     builder.Property(report => report.ProductRefundsBase).HasPrecision(19, 4).IsRequired();
     builder.Property(report => report.RefundTotalBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.NetSalesBase).HasPrecision(19, 4);
+    builder.Property(report => report.NetSalesBase).HasPrecision(19, 4).IsRequired();
     builder.HasIndex(report => report.ReportNumber).IsUnique();
     builder.HasIndex(report => report.PosSessionId).IsUnique();
     builder.HasIndex(report => new { report.BranchId, report.ClosedAtUtc });
@@ -232,11 +232,14 @@ public sealed class PosSaleEntityConfiguration : IEntityTypeConfiguration<PosSal
     builder.Property(sale => sale.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
     builder.Property(sale => sale.RequestFingerprint).HasMaxLength(64);
     builder.HasIndex(sale => sale.SalesInvoiceId).IsUnique();
+    builder.HasIndex(sale => sale.PaymentId).IsUnique().HasFilter("\"PaymentId\" IS NOT NULL");
     builder.HasIndex(sale => sale.PosSessionId);
     builder.HasIndex(sale => new { sale.CompletedAtUtc, sale.Status });
     builder.HasIndex(sale => sale.ClientRequestId).IsUnique().HasFilter("\"ClientRequestId\" IS NOT NULL");
     builder.HasOne(sale => sale.SalesInvoice).WithOne(invoice => invoice.PosSale)
       .HasForeignKey<PosSaleEntity>(sale => sale.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(sale => sale.Payment).WithOne(payment => payment.SourcePosSale).HasForeignKey<PosSaleEntity>(sale => sale.PaymentId)
+      .OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(sale => sale.PosSession).WithMany(session => session.Sales)
       .HasForeignKey(sale => sale.PosSessionId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(sale => sale.CashierUser).WithMany().HasForeignKey(sale => sale.CashierUserId)
@@ -255,12 +258,12 @@ public sealed class PosTenderEntityConfiguration : IEntityTypeConfiguration<PosT
     builder.Property(tender => tender.BaseAmount).HasPrecision(19, 4).IsRequired();
     builder.HasIndex(tender => new { tender.PosSaleId, tender.Sequence }).IsUnique();
     builder.HasIndex(tender => tender.MoneyAccountId);
-    builder.HasIndex(tender => tender.MoneyLedgerEntryId).IsUnique();
+    builder.HasIndex(tender => tender.PaymentMoneyLineId).IsUnique();
     builder.HasOne(tender => tender.PosSale).WithMany(sale => sale.Tenders)
       .HasForeignKey(tender => tender.PosSaleId).OnDelete(DeleteBehavior.Cascade);
     builder.HasOne(tender => tender.MoneyAccount).WithMany().HasForeignKey(tender => tender.MoneyAccountId)
       .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(tender => tender.MoneyLedgerEntry).WithMany().HasForeignKey(tender => tender.MoneyLedgerEntryId)
+    builder.HasOne(tender => tender.PaymentMoneyLine).WithMany().HasForeignKey(tender => tender.PaymentMoneyLineId)
       .OnDelete(DeleteBehavior.Restrict);
   }
 }
@@ -276,12 +279,12 @@ public sealed class PosChangeEntityConfiguration : IEntityTypeConfiguration<PosC
     builder.Property(change => change.BaseAmount).HasPrecision(19, 4).IsRequired();
     builder.HasIndex(change => change.PosSaleId).IsUnique();
     builder.HasIndex(change => change.MoneyAccountId);
-    builder.HasIndex(change => change.MoneyLedgerEntryId).IsUnique();
+    builder.HasIndex(change => change.PaymentMoneyLineId).IsUnique();
     builder.HasOne(change => change.PosSale).WithOne(sale => sale.Change)
       .HasForeignKey<PosChangeEntity>(change => change.PosSaleId).OnDelete(DeleteBehavior.Cascade);
     builder.HasOne(change => change.MoneyAccount).WithMany().HasForeignKey(change => change.MoneyAccountId)
       .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(change => change.MoneyLedgerEntry).WithMany().HasForeignKey(change => change.MoneyLedgerEntryId)
+    builder.HasOne(change => change.PaymentMoneyLine).WithMany().HasForeignKey(change => change.PaymentMoneyLineId)
       .OnDelete(DeleteBehavior.Restrict);
   }
 }

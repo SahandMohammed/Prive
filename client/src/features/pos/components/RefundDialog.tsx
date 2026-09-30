@@ -171,7 +171,7 @@ export function RefundDialog({
             <div className="grid gap-3 rounded-xl bg-muted/50 p-4 sm:grid-cols-4 lg:grid-cols-8">
               <Summary label="Sale" value={data.posSaleDocumentNumber} />
               <Summary label="Invoice" value={data.salesInvoiceDocumentNumber} />
-              <Summary label="Customer" value={data.customerName ?? 'Walk-in'} />
+              <Summary label="Customer" value={data.customerName} />
               <Summary label="Original date" value={new Date(data.completedAtUtc).toLocaleString()} />
               <Summary label="Cashier" value={data.cashierUsername} />
               <Summary label="Original" value={`${money(data.originalTotalBase)} ${data.baseCurrencyCode}`} />

@@ -15,11 +15,19 @@ public sealed class SalesService
 {
   private readonly AppDbContext _db;
   private readonly SalesOptions _options;
+  private readonly PaymentService _payments;
+  private readonly InvoiceSettlementReader _settlements;
 
-  public SalesService(AppDbContext db, IOptions<SalesOptions> options)
+  public SalesService(
+    AppDbContext db,
+    IOptions<SalesOptions> options,
+    PaymentService? payments = null,
+    InvoiceSettlementReader? settlements = null)
   {
     _db = db;
     _options = options.Value;
+    _payments = payments ?? new PaymentService(db);
+    _settlements = settlements ?? new InvoiceSettlementReader(db);
   }
 
   public async Task<PagedResult<ServiceCategoryResponse>> GetServiceCategoriesAsync(
@@ -149,7 +157,11 @@ public sealed class SalesService
     SalesInvoiceListQuery request,
     CancellationToken ct)
   {
-    var query = _db.SalesInvoices.AsNoTracking().AsQueryable();
+    // The current product workflow exposes only saved, effective invoices.
+    // Draft rows remain available to the separate Draft/Post workflow.
+    var query = _db.SalesInvoices.AsNoTracking()
+      .Where(invoice => invoice.Status == SalesInvoiceStatus.Posted)
+      .AsQueryable();
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
       var search = request.Search.Trim().ToLower();
@@ -163,14 +175,44 @@ public sealed class SalesService
     if (request.CurrencyId is not null) query = query.Where(invoice => invoice.CurrencyId == request.CurrencyId);
     if (request.Status is not null) query = query.Where(invoice => invoice.Status == request.Status);
 
-    return await query
-      .OrderByDescending(invoice => invoice.InvoiceDate)
-      .ThenByDescending(invoice => invoice.DocumentNumber)
+    var sortBy = request.SortBy?.Trim().ToLowerInvariant();
+    var desc = request.SortDescending ?? false;
+
+    var orderedQuery = sortBy switch
+    {
+      "document" or "documentnumber" => desc
+        ? query.OrderByDescending(i => i.DocumentNumber)
+        : query.OrderBy(i => i.DocumentNumber),
+      "customer" or "customername" => desc
+        ? query.OrderByDescending(i => i.Customer != null ? i.Customer.Name : string.Empty).ThenByDescending(i => i.InvoiceDate)
+        : query.OrderBy(i => i.Customer != null ? i.Customer.Name : string.Empty).ThenBy(i => i.InvoiceDate),
+      "date" or "invoicedate" => desc
+        ? query.OrderByDescending(i => i.InvoiceDate).ThenByDescending(i => i.DocumentNumber)
+        : query.OrderBy(i => i.InvoiceDate).ThenBy(i => i.DocumentNumber),
+      "branch" or "branchname" => desc
+        ? query.OrderByDescending(i => i.Branch.Name).ThenByDescending(i => i.InvoiceDate)
+        : query.OrderBy(i => i.Branch.Name).ThenBy(i => i.InvoiceDate),
+      "warehouse" or "warehousename" => desc
+        ? query.OrderByDescending(i => i.Warehouse != null ? i.Warehouse.Name : string.Empty).ThenByDescending(i => i.InvoiceDate)
+        : query.OrderBy(i => i.Warehouse != null ? i.Warehouse.Name : string.Empty).ThenBy(i => i.InvoiceDate),
+      "currency" or "currencycode" => desc
+        ? query.OrderByDescending(i => i.Currency.Code).ThenByDescending(i => i.InvoiceDate)
+        : query.OrderBy(i => i.Currency.Code).ThenBy(i => i.InvoiceDate),
+      "total" => desc
+        ? query.OrderByDescending(i => i.Total).ThenByDescending(i => i.InvoiceDate)
+        : query.OrderBy(i => i.Total).ThenBy(i => i.InvoiceDate),
+      "createdby" or "createdbyusername" => desc
+        ? query.OrderByDescending(i => i.CreatedByUser.Username).ThenByDescending(i => i.InvoiceDate)
+        : query.OrderBy(i => i.CreatedByUser.Username).ThenBy(i => i.InvoiceDate),
+      _ => query.OrderByDescending(invoice => invoice.InvoiceDate).ThenByDescending(invoice => invoice.DocumentNumber)
+    };
+
+    return await orderedQuery
       .Select(invoice => new SalesInvoiceListResponse(
         invoice.Id,
         invoice.DocumentNumber,
         invoice.CustomerId,
-        invoice.Customer == null ? null : invoice.Customer.Name,
+        invoice.Customer.Name,
         invoice.InvoiceDate,
         invoice.BranchId,
         invoice.Branch.Name,
@@ -189,11 +231,110 @@ public sealed class SalesService
       .ToPagedResultAsync(request, ct);
   }
 
+  public async Task<PagedResult<SalesCatalogItemResponse>> GetCatalogItemsAsync(
+    SalesCatalogQuery query,
+    CancellationToken ct)
+  {
+    var normalized = query.Normalize();
+
+    var servicesQuery = _db.Services.AsNoTracking()
+      .Include(s => s.Category)
+      .Where(s => query.IsActive == null || s.IsActive == query.IsActive);
+
+    var productsQuery = _db.Products.AsNoTracking()
+      .Include(p => p.Category)
+      .Include(p => p.UnitOfMeasure)
+      .Include(p => p.UnitConversions).ThenInclude(u => u.UnitOfMeasure)
+      .Where(p => p.TrackInventory && (p.Purpose == ProductPurpose.Resale || p.Purpose == ProductPurpose.Both))
+      .Where(p => query.IsActive == null || p.IsActive == query.IsActive);
+
+    if (query.CategoryId.HasValue)
+    {
+      servicesQuery = servicesQuery.Where(s => s.CategoryId == query.CategoryId.Value);
+      productsQuery = productsQuery.Where(p => p.CategoryId == query.CategoryId.Value);
+    }
+
+    if (!string.IsNullOrWhiteSpace(query.Search))
+    {
+      var term = query.Search.Trim().ToLower();
+      servicesQuery = servicesQuery.Where(s => s.Name.ToLower().Contains(term));
+      productsQuery = productsQuery.Where(p =>
+        p.Name.ToLower().Contains(term) || (p.SKU != null && p.SKU.ToLower().Contains(term)));
+    }
+
+    var services = servicesQuery.OrderBy(s => s.Name).Select(s => new SalesCatalogItemResponse(
+      s.Id,
+      s.Name,
+      SalesLineType.Service,
+      s.SellingPriceBase,
+      s.CategoryId,
+      s.Category.Name,
+      null,
+      null,
+      null,
+      null,
+      s.DurationMinutes,
+      s.IsActive,
+      null,
+      new List<ProductUnitConversionResponse>()));
+
+    var products = productsQuery.OrderBy(p => p.Name).Select(p => new SalesCatalogItemResponse(
+      p.Id,
+      p.Name,
+      SalesLineType.Product,
+      p.SellingPriceBase,
+      p.CategoryId,
+      p.Category.Name,
+      p.SKU,
+      p.UnitOfMeasureId,
+      p.UnitOfMeasure.Name,
+      p.UnitOfMeasure.Code,
+      null,
+      p.IsActive,
+      query.WarehouseId == null
+        ? null
+        : (decimal?)p.StockMovements.Where(m => m.WarehouseId == query.WarehouseId)
+            .Sum(m => m.QuantityIn - m.QuantityOut),
+      p.UnitConversions
+        .OrderBy(u => u.UnitOfMeasure.Code)
+        .Select(u => new ProductUnitConversionResponse(
+          u.Id,
+          u.UnitOfMeasureId,
+          u.UnitOfMeasure.Name,
+          u.UnitOfMeasure.Code,
+          u.Operation,
+          u.Factor))
+        .ToList()));
+
+    if (query.ItemType == SalesLineType.Service)
+      return await services.ToPagedResultAsync(query, ct);
+    if (query.ItemType == SalesLineType.Product)
+      return await products.ToPagedResultAsync(query, ct);
+
+    var serviceCount = await services.CountAsync(ct);
+    var productCount = await products.CountAsync(ct);
+    var skip = Math.Min((long)(normalized.Page - 1) * normalized.PageSize, int.MaxValue);
+    var items = new List<SalesCatalogItemResponse>(normalized.PageSize);
+    if (skip < serviceCount)
+    {
+      items.AddRange(await services.Skip((int)skip).Take(normalized.PageSize).ToListAsync(ct));
+    }
+    var productSkip = Math.Max(skip - serviceCount, 0);
+    var remaining = normalized.PageSize - items.Count;
+    if (remaining > 0 && productSkip < productCount)
+    {
+      items.AddRange(await products.Skip((int)productSkip).Take(remaining).ToListAsync(ct));
+    }
+    return new PagedResult<SalesCatalogItemResponse>(
+      items, serviceCount + productCount, normalized.Page, normalized.PageSize);
+  }
+
   public async Task<SalesInvoiceResponse> GetInvoiceAsync(Guid id, CancellationToken ct)
   {
     var invoice = await InvoiceQuery().SingleOrDefaultAsync(item => item.Id == id, ct)
       ?? throw InvoiceNotFound();
-    return ToInvoiceResponse(invoice);
+    var settlement = await _settlements.GetAsync(id, ct);
+    return ToInvoiceResponse(invoice, settlement);
   }
 
   public async Task<SalesInvoiceResponse> CreateInvoiceAsync(
@@ -201,7 +342,7 @@ public sealed class SalesService
     Guid userId,
     CancellationToken ct)
   {
-    var validation = await ValidateInvoiceAsync(request, false, ct);
+    var validation = await ValidateInvoiceAsync(request, true, ct);
     var invoice = new SalesInvoiceEntity
     {
       DocumentNumber = await NextDocumentNumberAsync(ct),
@@ -215,6 +356,52 @@ public sealed class SalesService
     return await GetInvoiceAsync(invoice.Id, ct);
   }
 
+  public async Task<SalesInvoiceResponse> CreateActiveInvoiceAsync(
+    SalesInvoiceDraftRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    await using var transaction = _db.Database.IsRelational()
+      ? await _db.Database.BeginTransactionAsync(ct)
+      : null;
+
+    try
+    {
+      var validation = await ValidateInvoiceAsync(request, requireCustomer: true, ct);
+      var invoice = new SalesInvoiceEntity
+      {
+        DocumentNumber = await NextDocumentNumberAsync(ct),
+        CreatedByUserId = userId
+      };
+      Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
+      ReplaceLines(invoice, request.Lines, validation);
+      Recalculate(invoice);
+      _db.SalesInvoices.Add(invoice);
+
+      // This lower-level generator creates all accounting and stock effects but
+      // does not write workflow activity. The single save below records one
+      // user-facing "created" activity for the active invoice.
+      await PreparePostingEffectsAsync(invoice, validation, userId, "Sales invoice", ct);
+      var embeddedPayments = request.Payments ?? [];
+      if (Money(embeddedPayments.Sum(payment => payment.Amount)) > invoice.Total)
+        throw new BadRequestException(ErrorCodes.Finance.PaymentAllocationExceedsOutstanding,
+          "Embedded Payments cannot exceed the Sales Invoice total.");
+      foreach (var embedded in embeddedPayments)
+        await _payments.CreateDirectInvoicePaymentAsync(invoice, new InvoicePaymentRequest(
+          invoice.InvoiceDate, embedded.MoneyAccountId, embedded.Amount,
+          embedded.ExchangeRate, embedded.Notes), userId, ct);
+      await SaveNewInvoiceAsync(ct);
+
+      if (transaction is not null) await transaction.CommitAsync(ct);
+      return await GetInvoiceAsync(invoice.Id, ct);
+    }
+    catch
+    {
+      if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
+      throw;
+    }
+  }
+
   public async Task<SalesInvoiceResponse> UpdateInvoiceAsync(
     Guid id,
     SalesInvoiceDraftRequest request,
@@ -224,7 +411,7 @@ public sealed class SalesService
       .SingleOrDefaultAsync(item => item.Id == id, ct)
       ?? throw InvoiceNotFound();
     EnsureDraft(invoice.Status);
-    var validation = await ValidateInvoiceAsync(request, false, ct);
+    var validation = await ValidateInvoiceAsync(request, true, ct);
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
     ReplaceLines(invoice, request.Lines, validation);
     Recalculate(invoice);
@@ -271,7 +458,7 @@ public sealed class SalesService
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
     Recalculate(invoice);
 
-    await PreparePostingEffectsAsync(invoice, validation, userId, null, "Sales invoice", ct);
+    await PreparePostingEffectsAsync(invoice, validation, userId, "Sales invoice", ct);
     await SaveInvoiceMutationAsync(ct);
     return await GetInvoiceAsync(id, ct);
   }
@@ -280,7 +467,6 @@ public sealed class SalesService
     SalesInvoiceDraftRequest request,
     string documentNumber,
     Guid userId,
-    IReadOnlyCollection<JournalLineEntity> settlementLines,
     CancellationToken ct)
   {
     var validation = await ValidateInvoiceAsync(request, false, ct);
@@ -294,7 +480,7 @@ public sealed class SalesService
     Recalculate(invoice);
     _db.SalesInvoices.Add(invoice);
 
-    await PreparePostingEffectsAsync(invoice, validation, userId, settlementLines, "POS sale", ct);
+    await PreparePostingEffectsAsync(invoice, validation, userId, "POS sale", ct);
     return invoice;
   }
 
@@ -302,26 +488,16 @@ public sealed class SalesService
     SalesInvoiceEntity invoice,
     InvoiceValidation validation,
     Guid userId,
-    IReadOnlyCollection<JournalLineEntity>? settlementLines,
     string journalDescription,
     CancellationToken ct,
     DateTime? postedAtUtc = null,
     bool preserveInvoiceTimestamps = false)
   {
     var productLines = invoice.Lines.Where(line => line.LineType == SalesLineType.Product).ToList();
-    var settlementBase = settlementLines is null
-      ? 0m
-      : Money(settlementLines.Sum(line => line.DebitBaseAmount - line.CreditBaseAmount));
-    if (settlementBase < 0 || settlementBase > invoice.BaseTotal)
-      throw new BadRequestException(ErrorCodes.Sales.AccountMappingInvalid,
-        "Immediate settlement must be between zero and the Sales Invoice total.");
-    var receivableBase = Money(invoice.BaseTotal - settlementBase);
-    if (receivableBase > 0 && invoice.CustomerId is null)
-      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired,
-        "Select an active customer when any part of the Sale remains receivable.");
+    var receivableBase = invoice.BaseTotal;
 
     var accountCodes = new List<string>();
-    if (receivableBase > 0) accountCodes.Add(_options.AccountsReceivableAccountCode);
+    accountCodes.Add(_options.AccountsReceivableAccountCode);
     if (productLines.Count > 0)
     {
       accountCodes.Add(_options.ProductRevenueAccountCode);
@@ -331,13 +507,9 @@ public sealed class SalesService
     var accounts = await _db.Accounts.Where(account => accountCodes.Contains(account.Code))
       .ToDictionaryAsync(account => account.Code, ct);
 
-    AccountEntity? receivableAccount = null;
-    if (receivableBase > 0)
-    {
-      receivableAccount = GetPostingAccount(accounts, _options.AccountsReceivableAccountCode,
-        AccountClassification.Asset, "accounts receivable");
-      invoice.AccountsReceivableAccountId = receivableAccount.Id;
-    }
+    var receivableAccount = GetPostingAccount(accounts, _options.AccountsReceivableAccountCode,
+      AccountClassification.Asset, "accounts receivable");
+    invoice.AccountsReceivableAccountId = receivableAccount.Id;
 
     AccountEntity? productRevenueAccount = null;
     AccountEntity? costOfGoodsSoldAccount = null;
@@ -358,19 +530,16 @@ public sealed class SalesService
     }
 
     var postedAt = postedAtUtc ?? DateTime.UtcNow;
-    var journalLines = settlementLines?.ToList() ?? [];
+    var journalLines = new List<JournalLineEntity>();
     if (receivableBase > 0)
     {
-      var receivableAmount = settlementLines is null
-        ? invoice.Total
-        : Money(receivableBase / invoice.ExchangeRate);
       journalLines.Add(new JournalLineEntity
       {
-        AccountId = receivableAccount!.Id,
+        AccountId = receivableAccount.Id,
         Description = $"Receivable from customer on {invoice.DocumentNumber}",
         CurrencyId = invoice.CurrencyId,
         ExchangeRate = invoice.ExchangeRate,
-        OriginalDebitAmount = receivableAmount,
+        OriginalDebitAmount = invoice.Total,
         DebitBaseAmount = receivableBase
       });
     }
@@ -497,12 +666,94 @@ public sealed class SalesService
       throw new BadRequestException(ErrorCodes.Sales.ServiceRevenueAccountInvalid, "Select an active Revenue posting account.");
   }
 
+  internal async Task<List<SalesInvoiceLineRequest>> NormalizeLinesAsync(
+    IEnumerable<SalesInvoiceLineRequest> lines,
+    CancellationToken ct)
+  {
+    var lineList = lines.ToList();
+    if (lineList.Count == 0) return lineList;
+
+    var candidateIds = lineList
+      .Select(line => line.ItemId ?? line.ServiceId ?? line.ProductId)
+      .Where(id => id.HasValue && id != Guid.Empty)
+      .Select(id => id!.Value)
+      .Distinct()
+      .ToList();
+
+    var knownServices = await _db.Services.AsNoTracking()
+      .Where(s => candidateIds.Contains(s.Id))
+      .ToDictionaryAsync(s => s.Id, ct);
+
+    var knownProducts = await _db.Products.AsNoTracking()
+      .Where(p => candidateIds.Contains(p.Id))
+      .ToDictionaryAsync(p => p.Id, ct);
+
+    var normalized = new List<SalesInvoiceLineRequest>(lineList.Count);
+    foreach (var line in lineList)
+    {
+      var targetId = line.ItemId ?? line.ServiceId ?? line.ProductId;
+      if (targetId is null || targetId == Guid.Empty)
+      {
+        normalized.Add(line);
+        continue;
+      }
+
+      var resolvedType = line.LineType;
+      if (resolvedType is null)
+      {
+        if (knownServices.ContainsKey(targetId.Value))
+          resolvedType = SalesLineType.Service;
+        else if (knownProducts.ContainsKey(targetId.Value))
+          resolvedType = SalesLineType.Product;
+      }
+
+      if (resolvedType == SalesLineType.Service)
+      {
+        normalized.Add(line with
+        {
+          LineType = SalesLineType.Service,
+          ServiceId = targetId.Value,
+          ProductId = null,
+          UnitOfMeasureId = null,
+          ItemId = targetId.Value,
+        });
+      }
+      else if (resolvedType == SalesLineType.Product)
+      {
+        var defaultUomId = line.UnitOfMeasureId;
+        if ((defaultUomId is null || defaultUomId == Guid.Empty) && knownProducts.TryGetValue(targetId.Value, out var prod))
+        {
+          defaultUomId = prod.UnitOfMeasureId;
+        }
+
+        normalized.Add(line with
+        {
+          LineType = SalesLineType.Product,
+          ProductId = targetId.Value,
+          ServiceId = null,
+          UnitOfMeasureId = defaultUomId,
+          ItemId = targetId.Value,
+        });
+      }
+      else
+      {
+        normalized.Add(line);
+      }
+    }
+
+    return normalized;
+  }
+
   internal async Task<InvoiceValidation> ValidateInvoiceAsync(
     SalesInvoiceDraftRequest request,
     bool requireCustomer,
     CancellationToken ct,
     bool validateUnits = true)
   {
+    var normalizedLines = await NormalizeLinesAsync(request.Lines, ct);
+    request.Lines.Clear();
+    request.Lines.AddRange(normalizedLines);
+
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Sales.LinesRequired, "Add at least one sales line.");
     if (request.Lines.Any(line => line.Quantity <= 0))
@@ -530,15 +781,13 @@ public sealed class SalesService
     if (serviceIds.Distinct().Count() != serviceIds.Count || productIds.Distinct().Count() != productIds.Count)
       throw new BadRequestException(ErrorCodes.Sales.DuplicateLine, "A Service or Product can appear only once on a sales invoice.");
 
-    if (requireCustomer && request.CustomerId is null)
-      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired, "Select an active customer before posting a credit sale.");
-    if (request.CustomerId is not null)
-    {
-      var validCustomer = await _db.Contacts.AsNoTracking()
-        .AnyAsync(contact => contact.Id == request.CustomerId && contact.IsActive && contact.IsCustomer, ct);
-      if (!validCustomer)
-        throw new BadRequestException(ErrorCodes.Sales.CustomerInvalid, "Select an active customer contact.");
-    }
+    if (request.CustomerId is null)
+      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired, "Every Sales Invoice requires a customer.");
+    var customer = await _db.Contacts.AsNoTracking().SingleOrDefaultAsync(contact =>
+      contact.Id == request.CustomerId && contact.IsActive && contact.IsCustomer, ct);
+    if (customer is null || (requireCustomer && customer.SystemRole is not null))
+      throw new BadRequestException(ErrorCodes.Sales.CustomerInvalid,
+        requireCustomer ? "Select an active non-system customer contact." : "Select an active customer contact.");
 
     var validBranch = await _db.Branches.AsNoTracking()
       .AnyAsync(branch => branch.Id == request.BranchId && branch.IsActive, ct);
@@ -647,7 +896,7 @@ public sealed class SalesService
     Guid baseCurrencyId,
     decimal exchangeRate)
   {
-    invoice.CustomerId = request.CustomerId;
+    invoice.CustomerId = request.CustomerId!.Value;
     invoice.InvoiceDate = request.InvoiceDate;
     invoice.BranchId = request.BranchId;
     invoice.WarehouseId = request.WarehouseId;
@@ -687,7 +936,7 @@ public sealed class SalesService
       var line = new SalesInvoiceLineEntity
       {
         SalesInvoiceId = invoice.Id,
-        LineType = request.LineType,
+        LineType = request.LineType!.Value,
         ServiceId = request.ServiceId,
         ProductId = request.ProductId,
         UnitOfMeasureId = request.UnitOfMeasureId,
@@ -834,44 +1083,38 @@ public sealed class SalesService
     .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts).ThenInclude(count => count.MoneyAccount)
     .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts).ThenInclude(count => count.Currency)
     .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
     .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change).ThenInclude(change => change!.PaymentMoneyLine)
     .Include(invoice => invoice.PosRefunds)
     .Include(invoice => invoice.Movements)
-    .Include(invoice => invoice.ReceiptAllocations).ThenInclude(allocation => allocation.CustomerReceipt)
+    .Include(invoice => invoice.PaymentAllocations).ThenInclude(allocation => allocation.Payment)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Product)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
     .Include(invoice => invoice.Lines).ThenInclude(line => line.Professional);
 
-  private static SalesInvoiceResponse ToInvoiceResponse(SalesInvoiceEntity invoice)
+  private static SalesInvoiceResponse ToInvoiceResponse(
+    SalesInvoiceEntity invoice,
+    InvoiceSettlement settlement)
   {
-    var receipts = invoice.ReceiptAllocations
-      .Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-      .OrderBy(allocation => allocation.CustomerReceipt.ReceiptDate)
-      .ThenBy(allocation => allocation.CustomerReceipt.DocumentNumber)
-      .Select(allocation => new SalesInvoiceReceiptResponse(
-        allocation.CustomerReceiptId,
-        allocation.CustomerReceipt.DocumentNumber,
-        allocation.CustomerReceipt.ReceiptDate,
+    var payments = invoice.PaymentAllocations
+      .OrderBy(allocation => allocation.Payment.PaymentDate)
+      .ThenBy(allocation => allocation.Payment.DocumentNumber)
+      .Select(allocation => new SalesInvoicePaymentResponse(
+        allocation.PaymentId,
+        allocation.Payment.DocumentNumber,
+        allocation.Payment.PaymentDate,
         allocation.Amount,
         allocation.BaseAmount,
-        allocation.CustomerReceipt.JournalEntryId))
+        allocation.Payment.Origin,
+        allocation.Payment.JournalEntryId!.Value))
       .ToList();
-    var posSettledBase = invoice.PosSale is null
-      ? 0m
-      : Money(invoice.PosSale.Tenders.Sum(tender => tender.BaseAmount) - (invoice.PosSale.Change?.BaseAmount ?? 0));
-    var posSettledAmount = invoice.ExchangeRate > 0 ? Money(posSettledBase / invoice.ExchangeRate) : 0m;
-    var receivedAmount = Money(posSettledAmount + receipts.Sum(receipt => receipt.Amount));
-    var refundReceivableBase = Money(invoice.PosRefunds
-      .Where(refund => refund.Status == PosRefundStatus.Posted)
-      .Sum(refund => refund.ReceivableReversalBase));
-    var refundReceivableAmount = invoice.ExchangeRate > 0
-      ? Money(refundReceivableBase / invoice.ExchangeRate)
-      : 0m;
-    var outstandingAmount = Math.Max(Money(invoice.Total - receivedAmount - refundReceivableAmount), 0);
-    var paymentStatus = outstandingAmount <= 0
-      ? SalesInvoicePaymentStatus.Paid
-      : receivedAmount <= 0
+    var paymentStatus = settlement.OverpaidAmount > 0
+      ? SalesInvoicePaymentStatus.Overpaid
+      : settlement.OutstandingAmount <= 0
+        ? SalesInvoicePaymentStatus.Paid
+      : settlement.CollectedAmount <= 0
         ? SalesInvoicePaymentStatus.Unpaid
         : SalesInvoicePaymentStatus.PartiallyPaid;
     SalesInvoicePosContextResponse? posContext = null;
@@ -889,7 +1132,7 @@ public sealed class SalesService
         tender.TenderedAmount,
         tender.ExchangeRate,
         tender.BaseAmount,
-        tender.MoneyLedgerEntryId)).ToList();
+        tender.PaymentMoneyLine.MoneyLedgerEntryId)).ToList();
       var change = sale.Change is null ? null : new PosChangeResponse(
         sale.Change.Id,
         sale.Change.MoneyAccountId,
@@ -900,7 +1143,7 @@ public sealed class SalesService
         sale.Change.Amount,
         sale.Change.ExchangeRate,
         sale.Change.BaseAmount,
-        sale.Change.MoneyLedgerEntryId);
+        sale.Change.PaymentMoneyLine.MoneyLedgerEntryId);
       var settledBase = Money(tenders.Sum(tender => tender.BaseAmount) - (change?.BaseAmount ?? 0m));
       var mode = settledBase <= 0
         ? PosPaymentMode.Credit
@@ -937,7 +1180,7 @@ public sealed class SalesService
     invoice.Id,
     invoice.DocumentNumber,
     invoice.CustomerId,
-    invoice.Customer?.Name,
+    invoice.Customer.Name,
     invoice.InvoiceDate,
     invoice.BranchId,
     invoice.Branch.Code,
@@ -961,10 +1204,12 @@ public sealed class SalesService
     invoice.UpdatedAtUtc,
     invoice.PostedAtUtc,
     invoice.JournalEntryId,
-    receivedAmount,
-    outstandingAmount,
+    settlement.CollectedAmount,
+    settlement.ReceivableReductionAmount,
+    settlement.OutstandingAmount,
+    settlement.OverpaidAmount,
     paymentStatus,
-    receipts,
+    payments,
     invoice.Movements.OrderBy(movement => movement.Id).Select(movement => movement.Id).ToList(),
     invoice.Lines.OrderBy(line => line.LineType).ThenBy(line => line.Id).Select(line => new SalesInvoiceLineResponse(
       line.Id,

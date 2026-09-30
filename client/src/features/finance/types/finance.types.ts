@@ -8,11 +8,10 @@ export const MoneyLedgerSourceType = {
   OpeningBalance: 0,
   MoneyTransfer: 1,
   SupplierPayment: 2,
-  CustomerReceipt: 3,
-  PosSale: 4,
-  Expense: 5,
-  PosRefund: 6,
-  PosDrawerMovement: 7,
+  Expense: 3,
+  PosRefund: 4,
+  PosDrawerMovement: 5,
+  Payment: 6,
 } as const
 export type MoneyLedgerSourceType = typeof MoneyLedgerSourceType[keyof typeof MoneyLedgerSourceType]
 
@@ -37,15 +36,23 @@ export interface OutstandingPurchaseInvoice { id: string; documentNumber: string
 export interface FinanceSupplier { id: string; name: string }
 export interface CustomerReceiptAllocation { id: string; salesInvoiceId: string; salesInvoiceDocumentNumber: string; salesInvoiceDate: string; salesInvoiceTotal: number; amount: number; baseAmount: number }
 export interface CustomerReceiptSummary { id: string; documentNumber: string; customerId: string; customerName: string; receiptDate: string; moneyAccountId: string; moneyAccountCode: string; moneyAccountName: string; branchId: string; branchName: string; currencyId: string; currencyCode: string; totalAmount: number; status: FinanceDocumentStatus; createdByUserId: string; createdByUsername: string }
-export interface CustomerReceipt { id: string; documentNumber: string; customerId: string; customerName: string; receiptDate: string; moneyAccountId: string; moneyAccountCode: string; moneyAccountName: string; branchId: string; branchName: string; currencyId: string; currencyCode: string; baseCurrencyId: string; baseCurrencyCode: string; exchangeRate: number; totalAmount: number; baseTotalAmount: number; status: FinanceDocumentStatus; notes: string | null; createdByUserId: string; createdByUsername: string; createdAtUtc: string; updatedAtUtc: string; postedAtUtc: string | null; journalEntryId: string | null; moneyLedgerEntryId: string | null; allocations: CustomerReceiptAllocation[] }
+export interface CustomerReceipt { id: string; documentNumber: string; customerId: string; customerName: string; receiptDate: string; moneyAccountId: string; moneyAccountCode: string; moneyAccountName: string; branchId: string; branchName: string; currencyId: string; currencyCode: string; baseCurrencyId: string; baseCurrencyCode: string; exchangeRate: number; totalAmount: number; baseTotalAmount: number; status: FinanceDocumentStatus; notes: string | null; createdByUserId: string; createdByUsername: string; createdAtUtc: string; updatedAtUtc: string; postedAtUtc: string | null; paymentId: string | null; paymentDocumentNumber: string | null; paymentJournalEntryId: string | null; allocations: CustomerReceiptAllocation[] }
 export interface CustomerReceiptInput { customerId: string; receiptDate: string; moneyAccountId: string; exchangeRate: number | null; totalAmount: number; notes: string | null; allocations: { salesInvoiceId: string; amount: number }[] }
-export interface OutstandingSalesInvoice { id: string; documentNumber: string; invoiceDate: string; customerId: string; customerName: string; currencyId: string; currencyCode: string; exchangeRate: number; originalTotal: number; receivedAmount: number; outstandingAmount: number }
+export interface OutstandingSalesInvoice { id: string; documentNumber: string; invoiceDate: string; customerId: string; customerName: string; currencyId: string; currencyCode: string; exchangeRate: number; originalTotal: number; collectedAmount: number; outstandingAmount: number }
 export interface FinanceCustomer { id: string; name: string }
 
-// Legacy Sales prototype contracts retained until the Sales module is replaced.
-export const InvoiceType = { SalesInvoice: 1, SalesReturn: 2, PurchaseInvoice: 3, PurchaseReturn: 4 } as const
-export type InvoiceType = typeof InvoiceType[keyof typeof InvoiceType]
-export const ContactType = { Customer: 1, Vendor: 2 } as const
-export type ContactType = typeof ContactType[keyof typeof ContactType]
-export interface ContactDto { id: string; name: string; type: ContactType; accountId: string; isActive: boolean }
-export interface InvoiceDto { id: string; type: InvoiceType; contactId: string; totalAmount: number; currencyId: string; exchangeRate: number; invoiceDateUtc: string; lines: { id: string; description: string; accountId: string; quantity: number; unitPrice: number; totalPrice: number }[] }
+export const PaymentOrigin = { SalesInvoice: 0, CustomerReceipt: 1, Pos: 2 } as const
+export type PaymentOrigin = typeof PaymentOrigin[keyof typeof PaymentOrigin]
+export const PaymentMoneyDirection = { Collection: 0, Change: 1 } as const
+export type PaymentMoneyDirection = typeof PaymentMoneyDirection[keyof typeof PaymentMoneyDirection]
+export interface PaymentAllocation { id: string; salesInvoiceId: string; salesInvoiceDocumentNumber: string; amount: number; baseAmount: number }
+export interface PaymentMoneyLine { id: string; sequence: number; moneyAccountId: string; moneyAccountCode: string; moneyAccountName: string; currencyId: string; currencyCode: string; amount: number; exchangeRate: number; baseAmount: number; direction: PaymentMoneyDirection; moneyLedgerEntryId: string }
+export interface Payment { id: string; documentNumber: string; branchId: string; customerId: string; customerName: string; paymentDate: string; currencyId: string; currencyCode: string; baseCurrencyId: string; baseCurrencyCode: string; amount: number; baseAmount: number; origin: PaymentOrigin; sourceSalesInvoiceId: string | null; originSourceId: string | null; originSourceDocumentNumber: string | null; notes: string | null; journalEntryId: string; createdByUserId: string; createdByUsername: string; createdAtUtc: string; updatedAtUtc: string; allocations: PaymentAllocation[]; moneyLines: PaymentMoneyLine[] }
+
+export interface CustomerAccountCurrencySummary { currencyId: string; currencyCode: string; totalReceivable: number; totalCollected: number; netBalance: number; outstanding: number; credit: number }
+export interface CustomerAccountSummary { customerId: string; customerName: string; baseCurrencyId: string; baseCurrencyCode: string; totalReceivable: number; totalCollected: number; netBalance: number; outstanding: number; credit: number; currencies: CustomerAccountCurrencySummary[] }
+export const CustomerAccountEntryType = { Invoice: 0, Payment: 1, RefundReceivableAdjustment: 2 } as const
+export type CustomerAccountEntryType = typeof CustomerAccountEntryType[keyof typeof CustomerAccountEntryType]
+export interface CustomerAccountStatementEntry { entryType: CustomerAccountEntryType; eventDate: string; createdAtUtc: string; sourceId: string; documentNumber: string; origin: string; relatedSourceId: string | null; relatedDocumentNumber: string | null; currencyId: string; currencyCode: string; amount: number; baseAmount: number; signedBaseBalanceImpact: number; runningBaseBalance: number }
+export interface CustomerAccountStatement { customerId: string; customerName: string; baseCurrencyId: string; baseCurrencyCode: string; fromDate: string; toDate: string; openingBalance: number; closingBalance: number; entries: CustomerAccountStatementEntry[]; pagination: { page: number; pageSize: number; totalCount: number; totalPages: number; hasPreviousPage: boolean; hasNextPage: boolean } }
+export interface CustomerStatementFilters { fromDate: string; toDate: string; pageNumber: number; pageSize: number }

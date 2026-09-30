@@ -25,7 +25,7 @@ export function AccountingDashboard() {
           </p>
         </div>
         <Link to="/accounting/journal/new">
-          <Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90">
+          <Button className="gap-1.5">
             <Plus className="size-4" />
             New Journal Entry
           </Button>

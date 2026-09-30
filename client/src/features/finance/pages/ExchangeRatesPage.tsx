@@ -188,7 +188,7 @@ export function ExchangeRatesPage() {
           {admin && (
             <Button
               size="sm"
-              className="gap-1.5 bg-primary font-medium text-white shadow-xs hover:bg-primary/90"
+              className="gap-1.5"
               onClick={() => setIsDialogOpen(true)}
             >
               <Plus className="size-4 stroke-[2.5]" />
@@ -637,7 +637,6 @@ function AddRateDialog({
             <Button
               type="submit"
               disabled={actions.create.isPending}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {actions.create.isPending && <Loader2 className="size-4 animate-spin" />}
               Save Exchange Rate

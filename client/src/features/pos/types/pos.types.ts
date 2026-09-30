@@ -374,8 +374,8 @@ export interface PosSale {
   status: PosSaleStatus
   posSessionId: string | null
   salesInvoiceId: string
-  customerId: string | null
-  customerName: string | null
+  customerId: string
+  customerName: string
   branchId: string
   branchCode: string
   branchName: string
@@ -412,8 +412,8 @@ export interface PosSaleSummary {
   completedAtUtc: string
   branchId: string
   branchName: string
-  customerId: string | null
-  customerName: string | null
+  customerId: string
+  customerName: string
   posSessionId: string | null
   posSessionNumber: string | null
   total: number
@@ -513,8 +513,8 @@ export interface PosRefundability {
   salesInvoiceId: string
   salesInvoiceDocumentNumber: string
   branchId: string
-  customerId: string | null
-  customerName: string | null
+  customerId: string
+  customerName: string
   warehouseId: string | null
   completedAtUtc: string
   cashierUsername: string
@@ -570,8 +570,8 @@ export interface PosRefund {
   branchName: string
   posSessionId: string
   posSessionNumber: string
-  customerId: string | null
-  customerName: string | null
+  customerId: string
+  customerName: string
   reason: PosRefundReason
   notes: string | null
   isVoid: boolean

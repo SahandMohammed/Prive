@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Api.Infrastructure.Http;
+using Api.Modules.Finance;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,16 @@ public sealed class SalesController : ControllerBase
 {
   private readonly SalesService _service;
   private readonly SalesInvoiceCorrectionService _corrections;
+  private readonly PaymentService _payments;
 
-  public SalesController(SalesService service, SalesInvoiceCorrectionService corrections)
+  public SalesController(
+    SalesService service,
+    SalesInvoiceCorrectionService corrections,
+    PaymentService payments)
   {
     _service = service;
     _corrections = corrections;
+    _payments = payments;
   }
 
   [HttpGet("service-categories")]
@@ -86,6 +92,14 @@ public sealed class SalesController : ControllerBase
     return NoContent();
   }
 
+  [HttpGet("items")]
+  [ProducesResponseType(typeof(ApiResponse<List<SalesCatalogItemResponse>>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetItems([FromQuery] SalesCatalogQuery query, CancellationToken ct)
+  {
+    var result = await _service.GetCatalogItemsAsync(query, ct);
+    return Ok(ApiResponse<List<SalesCatalogItemResponse>>.Ok(result.Items, result.ToMetadata()));
+  }
+
   [HttpGet("invoices")]
   [ProducesResponseType(typeof(ApiResponse<List<SalesInvoiceListResponse>>), StatusCodes.Status200OK)]
   public async Task<IActionResult> GetInvoices([FromQuery] SalesInvoiceListQuery query, CancellationToken ct)
@@ -114,6 +128,71 @@ public sealed class SalesController : ControllerBase
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetInvoiceHistory(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<List<SalesInvoiceHistoryResponse>>.Ok(await _corrections.GetHistoryAsync(id, ct)));
+
+  [HttpPost("invoices/{invoiceId:guid}/payments")]
+  [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status201Created)]
+  public async Task<IActionResult> CreateInvoicePayment(
+    Guid invoiceId,
+    [FromBody] InvoicePaymentRequest request,
+    CancellationToken ct)
+  {
+    var payment = await _payments.CreateInvoicePaymentAsync(invoiceId, request, GetUserId(), ct);
+    return StatusCode(StatusCodes.Status201Created, ApiResponse<PaymentResponse>.Ok(payment));
+  }
+
+  [HttpPut("invoices/{invoiceId:guid}/payments/{paymentId:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> UpdateInvoicePayment(
+    Guid invoiceId,
+    Guid paymentId,
+    [FromBody] UpdateInvoicePaymentRequest request,
+    CancellationToken ct) =>
+    Ok(ApiResponse<PaymentResponse>.Ok(await _payments.UpdateInvoicePaymentAsync(
+      invoiceId, paymentId, request, GetUserId(), ct)));
+
+  [HttpDelete("invoices/{invoiceId:guid}/payments/{paymentId:guid}")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeleteInvoicePayment(
+    Guid invoiceId,
+    Guid paymentId,
+    [FromBody] DeletePaymentRequest request,
+    CancellationToken ct)
+  {
+    await _payments.DeleteInvoicePaymentAsync(invoiceId, paymentId, request, GetUserId(), ct);
+    return NoContent();
+  }
+
+  [HttpPost("invoices/active")]
+  [ProducesResponseType(typeof(ApiResponse<SalesInvoiceResponse>), StatusCodes.Status201Created)]
+  public async Task<IActionResult> CreateActiveInvoice([FromBody] SalesInvoiceDraftRequest request, CancellationToken ct)
+  {
+    var invoice = await _service.CreateActiveInvoiceAsync(request, GetUserId(), ct);
+    var version = RouteData.Values["version"]?.ToString() ?? "1.0";
+    return CreatedAtAction(nameof(GetInvoice), new { invoice.Id, version }, ApiResponse<SalesInvoiceResponse>.Ok(invoice));
+  }
+
+  [HttpPut("invoices/{id:guid}/active")]
+  [ProducesResponseType(typeof(ApiResponse<SalesInvoiceResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> UpdateActiveInvoice(
+    Guid id,
+    [FromBody] UpdatePostedSalesInvoiceRequest request,
+    CancellationToken ct) =>
+    Ok(ApiResponse<SalesInvoiceResponse>.Ok(await _corrections.UpdateAsync(id, request, GetUserId(), ct)));
+
+  [HttpDelete("invoices/{id:guid}/active")]
+  [Authorize(Roles = "SuperAdmin")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeleteActiveInvoice(
+    Guid id,
+    [FromBody] DeletePostedSalesInvoiceRequest request,
+    CancellationToken ct)
+  {
+    await _corrections.DeleteAsync(id, request, GetUserId(), ct);
+    return NoContent();
+  }
+
+  // Legacy Draft/Post endpoints are intentionally retained for possible future
+  // use. The current Privé client must use the /active lifecycle endpoints above.
 
   [HttpPost("invoices")]
   [ProducesResponseType(typeof(ApiResponse<SalesInvoiceResponse>), StatusCodes.Status201Created)]

@@ -193,8 +193,9 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(sale.Id, persisted.Id);
     Assert.Single(await observer.PosTenders.Where(item => item.PosSaleId == persisted.Id).ToListAsync());
     Assert.Empty(await observer.PosChanges.Where(item => item.PosSaleId == persisted.Id).ToListAsync());
+    Assert.NotNull(persisted.PaymentId);
     Assert.Single(await observer.MoneyLedgerEntries.Where(item =>
-      item.SourceType == MoneyLedgerSourceType.PosSale && item.SourceDocumentId == persisted.Id).ToListAsync());
+      item.SourceType == MoneyLedgerSourceType.Payment && item.SourceDocumentId == persisted.PaymentId).ToListAsync());
     Assert.Single(await observer.JournalEntries.Where(item => item.Id == invoice.JournalEntryId).ToListAsync());
     Assert.Single(await observer.StockMovements.Where(item => item.Reference == persisted.DocumentNumber
       && item.Type == StockMovementType.Sale).ToListAsync());

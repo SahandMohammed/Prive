@@ -62,6 +62,96 @@ public sealed class MoneyLedgerEntryEntityConfiguration : IEntityTypeConfigurati
   }
 }
 
+public sealed class PaymentEntityConfiguration : IEntityTypeConfiguration<PaymentEntity>
+{
+  public void Configure(EntityTypeBuilder<PaymentEntity> builder)
+  {
+    builder.ToTable("payments", table =>
+    {
+      table.HasCheckConstraint("CK_payments_amounts", "\"Amount\" > 0 AND \"BaseAmount\" > 0");
+      table.HasCheckConstraint("CK_payments_origin_source", "(\"Origin\" = 'CustomerReceipt' AND \"SourceSalesInvoiceId\" IS NULL) OR (\"Origin\" IN ('SalesInvoice', 'Pos') AND \"SourceSalesInvoiceId\" IS NOT NULL)");
+      table.HasCheckConstraint("CK_payments_delete_metadata", "(\"IsDeleted\" = false AND \"DeletedAtUtc\" IS NULL AND \"DeletedByUserId\" IS NULL AND \"DeleteReason\" IS NULL) OR (\"IsDeleted\" = true AND \"DeletedAtUtc\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL AND \"DeleteReason\" IS NOT NULL)");
+      table.HasCheckConstraint("CK_payments_journal_state", "(\"IsDeleted\" = false AND \"JournalEntryId\" IS NOT NULL) OR (\"IsDeleted\" = true AND \"JournalEntryId\" IS NULL)");
+    });
+    builder.HasKey(payment => payment.Id);
+    builder.Property(payment => payment.DocumentNumber).HasMaxLength(20).IsRequired();
+    builder.HasIndex(payment => payment.DocumentNumber).IsUnique();
+    builder.Property(payment => payment.Amount).HasPrecision(19, 4).IsRequired();
+    builder.Property(payment => payment.BaseAmount).HasPrecision(19, 4).IsRequired();
+    builder.Property(payment => payment.Origin).HasConversion<string>().HasMaxLength(24).IsRequired();
+    builder.Property(payment => payment.Notes).HasMaxLength(1000);
+    builder.Property(payment => payment.DeleteReason).HasMaxLength(1000);
+    builder.Property(payment => payment.UpdatedAtUtc).IsConcurrencyToken();
+    builder.HasIndex(payment => new { payment.BranchId, payment.PaymentDate });
+    builder.HasIndex(payment => payment.CustomerId);
+    builder.HasIndex(payment => payment.SourceSalesInvoiceId)
+      .HasFilter("\"SourceSalesInvoiceId\" IS NOT NULL");
+    builder.HasIndex(payment => payment.JournalEntryId).IsUnique().HasFilter("\"JournalEntryId\" IS NOT NULL");
+    builder.HasOne(payment => payment.Branch).WithMany().HasForeignKey(payment => payment.BranchId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.Customer).WithMany().HasForeignKey(payment => payment.CustomerId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.Currency).WithMany().HasForeignKey(payment => payment.CurrencyId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.BaseCurrency).WithMany().HasForeignKey(payment => payment.BaseCurrencyId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.SourceSalesInvoice).WithMany().HasForeignKey(payment => payment.SourceSalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.CreatedByUser).WithMany().HasForeignKey(payment => payment.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.DeletedByUser).WithMany().HasForeignKey(payment => payment.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(payment => payment.JournalEntry).WithOne(journal => journal.SourcePayment)
+      .HasForeignKey<PaymentEntity>(payment => payment.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+  }
+}
+
+public sealed class PaymentAllocationEntityConfiguration : IEntityTypeConfiguration<PaymentAllocationEntity>
+{
+  public void Configure(EntityTypeBuilder<PaymentAllocationEntity> builder)
+  {
+    builder.ToTable("payment_allocations", table =>
+      table.HasCheckConstraint("CK_payment_allocations_amounts", "\"Amount\" > 0 AND \"BaseAmount\" > 0"));
+    builder.HasKey(allocation => allocation.Id);
+    builder.Property(allocation => allocation.Amount).HasPrecision(19, 4).IsRequired();
+    builder.Property(allocation => allocation.BaseAmount).HasPrecision(19, 4).IsRequired();
+    builder.HasIndex(allocation => new { allocation.PaymentId, allocation.SalesInvoiceId }).IsUnique();
+    builder.HasIndex(allocation => allocation.SalesInvoiceId);
+    builder.HasOne(allocation => allocation.Payment).WithMany(payment => payment.Allocations)
+      .HasForeignKey(allocation => allocation.PaymentId).OnDelete(DeleteBehavior.Cascade);
+    builder.HasOne(allocation => allocation.SalesInvoice).WithMany(invoice => invoice.PaymentAllocations)
+      .HasForeignKey(allocation => allocation.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+  }
+}
+
+public sealed class PaymentMoneyLineEntityConfiguration : IEntityTypeConfiguration<PaymentMoneyLineEntity>
+{
+  public void Configure(EntityTypeBuilder<PaymentMoneyLineEntity> builder)
+  {
+    builder.ToTable("payment_money_lines", table =>
+    {
+      table.HasCheckConstraint("CK_payment_money_lines_amounts", "\"Amount\" > 0 AND \"ExchangeRate\" > 0 AND \"BaseAmount\" > 0");
+      table.HasCheckConstraint("CK_payment_money_lines_sequence", "\"Sequence\" > 0");
+    });
+    builder.HasKey(line => line.Id);
+    builder.Property(line => line.Amount).HasPrecision(19, 4).IsRequired();
+    builder.Property(line => line.ExchangeRate).HasPrecision(19, 6).IsRequired();
+    builder.Property(line => line.BaseAmount).HasPrecision(19, 4).IsRequired();
+    builder.Property(line => line.Direction).HasConversion<string>().HasMaxLength(16).IsRequired();
+    builder.HasIndex(line => new { line.PaymentId, line.Sequence }).IsUnique();
+    builder.HasIndex(line => line.MoneyAccountId);
+    builder.HasIndex(line => line.MoneyLedgerEntryId).IsUnique();
+    builder.HasOne(line => line.Payment).WithMany(payment => payment.MoneyLines)
+      .HasForeignKey(line => line.PaymentId).OnDelete(DeleteBehavior.Cascade);
+    builder.HasOne(line => line.MoneyAccount).WithMany().HasForeignKey(line => line.MoneyAccountId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(line => line.Currency).WithMany().HasForeignKey(line => line.CurrencyId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(line => line.MoneyLedgerEntry).WithMany().HasForeignKey(line => line.MoneyLedgerEntryId).OnDelete(DeleteBehavior.Restrict);
+  }
+}
+
+public sealed class PaymentDocumentCounterEntityConfiguration : IEntityTypeConfiguration<PaymentDocumentCounterEntity>
+{
+  public void Configure(EntityTypeBuilder<PaymentDocumentCounterEntity> builder)
+  {
+    builder.ToTable("payment_document_counters");
+    builder.HasKey(counter => counter.Id);
+    builder.HasData(new PaymentDocumentCounterEntity { Id = 1, NextValue = 1 });
+  }
+}
+
 public sealed class ExchangeRateEntityConfiguration : IEntityTypeConfiguration<ExchangeRateEntity>
 {
   public void Configure(EntityTypeBuilder<ExchangeRateEntity> builder)
@@ -144,7 +234,9 @@ public sealed class CustomerReceiptEntityConfiguration : IEntityTypeConfiguratio
 {
   public void Configure(EntityTypeBuilder<CustomerReceiptEntity> builder)
   {
-    builder.ToTable("customer_receipts");
+    builder.ToTable("customer_receipts", table => table.HasCheckConstraint(
+      "CK_customer_receipts_posting_state",
+      "(\"Status\" = 'Draft' AND \"PaymentId\" IS NULL) OR (\"Status\" = 'Posted' AND \"PaymentId\" IS NOT NULL)"));
     builder.HasKey(receipt => receipt.Id);
     builder.Property(receipt => receipt.DocumentNumber).HasMaxLength(20).IsRequired();
     builder.HasIndex(receipt => receipt.DocumentNumber).IsUnique();
@@ -162,25 +254,27 @@ public sealed class CustomerReceiptEntityConfiguration : IEntityTypeConfiguratio
     builder.HasOne(receipt => receipt.Currency).WithMany().HasForeignKey(receipt => receipt.CurrencyId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(receipt => receipt.BaseCurrency).WithMany().HasForeignKey(receipt => receipt.BaseCurrencyId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(receipt => receipt.CreatedByUser).WithMany().HasForeignKey(receipt => receipt.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(receipt => receipt.JournalEntry).WithOne(entry => entry.SourceCustomerReceipt)
-      .HasForeignKey<CustomerReceiptEntity>(receipt => receipt.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasIndex(receipt => receipt.JournalEntryId).IsUnique().HasFilter("\"JournalEntryId\" IS NOT NULL");
+    builder.Property(receipt => receipt.DeleteReason).HasMaxLength(1000);
+    builder.HasOne(receipt => receipt.Payment).WithOne(payment => payment.SourceCustomerReceipt)
+      .HasForeignKey<CustomerReceiptEntity>(receipt => receipt.PaymentId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasIndex(receipt => receipt.PaymentId).IsUnique().HasFilter("\"PaymentId\" IS NOT NULL");
+    builder.HasOne(receipt => receipt.DeletedByUser).WithMany().HasForeignKey(receipt => receipt.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
   }
 }
 
-public sealed class CustomerReceiptAllocationEntityConfiguration : IEntityTypeConfiguration<CustomerReceiptAllocationEntity>
+public sealed class CustomerReceiptDraftAllocationEntityConfiguration : IEntityTypeConfiguration<CustomerReceiptDraftAllocationEntity>
 {
-  public void Configure(EntityTypeBuilder<CustomerReceiptAllocationEntity> builder)
+  public void Configure(EntityTypeBuilder<CustomerReceiptDraftAllocationEntity> builder)
   {
-    builder.ToTable("customer_receipt_allocations");
+    builder.ToTable("customer_receipt_draft_allocations");
     builder.HasKey(allocation => allocation.Id);
     builder.Property(allocation => allocation.Amount).HasPrecision(19, 4).IsRequired();
     builder.Property(allocation => allocation.BaseAmount).HasPrecision(19, 4).IsRequired();
     builder.HasIndex(allocation => new { allocation.CustomerReceiptId, allocation.SalesInvoiceId }).IsUnique();
     builder.HasIndex(allocation => allocation.SalesInvoiceId);
-    builder.HasOne(allocation => allocation.CustomerReceipt).WithMany(receipt => receipt.Allocations)
+    builder.HasOne(allocation => allocation.CustomerReceipt).WithMany(receipt => receipt.DraftAllocations)
       .HasForeignKey(allocation => allocation.CustomerReceiptId).OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(allocation => allocation.SalesInvoice).WithMany(invoice => invoice.ReceiptAllocations)
+    builder.HasOne(allocation => allocation.SalesInvoice).WithMany(invoice => invoice.ReceiptDraftAllocations)
       .HasForeignKey(allocation => allocation.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
   }
 }

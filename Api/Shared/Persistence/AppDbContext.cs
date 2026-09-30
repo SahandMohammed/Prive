@@ -49,12 +49,16 @@ public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options,
   public DbSet<MoneyAccountEntity> MoneyAccounts => Set<MoneyAccountEntity>();
   public DbSet<MoneyAccountAccessEntity> MoneyAccountAccess => Set<MoneyAccountAccessEntity>();
   public DbSet<MoneyLedgerEntryEntity> MoneyLedgerEntries => Set<MoneyLedgerEntryEntity>();
+  public DbSet<PaymentEntity> Payments => Set<PaymentEntity>();
+  public DbSet<PaymentAllocationEntity> PaymentAllocations => Set<PaymentAllocationEntity>();
+  public DbSet<PaymentMoneyLineEntity> PaymentMoneyLines => Set<PaymentMoneyLineEntity>();
+  public DbSet<PaymentDocumentCounterEntity> PaymentDocumentCounters => Set<PaymentDocumentCounterEntity>();
   public DbSet<ExchangeRateEntity> ExchangeRates => Set<ExchangeRateEntity>();
   public DbSet<MoneyTransferEntity> MoneyTransfers => Set<MoneyTransferEntity>();
   public DbSet<SupplierPaymentEntity> SupplierPayments => Set<SupplierPaymentEntity>();
   public DbSet<SupplierPaymentAllocationEntity> SupplierPaymentAllocations => Set<SupplierPaymentAllocationEntity>();
   public DbSet<CustomerReceiptEntity> CustomerReceipts => Set<CustomerReceiptEntity>();
-  public DbSet<CustomerReceiptAllocationEntity> CustomerReceiptAllocations => Set<CustomerReceiptAllocationEntity>();
+  public DbSet<CustomerReceiptDraftAllocationEntity> CustomerReceiptDraftAllocations => Set<CustomerReceiptDraftAllocationEntity>();
   public DbSet<ServiceCategoryEntity> ServiceCategories => Set<ServiceCategoryEntity>();
   public DbSet<ServiceEntity> Services => Set<ServiceEntity>();
   public DbSet<SalesInvoiceEntity> SalesInvoices => Set<SalesInvoiceEntity>();

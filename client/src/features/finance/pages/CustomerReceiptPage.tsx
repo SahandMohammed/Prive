@@ -206,11 +206,19 @@ export function CustomerReceiptPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {receipt && <ReceiptStatus status={receipt.status} />}
+          {receipt && (
+            <Link to={`/finance/customers/${receipt.customerId}/account`}>
+              <Button variant="outline" size="sm">
+                <BookOpen className="size-4" />
+                Customer account
+              </Button>
+            </Link>
+          )}
           {posted && receipt && (
             <>
               <Link
                 to={`/finance/money-ledger?documentNumber=${encodeURIComponent(
-                  receipt.documentNumber
+                  receipt.paymentDocumentNumber ?? receipt.documentNumber
                 )}`}
               >
                 <Button variant="outline" size="sm">
@@ -218,9 +226,9 @@ export function CustomerReceiptPage() {
                   Money Ledger
                 </Button>
               </Link>
-              {receipt.journalEntryId && (
+              {receipt.paymentJournalEntryId && (
                 <Link
-                  to={`/accounting/journal?search=${encodeURIComponent(receipt.documentNumber)}`}
+                  to={`/accounting/journal?search=${encodeURIComponent(receipt.paymentDocumentNumber ?? receipt.documentNumber)}`}
                 >
                   <Button variant="outline" size="sm">
                     <BookOpen className="size-4" />
@@ -355,7 +363,7 @@ export function CustomerReceiptPage() {
                   <Button
                     type="button"
                     size="sm"
-                    className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                    className="gap-1.5"
                     disabled={!values.customerId || !currencyId}
                     onClick={() => setIsInvoiceDialogOpen(true)}
                   >
@@ -436,7 +444,7 @@ export function CustomerReceiptPage() {
                                 {invoice ? formatAmount(invoice.originalTotal) : '—'}
                               </TableCell>
                               <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-500">
-                                {invoice ? formatAmount(invoice.receivedAmount) : '—'}
+                                {invoice ? formatAmount(invoice.collectedAmount) : '—'}
                               </TableCell>
                               <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-slate-900 dark:text-slate-100">
                                 {invoice ? formatAmount(invoice.outstandingAmount) : '—'}
@@ -676,7 +684,7 @@ function mergeOutstanding(rows: OutstandingSalesInvoice[], receipt: CustomerRece
       currencyCode: receipt.currencyCode,
       exchangeRate: receipt.exchangeRate,
       originalTotal: allocation.salesInvoiceTotal,
-      receivedAmount: allocation.salesInvoiceTotal,
+      collectedAmount: allocation.salesInvoiceTotal,
       outstandingAmount: 0,
     })
   })

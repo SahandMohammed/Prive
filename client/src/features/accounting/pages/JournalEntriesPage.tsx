@@ -72,7 +72,7 @@ export function JournalEntriesPage() {
           </p>
         </div>
         <Link to="/accounting/journal/new">
-          <Button className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90">
+          <Button className="gap-1.5">
             <Plus className="h-4 w-4 stroke-[2.5]" />
             Create Journal Entry
           </Button>
@@ -169,14 +169,14 @@ export function JournalEntriesPage() {
               )}
               {!journalsQuery.isPending && !journalsQuery.isError && journals.map((journal) => {
                 const statusBadge = getStatusBadge(journal.status)
-                const sourceOwned = Boolean(journal.sourcePurchaseInvoiceId || journal.sourceSalesInvoiceId || journal.sourceMoneyTransferId || journal.sourceSupplierPaymentId || journal.sourceCustomerReceiptId || journal.sourcePosSaleId || journal.sourcePosRefundId || journal.sourcePosDrawerMovementId)
+                const sourceOwned = Boolean(journal.sourcePurchaseInvoiceId || journal.sourceSalesInvoiceId || journal.sourceMoneyTransferId || journal.sourceSupplierPaymentId || journal.sourcePaymentId || journal.sourcePosSaleId || journal.sourcePosRefundId || journal.sourcePosDrawerMovementId)
                 return (
                   <TableRow key={journal.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
                     <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
                       {journal.entryDate}
                     </TableCell>
                     <TableCell className="px-4 py-3.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {journal.sourcePurchaseInvoiceId ? <Link className="text-primary" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.sourcePosRefundId ? <Link className="text-primary" to={`/pos/refunds/${journal.sourcePosRefundId}`}>{journal.reference || 'POS Refund'}</Link> : journal.sourcePosSaleId ? <Link className="text-primary" to={`/pos/sales/${journal.sourcePosSaleId}`}>{journal.reference || 'POS Sale'}</Link> : journal.sourcePosDrawerMovementId ? <Link className="text-primary" to="/pos/sessions">{journal.reference || 'Drawer movement'}</Link> : journal.sourceSalesInvoiceId ? <Link className="text-primary" to={`/sales/invoices/${journal.sourceSalesInvoiceId}`}>{journal.reference || 'Sale'}</Link> : journal.sourceCustomerReceiptId ? <Link className="text-primary" to={`/finance/customer-receipts/${journal.sourceCustomerReceiptId}`}>{journal.reference || 'Receipt'}</Link> : journal.reference || '—'}
+                      {journal.sourcePurchaseInvoiceId ? <Link className="text-primary" to={`/purchases/invoices/${journal.sourcePurchaseInvoiceId}`}>{journal.reference || 'Purchase'}</Link> : journal.sourcePosRefundId ? <Link className="text-primary" to={`/pos/refunds/${journal.sourcePosRefundId}`}>{journal.reference || 'POS Refund'}</Link> : journal.sourcePosSaleId ? <Link className="text-primary" to={`/pos/sales/${journal.sourcePosSaleId}`}>{journal.reference || 'POS Sale'}</Link> : journal.sourcePosDrawerMovementId ? <Link className="text-primary" to="/pos/sessions">{journal.reference || 'Drawer movement'}</Link> : journal.sourceSalesInvoiceId ? <Link className="text-primary" to={`/sales/invoices/${journal.sourceSalesInvoiceId}`}>{journal.reference || 'Sale'}</Link> : journal.sourcePaymentId ? <Link className="text-primary" to={`/finance/payments/${journal.sourcePaymentId}`}>{journal.reference || 'Payment'}</Link> : journal.reference || '—'}
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
                       <div className="max-w-md truncate font-medium text-slate-800 dark:text-slate-200">
@@ -335,7 +335,7 @@ function EmptyRow() {
             </p>
           </div>
           <Link to="/accounting/journal/new">
-            <Button size="sm" className="bg-primarytext-primary-foregroundhover:bg-primary/90">
+            <Button size="sm">
               <FilePlus className="h-4 w-4" /> Create Journal Entry
             </Button>
           </Link>

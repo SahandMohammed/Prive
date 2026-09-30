@@ -64,7 +64,7 @@ export interface JournalEntry {
   sourceSalesInvoiceId: string | null
   sourceMoneyTransferId: string | null
   sourceSupplierPaymentId: string | null
-  sourceCustomerReceiptId: string | null
+  sourcePaymentId: string | null
   sourcePosSaleId: string | null
   sourceExpenseDocumentId: string | null
   sourcePosRefundId: string | null

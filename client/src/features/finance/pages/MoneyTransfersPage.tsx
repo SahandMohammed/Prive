@@ -119,7 +119,7 @@ export function MoneyTransfersPage() {
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+          className="gap-1.5"
           onClick={openCreate}
         >
           <FilePlus2 className="size-4" />
@@ -229,7 +229,7 @@ export function MoneyTransfersPage() {
                       <p>No Money Transfers found.</p>
                       <Button
                         size="sm"
-                        className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                        className="gap-1.5"
                         onClick={openCreate}
                       >
                         <FilePlus2 className="size-4" /> Create Money Transfer
@@ -645,7 +645,6 @@ function MoneyTransferFormDialog({
             </Button>
             <Button
               type="submit"
-              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={isPending}
             >
               {isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
@@ -846,7 +845,6 @@ function MoneyTransferDetailDialog({
               <Button
                 type="button"
                 size="sm"
-                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={actions.post.isPending}
                 onClick={handlePost}
               >

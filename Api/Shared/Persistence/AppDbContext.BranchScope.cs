@@ -42,8 +42,11 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<MoneyTransferEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SourceMoneyAccount.BranchId == SelectedBranchId);
     modelBuilder.Entity<SupplierPaymentEntity>().HasQueryFilter(x => SelectedBranchId == null || x.MoneyAccount.BranchId == SelectedBranchId);
     modelBuilder.Entity<SupplierPaymentAllocationEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SupplierPayment.MoneyAccount.BranchId == SelectedBranchId);
-    modelBuilder.Entity<CustomerReceiptEntity>().HasQueryFilter(x => SelectedBranchId == null || x.MoneyAccount.BranchId == SelectedBranchId);
-    modelBuilder.Entity<CustomerReceiptAllocationEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CustomerReceipt.MoneyAccount.BranchId == SelectedBranchId);
+    modelBuilder.Entity<CustomerReceiptEntity>().HasQueryFilter(x => !x.IsDeleted && (SelectedBranchId == null || x.MoneyAccount.BranchId == SelectedBranchId));
+    modelBuilder.Entity<CustomerReceiptDraftAllocationEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CustomerReceipt.MoneyAccount.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PaymentEntity>().HasQueryFilter(x => !x.IsDeleted && (SelectedBranchId == null || x.BranchId == SelectedBranchId));
+    modelBuilder.Entity<PaymentAllocationEntity>().HasQueryFilter(x => !x.Payment.IsDeleted && (SelectedBranchId == null || x.Payment.BranchId == SelectedBranchId));
+    modelBuilder.Entity<PaymentMoneyLineEntity>().HasQueryFilter(x => !x.Payment.IsDeleted && (SelectedBranchId == null || x.Payment.BranchId == SelectedBranchId));
     modelBuilder.Entity<PosRegisterEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRegisterCashboxEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosSessionEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
@@ -102,7 +105,13 @@ public sealed partial class AppDbContext
     {
       if (entry.Entity is IBranchCatalogEntity catalog)
       {
-        if (entry.State == EntityState.Added) catalog.CatalogBranchId = CatalogBranchId;
+        if (entry.State == EntityState.Added
+          && entry.Entity is ContactEntity { SystemRole: not null })
+        {
+          // Protected system contacts are provisioned explicitly for either the shared
+          // catalog or a newly created separate catalog branch.
+        }
+        else if (entry.State == EntityState.Added) catalog.CatalogBranchId = CatalogBranchId;
         else if (entry.Property(nameof(IBranchCatalogEntity.CatalogBranchId)).OriginalValue as Guid? != CatalogBranchId
           || catalog.CatalogBranchId != CatalogBranchId) ThrowScopeMismatch();
       }
@@ -126,7 +135,7 @@ public sealed partial class AppDbContext
 
     foreach (var entry in entries)
     {
-      if (entry.State != EntityState.Added && entry.Metadata.GetDeclaredQueryFilters().Any())
+      if (entry.State == EntityState.Modified && entry.Metadata.GetDeclaredQueryFilters().Any())
         RequireReference(entry.Metadata.ClrType, (Guid)entry.Property("Id").OriginalValue!);
       foreach (var fk in entry.Metadata.GetForeignKeys().Where(fk => fk.PrincipalEntityType.GetDeclaredQueryFilters().Any()))
       {
@@ -222,11 +231,14 @@ public sealed partial class AppDbContext
           {
             BranchId = branchId,
             UserId = sale.CreatedByUserId,
-            Action = sale.Status == SalesInvoiceStatus.Posted ? "posted" : "created",
+            // An active Sales Invoice is internally Posted so existing effect
+            // generation can be reused, but its user-facing lifecycle starts
+            // with one creation activity, never a separate posting activity.
+            Action = "created",
             EntityType = "Sales Invoice",
             EntityId = sale.Id,
             DocumentNumber = sale.DocumentNumber,
-            Description = sale.Status == SalesInvoiceStatus.Posted ? "Posted sales invoice" : "Created sales invoice draft",
+            Description = "Created sales invoice",
             TimestampUtc = sale.PostedAtUtc ?? sale.CreatedAtUtc
           });
         }

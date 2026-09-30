@@ -142,7 +142,7 @@ public sealed class AccountingService
       .ThenInclude(invoice => invoice!.PosSale)
       .Include(journal => journal.SourceMoneyTransfer)
       .Include(journal => journal.SourceSupplierPayment)
-      .Include(journal => journal.SourceCustomerReceipt)
+      .Include(journal => journal.SourcePayment)
       .Include(journal => journal.SourceExpenseDocument)
       .Include(journal => journal.SourcePosRefund)
       .Include(journal => journal.SourcePosDrawerMovement)
@@ -163,7 +163,7 @@ public sealed class AccountingService
       .ThenInclude(invoice => invoice!.PosSale)
       .Include(entry => entry.SourceMoneyTransfer)
       .Include(entry => entry.SourceSupplierPayment)
-      .Include(entry => entry.SourceCustomerReceipt)
+      .Include(entry => entry.SourcePayment)
       .Include(entry => entry.SourceExpenseDocument)
       .Include(entry => entry.SourcePosRefund)
       .Include(entry => entry.SourcePosDrawerMovement)
@@ -521,7 +521,7 @@ public sealed class AccountingService
     journal.Id, journal.EntryDate, journal.Reference, journal.Description, journal.BranchId, journal.Branch.Code, journal.Branch.Name,
     journal.Status, journal.Type, journal.PostedAtUtc, journal.ReversalOfJournalId, journal.SourcePurchaseInvoice?.Id,
     journal.SourceSalesInvoice?.Id, journal.SourceMoneyTransfer?.Id, journal.SourceSupplierPayment?.Id,
-    journal.SourceCustomerReceipt?.Id, journal.SourceSalesInvoice?.PosSale?.Id,
+    journal.SourcePayment?.Id, journal.SourceSalesInvoice?.PosSale?.Id,
     journal.SourceExpenseDocument?.Id, journal.SourcePosRefund?.Id, journal.SourcePosDrawerMovement?.Id,
     journal.Lines.Sum(line => line.DebitBaseAmount), journal.Lines.Sum(line => line.CreditBaseAmount),
     journal.Lines.OrderBy(line => line.Id).Select(ToJournalLineResponse).ToList());

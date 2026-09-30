@@ -379,7 +379,6 @@ export function ChartOfAccountsPage() {
               </Button>
               <Button
                 type="submit"
-                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={saveAccount.isPending}
               >
                 {saveAccount.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}

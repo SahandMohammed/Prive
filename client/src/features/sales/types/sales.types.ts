@@ -2,7 +2,7 @@ export const SalesInvoiceStatus = { Draft: 0, Posted: 1 } as const
 export type SalesInvoiceStatus = typeof SalesInvoiceStatus[keyof typeof SalesInvoiceStatus]
 export const SalesLineType = { Service: 0, Product: 1 } as const
 export type SalesLineType = typeof SalesLineType[keyof typeof SalesLineType]
-export const SalesInvoicePaymentStatus = { Unpaid: 0, PartiallyPaid: 1, Paid: 2 } as const
+export const SalesInvoicePaymentStatus = { Unpaid: 0, PartiallyPaid: 1, Paid: 2, Overpaid: 3 } as const
 export type SalesInvoicePaymentStatus = typeof SalesInvoicePaymentStatus[keyof typeof SalesInvoicePaymentStatus]
 
 export interface ServiceCategory {
@@ -46,6 +46,8 @@ export interface SalesInvoiceFilters {
   branchId?: string
   currencyId?: string
   status?: string
+  sortBy?: string
+  sortDescending?: boolean
 }
 
 export interface DeletedSalesInvoiceFilters {
@@ -59,8 +61,8 @@ export interface DeletedSalesInvoiceFilters {
 export interface SalesInvoiceSummary {
   id: string
   documentNumber: string
-  customerId: string | null
-  customerName: string | null
+  customerId: string
+  customerName: string
   invoiceDate: string
   branchId: string
   branchName: string
@@ -103,13 +105,14 @@ export interface SalesInvoiceLine {
   baseLineAmount: number
 }
 
-export interface SalesInvoiceReceipt {
-  customerReceiptId: string
-  customerReceiptDocumentNumber: string
-  receiptDate: string
+export interface SalesInvoicePayment {
+  paymentId: string
+  paymentDocumentNumber: string
+  paymentDate: string
   amount: number
   baseAmount: number
-  journalEntryId: string | null
+  origin: number
+  journalEntryId: string
 }
 
 export const PosPaymentMode = { Paid: 0, Partial: 1, Credit: 2 } as const
@@ -169,13 +172,39 @@ export interface SalesInvoice extends SalesInvoiceSummary {
   subtotal: number
   notes: string | null
   journalEntryId: string | null
-  receivedAmount: number
+  collectedAmount: number
+  receivableReductionAmount: number
   outstandingAmount: number
+  overpaidAmount: number
   paymentStatus: SalesInvoicePaymentStatus
-  receipts: SalesInvoiceReceipt[]
+  payments: SalesInvoicePayment[]
   stockMovementIds: string[]
   lines: SalesInvoiceLine[]
   posContext: SalesInvoicePosContext | null
+}
+
+export interface SalesCatalogItem {
+  id: string
+  name: string
+  type: SalesLineType
+  basePrice: number
+  categoryId: string
+  categoryName: string
+  sku?: string | null
+  unitOfMeasureId?: string | null
+  unitName?: string | null
+  unitCode?: string | null
+  durationMinutes?: number | null
+  isActive: boolean
+  availableQuantity?: number | null
+  unitConversions?: {
+    id: string
+    unitOfMeasureId: string
+    name: string
+    code: string
+    operation: number
+    factor: number
+  }[]
 }
 
 export interface SalesInvoiceDraftInput {
@@ -187,19 +216,48 @@ export interface SalesInvoiceDraftInput {
   exchangeRate: number | null
   notes: string | null
   lines: {
-    lineType: SalesLineType
-    serviceId: string | null
-    productId: string | null
-    unitOfMeasureId: string | null
+    lineType?: SalesLineType | null
+    itemId?: string | null
+    serviceId?: string | null
+    productId?: string | null
+    unitOfMeasureId?: string | null
     description: string | null
     quantity: number
     unitPrice: number
     useMasterPrice: boolean
   }[]
+  payments?: { moneyAccountId: string; amount: number; exchangeRate: number | null; notes: string | null }[]
+}
+
+export interface InvoicePaymentInput { paymentDate: string; moneyAccountId: string; amount: number; exchangeRate: number | null; notes: string | null }
+export interface UpdateInvoicePaymentInput extends InvoicePaymentInput { reason: string; expectedUpdatedAtUtc: string }
+
+export interface SalesInvoiceLineForm {
+  lineType?: SalesLineType
+  itemId?: string
+  serviceId?: string
+  productId?: string
+  unitOfMeasureId?: string
+  description?: string | null
+  quantity: number
+  unitPrice: number
+  unitPriceBase?: number
+  useMasterPrice?: boolean
+}
+
+export interface SalesInvoiceFormValues {
+  customerId: string
+  invoiceDate: string
+  branchId: string
+  warehouseId: string
+  currencyId: string
+  exchangeRate: number | null
+  notes: string
+  lines: SalesInvoiceLineForm[]
 }
 
 export interface PostedSalesInvoiceInput extends SalesInvoiceDraftInput {
-  reason: string
+  reason?: string | null
   expectedUpdatedAtUtc: string
   posSettlement: {
     paymentMode: PosPaymentMode
@@ -225,8 +283,8 @@ export interface DeletedSalesInvoice {
   invoiceDate: string
   branchId: string
   branchName: string
-  customerId: string | null
-  customerName: string | null
+  customerId: string
+  customerName: string
   total: number
   baseTotal: number
   postedAtUtc: string | null

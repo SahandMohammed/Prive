@@ -17,6 +17,17 @@
 @theme inline {
     --font-heading: var(--font-family, 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     --font-sans: var(--font-family, 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    /* Privé Brand Colors */
+    --color-prive-black: #0A0A0A;
+    --color-prive-nearblack: #0A0A0F;
+    --color-prive-cream: #EBDDD0;
+    --color-prive-champagne: #C6AD8F;
+    --color-prive-champagne-light: #D1B59A;
+    --color-prive-olive: #4D4D35;
+    --color-prive-olive-deep: #303020;
+    --color-prive-white: #FFFFFF;
+
+    /* Semantic color bindings */
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -59,89 +70,96 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Light Theme — Clean Minimalist High-Contrast SaaS (Pure white cards, crisp off-white canvas, bold charcoal primary) */
+/* Light Theme — Editorial Luxury Salon (Warm Alabaster Canvas, Crisp White Surfaces, Privé Black Typography & Actions, Champagne Accents) */
 :root {
     --font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --background: oklch(0.985 0.002 247);           /* Crisp airy off-white canvas #FAFAFA */
-    --foreground: oklch(0.14 0.02 260);             /* Dark charcoal black #0F172A */
-    --card: oklch(1 0 0);                           /* Pure white #FFFFFF */
-    --card-foreground: oklch(0.14 0.02 260);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.14 0.02 260);
-    --primary: oklch(0.18 0.02 260);                /* Bold sleek dark charcoal #0F172A */
-    --primary-foreground: oklch(1 0 0);             /* Crisp pure white */
-    --secondary: oklch(0.965 0.005 250);            /* Clean soft neutral #F3F4F6 */
-    --secondary-foreground: oklch(0.20 0.02 260);   /* Dark neutral #1F2937 */
-    --muted: oklch(0.965 0.004 250);                /* #F3F4F6 */
-    --muted-foreground: oklch(0.50 0.02 255);       /* Refined slate #64748B */
-    --accent: oklch(0.96 0.006 250);                /* Soft subtle hover #F1F5F9 */
-    --accent-foreground: oklch(0.14 0.02 260);
-    --highlight: oklch(0.75 0.165 70);              /* Warm Amber #F59E0B */
-    --highlight-foreground: oklch(0.14 0.02 260);
-    --destructive: oklch(0.58 0.23 25);             /* Crisp coral red #EF4444 */
-    --border: oklch(0.925 0.004 250);               /* Crisp clean border #E5E7EB */
-    --input: oklch(0.925 0.004 250);
-    --ring: oklch(0.18 0.02 260);                   /* Dark ring focus */
-    --chart-1: oklch(0.65 0.21 35);                 /* Coral Orange */
-    --chart-2: oklch(0.65 0.16 175);                /* Teal */
-    --chart-3: oklch(0.55 0.20 255);                /* Royal / Slate Blue */
-    --chart-4: oklch(0.78 0.17 75);                 /* Warm Amber */
-    --chart-5: oklch(0.58 0.22 280);                /* Violet Purple */
+    --background: #FAF8F5;                         /* Warm linen/alabaster canvas inspired by Privé Cream */
+    --foreground: #0A0A0A;                         /* Privé Black typography */
+    --card: #FFFFFF;                               /* Pure white card surfaces */
+    --card-foreground: #0A0A0A;
+    --popover: #FFFFFF;
+    --popover-foreground: #0A0A0A;
+    --primary: #C6AD8F;                            /* Champagne primary actions — warm luxury, NOT black */
+    --primary-foreground: #0A0A0A;                 /* Privé Black text on Champagne */
+    --secondary: #F2ECE4;                          /* Soft cream neutral */
+    --secondary-foreground: #0A0A0A;
+    --muted: #F2ECE4;                              /* Subtle surface neutral */
+    --muted-foreground: #6A655C;                   /* Refined warm olive-charcoal */
+    --accent: #EFE8DC;                             /* Gentle warm hover */
+    --accent-foreground: #0A0A0A;
+    --highlight: #C6AD8F;                          /* Champagne accent */
+    --highlight-foreground: #0A0A0A;
+    --destructive: #DC2626;                        /* Crisp alert red */
+    --border: #E6DFD5;                             /* Warm delicate cream border — eliminates harsh black */
+    --input: #E6DFD5;
+    --ring: #C6AD8F;                               /* Champagne focus ring */
+    --chart-1: #C6AD8F;                            /* Champagne */
+    --chart-2: #4D4D35;                            /* Privé Olive */
+    --chart-3: #8C7558;                            /* Warm Bronze */
+    --chart-4: #303020;                            /* Deep Olive */
+    --chart-5: #D1B59A;                            /* Light Champagne */
     --radius: 0.875rem;
 
     /* Sidebar tokens */
-    --sidebar: oklch(1 0 0);                        /* Pure white sidebar #FFFFFF */
-    --sidebar-foreground: oklch(0.14 0.02 260);
-    --sidebar-primary: oklch(0.18 0.02 260);
-    --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.965 0.005 250);       /* Soft neutral active item #F3F4F6 */
-    --sidebar-accent-foreground: oklch(0.14 0.02 260);
-    --sidebar-border: oklch(0.925 0.004 250);       /* #E5E7EB */
-    --sidebar-ring: oklch(0.18 0.02 260);
+    --sidebar: #FFFFFF;                            /* Pure white sidebar */
+    --sidebar-foreground: #0A0A0A;                 /* Privé Black */
+    --sidebar-primary: #C6AD8F;                    /* Champagne */
+    --sidebar-primary-foreground: #0A0A0A;
+    --sidebar-accent: #F2ECE4;
+    --sidebar-accent-foreground: #0A0A0A;
+    --sidebar-border: #E6DFD5;
+    --sidebar-ring: #C6AD8F;
 }
 
-/* Dark Theme — Deep Neutral Obsidian + Pure White Primary */
+/* Dark Theme — Signature Privé Brand Canvas (Privé Black, UI Near-black, Privé Cream Typography, Champagne Actions, Deep Olive Layering) */
 .dark {
-    --background: oklch(0.11 0.01 260);            /* Deep obsidian #090A0F */
-    --foreground: oklch(0.98 0.005 250);           /* Crisp white #F8FAFC */
-    --card: oklch(0.15 0.015 260);                 /* Elevated card #12141C */
-    --card-foreground: oklch(0.98 0.005 250);
-    --popover: oklch(0.15 0.015 260);
-    --popover-foreground: oklch(0.98 0.005 250);
-    --primary: oklch(0.98 0.005 250);              /* High-contrast crisp white button */
-    --primary-foreground: oklch(0.14 0.02 260);    /* Dark text on primary */
-    --secondary: oklch(0.20 0.015 260);            /* #1E2230 */
-    --secondary-foreground: oklch(0.95 0.01 250);
-    --muted: oklch(0.20 0.015 260);
-    --muted-foreground: oklch(0.65 0.02 255);      /* Muted slate #94A3B8 */
-    --accent: oklch(0.20 0.015 260);
-    --accent-foreground: oklch(0.98 0.005 250);
-    --highlight: oklch(0.75 0.165 70);             /* Warm Amber */
-    --highlight-foreground: oklch(0.1 0.01 260);
-    --destructive: oklch(0.62 0.2 25);
-    --border: oklch(0.23 0.015 260);               /* Subtle dark border */
-    --input: oklch(0.23 0.015 260);
-    --ring: oklch(0.98 0.005 250);
-    --chart-1: oklch(0.68 0.20 35);
-    --chart-2: oklch(0.68 0.16 175);
-    --chart-3: oklch(0.62 0.20 255);
-    --chart-4: oklch(0.78 0.17 75);
-    --chart-5: oklch(0.65 0.20 280);
+    --background: #0A0A0A;                         /* Privé Black primary canvas */
+    --foreground: #EBDDD0;                         /* Privé Cream primary text & headlines */
+    --card: #151511;                               /* Tonal elevated card surface with subtle deep olive/charcoal undertone */
+    --card-foreground: #EBDDD0;
+    --popover: #181813;                            /* Elevated popovers & menus */
+    --popover-foreground: #EBDDD0;
+    --primary: #C6AD8F;                            /* Champagne primary actions */
+    --primary-foreground: #0A0A0A;                 /* Privé Black text on Champagne */
+    --secondary: #22221A;                          /* Deep Olive tonal surface */
+    --secondary-foreground: #EBDDD0;
+    --muted: #1B1B15;                              /* Muted dark background */
+    --muted-foreground: #9C9387;                   /* Warm champagne-slate muted text */
+    --accent: #25241C;                             /* Subtle deep olive hover */
+    --accent-foreground: #D1B59A;                  /* Light Champagne highlight */
+    --highlight: #D1B59A;                          /* Light Champagne */
+    --highlight-foreground: #0A0A0A;
+    --destructive: #EF4444;                        /* Balanced warning red */
+    --border: #292820;                             /* Subtle warm olive-tinted dark border — eliminates harsh black borders */
+    --input: #292820;
+    --ring: #C6AD8F;                               /* Champagne focus ring */
+    --chart-1: #C6AD8F;                            /* Champagne */
+    --chart-2: #6E6E4E;                            /* Privé Olive elevated */
+    --chart-3: #D1B59A;                            /* Light Champagne */
+    --chart-4: #9E8266;                            /* Warm Bronze */
+    --chart-5: #B8B896;                            /* Sage Olive */
 
     /* Sidebar tokens */
-    --sidebar: oklch(0.13 0.01 260);               /* #0D0F15 */
-    --sidebar-foreground: oklch(0.98 0.005 250);
-    --sidebar-primary: oklch(0.98 0.005 250);
-    --sidebar-primary-foreground: oklch(0.14 0.02 260);
-    --sidebar-accent: oklch(0.20 0.015 260);
-    --sidebar-accent-foreground: oklch(0.98 0.005 250);
-    --sidebar-border: oklch(0.23 0.015 260);
-    --sidebar-ring: oklch(0.98 0.005 250);
+    --sidebar: #0A0A0F;                            /* UI Near-black brand surface */
+    --sidebar-foreground: #EBDDD0;                 /* Privé Cream text */
+    --sidebar-primary: #C6AD8F;                    /* Champagne */
+    --sidebar-primary-foreground: #0A0A0A;         /* Privé Black */
+    --sidebar-accent: #191913;                     /* Subtle active item */
+    --sidebar-accent-foreground: #EBDDD0;
+    --sidebar-border: #222119;
+    --sidebar-ring: #C6AD8F;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  input, textarea, select {
+    outline: none;
+  }
+  input:focus, textarea:focus, select:focus,
+  input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: none;
   }
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;

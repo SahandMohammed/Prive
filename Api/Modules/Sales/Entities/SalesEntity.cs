@@ -39,8 +39,8 @@ public sealed class SalesInvoiceEntity
 {
   public Guid Id { get; set; } = Guid.NewGuid();
   public string DocumentNumber { get; set; } = string.Empty;
-  public Guid? CustomerId { get; set; }
-  public ContactEntity? Customer { get; set; }
+  public Guid CustomerId { get; set; }
+  public ContactEntity Customer { get; set; } = null!;
   public DateOnly InvoiceDate { get; set; }
   public Guid BranchId { get; set; }
   public BranchEntity Branch { get; set; } = null!;
@@ -71,7 +71,8 @@ public sealed class SalesInvoiceEntity
   public Guid? AccountsReceivableAccountId { get; set; }
   public ICollection<SalesInvoiceLineEntity> Lines { get; set; } = new List<SalesInvoiceLineEntity>();
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
-  public ICollection<CustomerReceiptAllocationEntity> ReceiptAllocations { get; set; } = new List<CustomerReceiptAllocationEntity>();
+  public ICollection<CustomerReceiptDraftAllocationEntity> ReceiptDraftAllocations { get; set; } = new List<CustomerReceiptDraftAllocationEntity>();
+  public ICollection<PaymentAllocationEntity> PaymentAllocations { get; set; } = new List<PaymentAllocationEntity>();
   public PosSaleEntity? PosSale { get; set; }
   public ICollection<PosRefundEntity> PosRefunds { get; set; } = new List<PosRefundEntity>();
 }

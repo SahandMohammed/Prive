@@ -208,19 +208,23 @@ public sealed partial class PosWorkflowTests
   }
 
   [Fact]
-  public async Task Posted_customer_receipt_is_included_before_ar_first_refund_allocation()
+  public async Task Posted_payment_is_included_before_ar_first_refund_allocation()
   {
     await using var db = CreateDb();
     var data = await SeedAsync(db, iqdOpeningBalance: 10_000);
     var sale = await CreateService(db).CompleteSaleAsync(
       Request(data, [ServiceLine(data)], [], data.CustomerId) with { PaymentMode = PosPaymentMode.Credit }, data.CashierId, default);
-    db.CustomerReceipts.Add(new CustomerReceiptEntity
+    db.PaymentAllocations.Add(new PaymentAllocationEntity
     {
-      DocumentNumber = "CR-TEST", CustomerId = data.CustomerId, ReceiptDate = Today,
-      MoneyAccountId = data.IqdMoneyAccountId, CurrencyId = data.IqdCurrencyId, BaseCurrencyId = data.IqdCurrencyId,
-      ExchangeRate = 1, TotalAmount = 10_000, BaseTotalAmount = 10_000, Status = FinanceDocumentStatus.Posted,
-      CreatedByUserId = data.CashierId, PostedAtUtc = DateTime.UtcNow,
-      Allocations = [new CustomerReceiptAllocationEntity { SalesInvoiceId = sale.SalesInvoiceId, Amount = 10_000, BaseAmount = 10_000 }]
+      SalesInvoiceId = sale.SalesInvoiceId,
+      Amount = 10_000,
+      BaseAmount = 10_000,
+      Payment = new PaymentEntity
+      {
+        DocumentNumber = "PAY-TEST", BranchId = data.BranchId, CustomerId = data.CustomerId, PaymentDate = Today,
+        CurrencyId = data.IqdCurrencyId, BaseCurrencyId = data.IqdCurrencyId, Amount = 10_000, BaseAmount = 10_000,
+        Origin = PaymentOrigin.CustomerReceipt, CreatedByUserId = data.CashierId
+      }
     });
     await db.SaveChangesAsync();
     await PromoteAsync(db, data.CashierId);

@@ -102,7 +102,7 @@ public sealed class DashboardService
     var todayCashPaidBase = ledgerEntriesToday.Where(a => a < 0).Sum(a => -a);
     var todayNetCashMovementBase = todayCashReceivedBase - todayCashPaidBase;
 
-    // 3. Customer Receivables (all posted invoices minus initial POS settlement and posted customer receipts)
+    // 3. Customer Receivables (posted receivables minus active Payment allocations and AR refunds)
     var unpaidCustomerInvoices = await _db.SalesInvoices.AsNoTracking()
       .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted)
       .Select(s => new
@@ -110,24 +110,20 @@ public sealed class DashboardService
         s.Id,
         s.CustomerId,
         s.BaseTotal,
-        PosSettledBase = s.PosSale == null
-          ? 0m
-          : (s.PosSale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
-            - (s.PosSale.Change == null ? 0m : s.PosSale.Change.BaseAmount),
-        AllocatedBase = _db.CustomerReceiptAllocations
-          .Where(a => a.SalesInvoiceId == s.Id && a.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
+        AllocatedBase = _db.PaymentAllocations
+          .Where(a => a.SalesInvoiceId == s.Id)
           .Sum(a => (decimal?)a.BaseAmount) ?? 0m,
         RefundReceivableBase = _db.PosRefunds
           .Where(refund => refund.SalesInvoiceId == s.Id && refund.Status == PosRefundStatus.Posted)
           .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m
       })
-      .Where(s => s.BaseTotal - s.PosSettledBase - s.AllocatedBase - s.RefundReceivableBase > 0.001m)
+      .Where(s => s.BaseTotal - s.AllocatedBase - s.RefundReceivableBase > 0.001m)
       .ToListAsync(ct);
 
     var customerReceivablesBase = unpaidCustomerInvoices.Sum(s =>
-      s.BaseTotal - s.PosSettledBase - s.AllocatedBase - s.RefundReceivableBase);
+      s.BaseTotal - s.AllocatedBase - s.RefundReceivableBase);
     var customerOutstandingInvoiceCount = unpaidCustomerInvoices.Count;
-    var customerOutstandingCustomerCount = unpaidCustomerInvoices.Select(s => s.CustomerId).Where(c => c != null).Distinct().Count();
+    var customerOutstandingCustomerCount = unpaidCustomerInvoices.Select(s => s.CustomerId).Distinct().Count();
 
     // 4. Supplier Payables (Posted purchase invoices minus posted supplier payment allocations)
     var unpaidPurchaseInvoices = await _db.PurchaseInvoices.AsNoTracking()
@@ -496,17 +492,20 @@ public sealed class DashboardService
     // Sales Invoices
     var recentSales = await _db.SalesInvoices.AsNoTracking()
       .Include(s => s.CreatedByUser)
-      .Where(s => s.BranchId == branchId && s.PosSale == null && !seenDocNumbers.Contains(s.DocumentNumber))
+      .Where(s => s.BranchId == branchId
+        && s.Status == SalesInvoiceStatus.Posted
+        && s.PosSale == null
+        && !seenDocNumbers.Contains(s.DocumentNumber))
       .OrderByDescending(s => s.PostedAtUtc ?? s.CreatedAtUtc)
       .Take(safeLimit)
       .Select(s => new DashboardRecentActivityResponse(
         s.Id,
         s.CreatedByUser.Username,
-        s.Status == SalesInvoiceStatus.Posted ? "posted" : "created",
+        "created",
         "Sales Invoice",
         s.DocumentNumber,
         s.PostedAtUtc ?? s.CreatedAtUtc,
-        s.Status == SalesInvoiceStatus.Posted ? "Posted sales invoice" : "Created sales invoice draft"))
+        "Created sales invoice"))
       .ToListAsync(ct);
     supplemental.AddRange(recentSales);
 

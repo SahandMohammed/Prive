@@ -30,9 +30,14 @@ public sealed class BranchScopeTests
     var options = Options();
     var branch = new BranchEntity { Code = "MAIN", Name = "Main" };
     var user = new UserEntity { Username = "auditor", PasswordHash = "test", Role = UserRole.SuperAdmin };
+    var customer = new ContactEntity { Name = "Customer", IsCustomer = true };
+    branch.WalkInCustomer = new ContactEntity
+    {
+      Name = "Walk-in Customer", IsCustomer = true, SystemRole = ContactSystemRole.WalkInCustomer
+    };
     await using (var seed = new AppDbContext(options))
     {
-      seed.AddRange(branch, user);
+      seed.AddRange(branch, user, customer);
       await seed.SaveChangesAsync();
     }
 
@@ -77,6 +82,7 @@ public sealed class BranchScopeTests
       {
         DocumentNumber = "SI-AUTO",
         BranchId = branch.Id,
+        CustomerId = customer.Id,
         CurrencyId = Guid.NewGuid(),
         BaseCurrencyId = Guid.NewGuid(),
         CreatedByUserId = user.Id
@@ -321,7 +327,8 @@ public sealed class BranchScopeTests
     using var db = new AppDbContext(options, new BranchContext { BranchId = branchId, CatalogBranchId = branchId });
     Assert.Contains("BranchId", db.SalesInvoices.ToQueryString());
     Assert.Contains("BranchId", db.JournalLines.ToQueryString());
-    Assert.Contains("BranchId", db.CustomerReceiptAllocations.ToQueryString());
+    Assert.Contains("BranchId", db.CustomerReceiptDraftAllocations.ToQueryString());
+    Assert.Contains("BranchId", db.PaymentAllocations.ToQueryString());
     Assert.Contains("BranchId", db.PosTenders.ToQueryString());
     Assert.Contains("CatalogBranchId", db.Products.ToQueryString());
   }

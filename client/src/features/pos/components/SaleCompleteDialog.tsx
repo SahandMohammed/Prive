@@ -54,7 +54,7 @@ export function SaleCompleteDialog({
               <p className="mt-1 font-mono text-2xl font-bold text-primary">
                 {amount(sale.total)} {sale.baseCurrencyCode}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">{sale.customerName ?? 'Walk-in customer'}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{sale.customerName}</p>
             </div>
             <div className="grid grid-cols-2 gap-2 border-t pt-3 text-left text-xs">
               <Metric label="Received now" value={`${amount(sale.settledBaseAmount)} ${sale.baseCurrencyCode}`} />

@@ -105,6 +105,7 @@ public static class ErrorCodes
     public const string NotFound = "CONTACT_NOT_FOUND";
     public const string RoleRequired = "CONTACT_ROLE_REQUIRED";
     public const string HasHistory = "CONTACT_HAS_HISTORY";
+    public const string SystemProtected = "CONTACT_SYSTEM_PROTECTED";
   }
 
   public static class Purchase
@@ -180,6 +181,16 @@ public static class ErrorCodes
     public const string ReceiptCurrencyMismatch = "FINANCE_RECEIPT_CURRENCY_MISMATCH";
     public const string ReceiptExchangeRateMismatch = "FINANCE_RECEIPT_EXCHANGE_RATE_MISMATCH";
     public const string ReceiptAllocationExceedsOutstanding = "FINANCE_RECEIPT_ALLOCATION_EXCEEDS_OUTSTANDING";
+    public const string PaymentNotFound = "FINANCE_CUSTOMER_PAYMENT_NOT_FOUND";
+    public const string PaymentCustomerMismatch = "FINANCE_PAYMENT_CUSTOMER_MISMATCH";
+    public const string PaymentBranchMismatch = "FINANCE_PAYMENT_BRANCH_MISMATCH";
+    public const string PaymentSourceInvoiceMismatch = "FINANCE_PAYMENT_SOURCE_INVOICE_MISMATCH";
+    public const string PaymentMoneyLinesInvalid = "FINANCE_PAYMENT_MONEY_LINES_INVALID";
+    public const string PaymentMoneyLinesUnbalanced = "FINANCE_PAYMENT_MONEY_LINES_UNBALANCED";
+    public const string PaymentReceivableAccountMissing = "FINANCE_PAYMENT_RECEIVABLE_ACCOUNT_MISSING";
+    public const string PaymentHasRefundDependency = "FINANCE_PAYMENT_HAS_REFUND_DEPENDENCY";
+    public const string PaymentConcurrencyConflict = "FINANCE_PAYMENT_CONCURRENCY_CONFLICT";
+    public const string CustomerAccountDateRangeInvalid = "FINANCE_CUSTOMER_ACCOUNT_DATE_RANGE_INVALID";
     public const string InsufficientBalance = "FINANCE_INSUFFICIENT_BALANCE";
     public const string DocumentNotDraft = "FINANCE_DOCUMENT_NOT_DRAFT";
     public const string JournalDirectReversalNotAllowed = "FINANCE_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
@@ -220,7 +231,7 @@ public static class ErrorCodes
     public const string InsufficientStock = "SALES_INSUFFICIENT_STOCK";
     public const string AccountMappingInvalid = "SALES_ACCOUNT_MAPPING_INVALID";
     public const string JournalDirectReversalNotAllowed = "SALES_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
-    public const string InvoiceHasReceipt = "SALES_INVOICE_HAS_RECEIPT";
+    public const string InvoiceHasPayment = "SALES_INVOICE_HAS_PAYMENT";
     public const string InvoiceHasRefundOrVoid = "SALES_INVOICE_HAS_REFUND_OR_VOID";
     public const string InvoiceHasDependentTransaction = "SALES_INVOICE_HAS_DEPENDENT_TRANSACTION";
     public const string ConcurrencyConflict = "SALES_INVOICE_CONCURRENCY_CONFLICT";

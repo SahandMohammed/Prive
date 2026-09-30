@@ -406,7 +406,7 @@ export function SupplierPaymentInvoiceDialog({
           <Button
             type="button"
             size="sm"
-            className="gap-1.5 bg-primary font-medium text-white hover:bg-primary/90"
+            className="gap-1.5"
             disabled={selectedCount === 0 || totalAllocated <= 0}
             onClick={handleApply}
           >

@@ -123,9 +123,7 @@ public sealed class PosZReportEntity
   public decimal ServiceRefundsBase { get; set; }
   public decimal ProductRefundsBase { get; set; }
   public decimal RefundTotalBase { get; set; }
-  // Null only for immutable Z reports created before refunds existed; responses
-  // derive those legacy snapshots as gross (there could have been no refunds).
-  public decimal? NetSalesBase { get; set; }
+  public decimal NetSalesBase { get; set; }
   public ICollection<PosZPaymentSummaryEntity> PaymentSummaries { get; set; } = new List<PosZPaymentSummaryEntity>();
   public ICollection<PosZDrawerSummaryEntity> DrawerSummaries { get; set; } = new List<PosZDrawerSummaryEntity>();
 }
@@ -193,6 +191,8 @@ public sealed class PosSaleEntity
   public string DocumentNumber { get; set; } = string.Empty;
   public Guid SalesInvoiceId { get; set; }
   public SalesInvoiceEntity SalesInvoice { get; set; } = null!;
+  public Guid? PaymentId { get; set; }
+  public PaymentEntity? Payment { get; set; }
   public Guid? PosSessionId { get; set; }
   public PosSessionEntity? PosSession { get; set; }
   public PosSaleStatus Status { get; set; } = PosSaleStatus.Completed;
@@ -217,8 +217,8 @@ public sealed class PosTenderEntity
   public decimal TenderedAmount { get; set; }
   public decimal ExchangeRate { get; set; } = 1m;
   public decimal BaseAmount { get; set; }
-  public Guid MoneyLedgerEntryId { get; set; }
-  public MoneyLedgerEntryEntity MoneyLedgerEntry { get; set; } = null!;
+  public Guid PaymentMoneyLineId { get; set; }
+  public PaymentMoneyLineEntity PaymentMoneyLine { get; set; } = null!;
 }
 
 public sealed class PosChangeEntity
@@ -231,8 +231,8 @@ public sealed class PosChangeEntity
   public decimal Amount { get; set; }
   public decimal ExchangeRate { get; set; } = 1m;
   public decimal BaseAmount { get; set; }
-  public Guid MoneyLedgerEntryId { get; set; }
-  public MoneyLedgerEntryEntity MoneyLedgerEntry { get; set; } = null!;
+  public Guid PaymentMoneyLineId { get; set; }
+  public PaymentMoneyLineEntity PaymentMoneyLine { get; set; } = null!;
 }
 
 public sealed class PosRefundEntity

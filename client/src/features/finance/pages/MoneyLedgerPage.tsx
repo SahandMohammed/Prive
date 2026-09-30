@@ -58,10 +58,8 @@ export function MoneyLedgerPage() {
 }
 
 function SourceLink({ entry }: { entry: MoneyLedgerEntry }) {
-  if (entry.sourceType === MoneyLedgerSourceType.CustomerReceipt)
-    return <Link className="font-mono text-xs text-primary" to={`/finance/customer-receipts/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
-  if (entry.sourceType === MoneyLedgerSourceType.PosSale)
-    return <Link className="font-mono text-xs text-primary" to={`/pos/sales/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
+  if (entry.sourceType === MoneyLedgerSourceType.Payment)
+    return <Link className="font-mono text-xs text-primary" to={`/finance/payments/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
   if (entry.sourceType === MoneyLedgerSourceType.PosRefund)
     return <Link className="font-mono text-xs text-primary" to={`/pos/refunds/${entry.sourceDocumentId}`}>{entry.documentNumber}</Link>
   if (entry.sourceType === MoneyLedgerSourceType.PosDrawerMovement)
@@ -73,11 +71,10 @@ const sourceLabel: Record<MoneyLedgerSourceType, string> = {
   [MoneyLedgerSourceType.OpeningBalance]: 'Opening balance',
   [MoneyLedgerSourceType.MoneyTransfer]: 'Money transfer',
   [MoneyLedgerSourceType.SupplierPayment]: 'Supplier payment',
-  [MoneyLedgerSourceType.CustomerReceipt]: 'Customer receipt',
-  [MoneyLedgerSourceType.PosSale]: 'POS Sale',
   [MoneyLedgerSourceType.Expense]: 'Expense',
   [MoneyLedgerSourceType.PosRefund]: 'POS Refund',
   [MoneyLedgerSourceType.PosDrawerMovement]: 'POS Drawer movement',
+  [MoneyLedgerSourceType.Payment]: 'Customer payment',
 }
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className="h-9 rounded-md border bg-background px-3 text-sm" {...props} /> }
 function Message({ text }: { text: string }) { return <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">{text}</TableCell></TableRow> }

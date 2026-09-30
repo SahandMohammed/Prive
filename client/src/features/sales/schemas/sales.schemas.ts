@@ -19,22 +19,26 @@ export const serviceSchema = z.object({
 })
 
 const salesLineSchema = z.object({
-  lineType: z.union([z.literal(SalesLineType.Service), z.literal(SalesLineType.Product)]),
-  serviceId: z.string(),
-  productId: z.string(),
-  unitOfMeasureId: z.string(),
-  description: z.string().max(500, 'Maximum 500 characters'),
+  lineType: z.union([z.literal(SalesLineType.Service), z.literal(SalesLineType.Product)]).optional(),
+  itemId: z.string().optional(),
+  serviceId: z.string().optional(),
+  productId: z.string().optional(),
+  unitOfMeasureId: z.string().optional(),
+  description: z.string().max(500, 'Maximum 500 characters').optional().nullable(),
   quantity: z.number().positive('Quantity must be greater than zero'),
   unitPrice: z.number().min(0, 'Unit price cannot be negative'),
-  unitPriceBase: z.number().min(0),
-  useMasterPrice: z.boolean(),
+  unitPriceBase: z.number().min(0).optional(),
+  useMasterPrice: z.boolean().optional(),
 }).superRefine((line, context) => {
-  if (line.lineType === SalesLineType.Service && !z.string().uuid().safeParse(line.serviceId).success)
-    context.addIssue({ code: 'custom', path: ['serviceId'], message: 'Select a Service' })
-  if (line.lineType === SalesLineType.Product && !z.string().uuid().safeParse(line.productId).success)
-    context.addIssue({ code: 'custom', path: ['productId'], message: 'Select a Product' })
-  if (line.lineType === SalesLineType.Product && !z.string().uuid().safeParse(line.unitOfMeasureId).success)
-    context.addIssue({ code: 'custom', path: ['unitOfMeasureId'], message: 'Select a Unit' })
+  const chosenId = line.itemId || line.serviceId || line.productId
+  if (!chosenId || !z.string().uuid().safeParse(chosenId).success) {
+    context.addIssue({ code: 'custom', path: ['itemId'], message: 'Select an item' })
+    if (line.lineType === SalesLineType.Product) {
+      context.addIssue({ code: 'custom', path: ['productId'], message: 'Select a Product' })
+    } else {
+      context.addIssue({ code: 'custom', path: ['serviceId'], message: 'Select a Service' })
+    }
+  }
 })
 
 export const salesInvoiceSchema = z.object({
@@ -45,10 +49,9 @@ export const salesInvoiceSchema = z.object({
   currencyId: requiredId,
   exchangeRate: z.number().positive('Exchange rate must be greater than zero').nullable(),
   notes: z.string().max(1000, 'Maximum 1000 characters'),
-  correctionReason: z.string().max(1000, 'Maximum 1000 characters'),
-  lines: z.array(salesLineSchema).min(1, 'Add at least one Service or Product'),
+  lines: z.array(salesLineSchema).min(1, 'Add at least one item'),
 }).superRefine((invoice, context) => {
-  if (invoice.lines.some((line) => line.lineType === SalesLineType.Product)
+  if (invoice.lines.some((line) => line.lineType === SalesLineType.Product && (line.productId || line.itemId))
     && !z.string().uuid().safeParse(invoice.warehouseId).success)
     context.addIssue({ code: 'custom', path: ['warehouseId'], message: 'Select a warehouse for Product lines' })
 })

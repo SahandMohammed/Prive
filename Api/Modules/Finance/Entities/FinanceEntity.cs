@@ -3,6 +3,7 @@ using Api.Modules.Branch;
 using Api.Modules.Contact;
 using Api.Modules.Currency;
 using Api.Modules.Purchase;
+using Api.Modules.Pos;
 using Api.Modules.Sales;
 using Api.Modules.User;
 
@@ -62,6 +63,77 @@ public sealed class MoneyLedgerEntryEntity
   public UserEntity PerformedByUser { get; set; } = null!;
   public string? Notes { get; set; }
   public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class PaymentEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public string DocumentNumber { get; set; } = string.Empty;
+  public Guid BranchId { get; set; }
+  public BranchEntity Branch { get; set; } = null!;
+  public Guid CustomerId { get; set; }
+  public ContactEntity Customer { get; set; } = null!;
+  public DateOnly PaymentDate { get; set; }
+  public Guid CurrencyId { get; set; }
+  public CurrencyEntity Currency { get; set; } = null!;
+  public Guid BaseCurrencyId { get; set; }
+  public CurrencyEntity BaseCurrency { get; set; } = null!;
+  public decimal Amount { get; set; }
+  public decimal BaseAmount { get; set; }
+  public PaymentOrigin Origin { get; set; }
+  public Guid? SourceSalesInvoiceId { get; set; }
+  public SalesInvoiceEntity? SourceSalesInvoice { get; set; }
+  public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
+  public PosSaleEntity? SourcePosSale { get; set; }
+  public string? Notes { get; set; }
+  public Guid CreatedByUserId { get; set; }
+  public UserEntity CreatedByUser { get; set; } = null!;
+  public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+  public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+  public Guid? JournalEntryId { get; set; }
+  public JournalEntryEntity? JournalEntry { get; set; }
+  public bool IsDeleted { get; set; }
+  public DateTime? DeletedAtUtc { get; set; }
+  public Guid? DeletedByUserId { get; set; }
+  public UserEntity? DeletedByUser { get; set; }
+  public string? DeleteReason { get; set; }
+  public ICollection<PaymentAllocationEntity> Allocations { get; set; } = new List<PaymentAllocationEntity>();
+  public ICollection<PaymentMoneyLineEntity> MoneyLines { get; set; } = new List<PaymentMoneyLineEntity>();
+}
+
+public sealed class PaymentAllocationEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public Guid PaymentId { get; set; }
+  public PaymentEntity Payment { get; set; } = null!;
+  public Guid SalesInvoiceId { get; set; }
+  public SalesInvoiceEntity SalesInvoice { get; set; } = null!;
+  public decimal Amount { get; set; }
+  public decimal BaseAmount { get; set; }
+}
+
+public sealed class PaymentMoneyLineEntity
+{
+  public Guid Id { get; set; } = Guid.NewGuid();
+  public Guid PaymentId { get; set; }
+  public PaymentEntity Payment { get; set; } = null!;
+  public int Sequence { get; set; }
+  public Guid MoneyAccountId { get; set; }
+  public MoneyAccountEntity MoneyAccount { get; set; } = null!;
+  public Guid CurrencyId { get; set; }
+  public CurrencyEntity Currency { get; set; } = null!;
+  public decimal Amount { get; set; }
+  public decimal ExchangeRate { get; set; } = 1m;
+  public decimal BaseAmount { get; set; }
+  public PaymentMoneyDirection Direction { get; set; }
+  public Guid MoneyLedgerEntryId { get; set; }
+  public MoneyLedgerEntryEntity MoneyLedgerEntry { get; set; } = null!;
+}
+
+public sealed class PaymentDocumentCounterEntity
+{
+  public int Id { get; set; } = 1;
+  public long NextValue { get; set; } = 1;
 }
 
 public sealed class ExchangeRateEntity
@@ -168,12 +240,17 @@ public sealed class CustomerReceiptEntity
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime? PostedAtUtc { get; set; }
-  public Guid? JournalEntryId { get; set; }
-  public JournalEntryEntity? JournalEntry { get; set; }
-  public ICollection<CustomerReceiptAllocationEntity> Allocations { get; set; } = new List<CustomerReceiptAllocationEntity>();
+  public Guid? PaymentId { get; set; }
+  public PaymentEntity? Payment { get; set; }
+  public bool IsDeleted { get; set; }
+  public DateTime? DeletedAtUtc { get; set; }
+  public Guid? DeletedByUserId { get; set; }
+  public UserEntity? DeletedByUser { get; set; }
+  public string? DeleteReason { get; set; }
+  public ICollection<CustomerReceiptDraftAllocationEntity> DraftAllocations { get; set; } = new List<CustomerReceiptDraftAllocationEntity>();
 }
 
-public sealed class CustomerReceiptAllocationEntity
+public sealed class CustomerReceiptDraftAllocationEntity
 {
   public Guid Id { get; set; } = Guid.NewGuid();
   public Guid CustomerReceiptId { get; set; }
@@ -186,5 +263,7 @@ public sealed class CustomerReceiptAllocationEntity
 
 public enum MoneyAccountType { Cashbox, Bank }
 public enum MoneyAccountAccessLevel { View, Operate }
-public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment, CustomerReceipt, PosSale, Expense, PosRefund, PosDrawerMovement }
+public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment, Expense, PosRefund, PosDrawerMovement, Payment }
 public enum FinanceDocumentStatus { Draft, Posted }
+public enum PaymentOrigin { SalesInvoice, CustomerReceipt, Pos }
+public enum PaymentMoneyDirection { Collection, Change }

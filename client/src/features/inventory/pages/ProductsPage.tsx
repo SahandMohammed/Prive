@@ -56,7 +56,7 @@ export function ProductsPage() {
           <h2 className="text-xl font-semibold">Items</h2>
           <p className="mt-1 text-sm text-muted-foreground">Define inventory items, their base units, and selling or purchasing conversions.</p>
         </div>
-        <Link to="/settings/items/new"><Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"><Plus className="size-4" />Add item</Button></Link>
+        <Link to="/settings/items/new"><Button className="gap-1.5"><Plus className="size-4" />Add item</Button></Link>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">

@@ -364,7 +364,7 @@ export function SupplierPaymentPage() {
                   <Button
                     type="button"
                     size="sm"
-                    className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                    className="gap-1.5"
                     disabled={!values.supplierId || !currencyId}
                     onClick={() => setIsInvoiceDialogOpen(true)}
                   >

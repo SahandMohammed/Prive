@@ -130,7 +130,7 @@ export function PosReceiptPage() {
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           <div className="grid gap-3 text-sm sm:grid-cols-5">
-            <Info label="Customer" value={sale.customerName ?? 'Walk-in'} />
+            <Info label="Customer" value={sale.customerName} />
             <Info label="Branch" value={`${sale.branchCode} — ${sale.branchName}`} />
             <Info
               label="Warehouse"

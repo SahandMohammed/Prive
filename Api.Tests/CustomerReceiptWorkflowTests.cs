@@ -29,7 +29,7 @@ public sealed class CustomerReceiptWorkflowTests
     Assert.Equal(FinanceDocumentStatus.Draft, draft.Status);
     Assert.Empty(db.MoneyLedgerEntries);
     Assert.Empty(db.JournalEntries);
-    Assert.Equal(2, await db.CustomerReceiptAllocations.AsNoTracking().CountAsync());
+    Assert.Equal(2, await db.CustomerReceiptDraftAllocations.AsNoTracking().CountAsync());
     Assert.Equal(0, await PostedReceivedAsync(db, data.InvoiceOneId));
 
     await using var editDb = CreateDb(databaseName);
@@ -64,33 +64,39 @@ public sealed class CustomerReceiptWorkflowTests
     Assert.Equal(FinanceDocumentStatus.Posted, posted.Status);
     Assert.Equal(350, await BalanceAsync(db, data.MoneyAccountId));
     Assert.Empty(db.StockMovements);
-    Assert.NotNull(posted.JournalEntryId);
-    Assert.NotNull(posted.MoneyLedgerEntryId);
-    var ledger = await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceDocumentId == posted.Id);
-    Assert.Equal(MoneyLedgerSourceType.CustomerReceipt, ledger.SourceType);
+    Assert.NotNull(posted.PaymentId);
+    Assert.NotNull(posted.PaymentJournalEntryId);
+    Assert.Empty(db.CustomerReceiptDraftAllocations);
+    var ledger = await db.MoneyLedgerEntries.SingleAsync(entry => entry.SourceDocumentId == posted.PaymentId);
+    Assert.Equal(MoneyLedgerSourceType.Payment, ledger.SourceType);
     Assert.Equal(350, ledger.Amount);
-    Assert.Equal(posted.Id, ledger.SourceDocumentId);
+    Assert.Equal(posted.PaymentId, ledger.SourceDocumentId);
 
     var journal = await db.JournalEntries.Include(entry => entry.Lines)
-      .SingleAsync(entry => entry.Id == posted.JournalEntryId);
+      .SingleAsync(entry => entry.Id == posted.PaymentJournalEntryId);
     Assert.Equal(data.MoneyAccountGlId, journal.Lines.Single(line => line.DebitBaseAmount > 0).AccountId);
     Assert.Equal(data.ReceivableAccountId, journal.Lines.Single(line => line.CreditBaseAmount > 0).AccountId);
     Assert.Equal(350, journal.Lines.Sum(line => line.DebitBaseAmount));
     Assert.Equal(350, journal.Lines.Sum(line => line.CreditBaseAmount));
-    Assert.Equal(posted.Id, journal.SourceCustomerReceipt!.Id);
+    Assert.Equal(posted.PaymentId, journal.SourcePayment!.Id);
+
+    var payment = await new PaymentService(db).GetAsync(posted.PaymentId!.Value, default);
+    Assert.Equal(PaymentOrigin.CustomerReceipt, payment.Origin);
+    Assert.Equal(posted.Id, payment.OriginSourceId);
+    Assert.Equal(posted.DocumentNumber, payment.OriginSourceDocumentNumber);
 
     var sales = CreateSalesService(db);
     var firstInvoice = await sales.GetInvoiceAsync(data.InvoiceOneId, default);
-    Assert.Equal(300, firstInvoice.ReceivedAmount);
+    Assert.Equal(300, firstInvoice.CollectedAmount);
     Assert.Equal(200, firstInvoice.OutstandingAmount);
     Assert.Equal(SalesInvoicePaymentStatus.PartiallyPaid, firstInvoice.PaymentStatus);
-    Assert.Equal(posted.Id, Assert.Single(firstInvoice.Receipts).CustomerReceiptId);
+    Assert.Equal(posted.PaymentId, Assert.Single(firstInvoice.Payments).PaymentId);
     var secondInvoice = await sales.GetInvoiceAsync(data.InvoiceTwoId, default);
-    Assert.Equal(50, secondInvoice.ReceivedAmount);
+    Assert.Equal(50, secondInvoice.CollectedAmount);
     Assert.Equal(200, secondInvoice.OutstandingAmount);
 
     var accounting = await new AccountingService(db).GetJournalAsync(journal.Id, default);
-    Assert.Equal(posted.Id, accounting.SourceCustomerReceiptId);
+    Assert.Equal(posted.PaymentId, accounting.SourcePaymentId);
     var reverse = await Assert.ThrowsAsync<BadRequestException>(() =>
       new AccountingService(db).ReverseJournalAsync(journal.Id, default));
     Assert.Equal(ErrorCodes.Finance.JournalDirectReversalNotAllowed, reverse.Code);
@@ -116,7 +122,7 @@ public sealed class CustomerReceiptWorkflowTests
     var invoice = await CreateSalesService(db).GetInvoiceAsync(data.InvoiceOneId, default);
     Assert.Equal(0, invoice.OutstandingAmount);
     Assert.Equal(SalesInvoicePaymentStatus.Paid, invoice.PaymentStatus);
-    Assert.Equal(2, invoice.Receipts.Count);
+    Assert.Equal(2, invoice.Payments.Count);
     Assert.Equal(ErrorCodes.Finance.ReceiptAllocationExceedsOutstanding,
       (await Assert.ThrowsAsync<BadRequestException>(() => service.CreateCustomerReceiptAsync(
         Receipt(data, 1, [new(data.InvoiceOneId, 1)]), data.OperatorUserId, default))).Code);
@@ -228,7 +234,7 @@ public sealed class CustomerReceiptWorkflowTests
     Assert.Equal(1310, foreign.ExchangeRate);
     Assert.Equal(131_000, foreign.BaseTotalAmount);
     Assert.Equal(131_000, (await db.MoneyLedgerEntries.SingleAsync(
-      entry => entry.SourceDocumentId == foreign.Id)).BaseAmount);
+      entry => entry.SourceDocumentId == foreign.PaymentId)).BaseAmount);
 
     Assert.Equal(ErrorCodes.Finance.ReceiptExchangeRateMismatch,
       (await Assert.ThrowsAsync<BadRequestException>(() => service.CreateCustomerReceiptAsync(
@@ -240,7 +246,7 @@ public sealed class CustomerReceiptWorkflowTests
   }
 
   [Fact]
-  public async Task Accounting_configuration_failure_is_atomic_and_list_uses_shared_pagination()
+  public async Task Missing_invoice_receivable_account_is_atomic_and_list_uses_shared_pagination()
   {
     await using var db = CreateDb();
     var data = await SeedAsync(db);
@@ -251,12 +257,14 @@ public sealed class CustomerReceiptWorkflowTests
       Receipt(data, 20, [new(data.InvoiceOneId, 20)]), data.OperatorUserId, default);
     await service.CreateCustomerReceiptAsync(
       Receipt(data, 30, [new(data.InvoiceOneId, 30)]), data.OperatorUserId, default);
-    var invalidAccounting = CreateService(db, "missing-ar");
+    var invoiceWithoutReceivable = await db.SalesInvoices.SingleAsync(item => item.Id == data.InvoiceOneId);
+    invoiceWithoutReceivable.AccountsReceivableAccountId = null;
+    await db.SaveChangesAsync();
 
     var exception = await Assert.ThrowsAsync<BadRequestException>(() =>
-      invalidAccounting.PostCustomerReceiptAsync(first.Id, data.OperatorUserId, default));
+      service.PostCustomerReceiptAsync(first.Id, data.OperatorUserId, default));
 
-    Assert.Equal(ErrorCodes.Finance.AccountMappingInvalid, exception.Code);
+    Assert.Equal(ErrorCodes.Finance.PaymentReceivableAccountMissing, exception.Code);
     Assert.Empty(db.MoneyLedgerEntries);
     Assert.Empty(db.JournalEntries);
     Assert.Equal(0, await PostedReceivedAsync(db, data.InvoiceOneId));
@@ -276,6 +284,165 @@ public sealed class CustomerReceiptWorkflowTests
     Assert.Equal(3, page.TotalCount);
     Assert.Equal(2, page.Page);
     Assert.Equal(2, page.TotalPages);
+  }
+
+  [Fact]
+  public async Task Payment_core_enforces_customer_branch_currency_and_source_invoice_ownership()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var payments = new PaymentService(db);
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    CreatePaymentCommand Command(
+      Guid customerId,
+      Guid branchId,
+      Guid currencyId,
+      PaymentOrigin origin,
+      Guid? sourceInvoiceId,
+      params PaymentAllocationCommand[] allocations) => new(
+        branchId, customerId, today, currencyId, origin, sourceInvoiceId, null,
+        allocations,
+        [new PaymentMoneyLineCommand(data.MoneyAccountId, allocations.Sum(item => item.Amount), 1,
+          PaymentMoneyDirection.Collection)]);
+
+    var customerMismatch = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.CustomerReceipt, null,
+        new PaymentAllocationCommand(data.OtherCustomerInvoiceId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentCustomerMismatch, customerMismatch.Code);
+
+    var branchMismatch = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, Guid.NewGuid(), data.BaseCurrencyId, PaymentOrigin.CustomerReceipt, null,
+        new PaymentAllocationCommand(data.InvoiceOneId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentBranchMismatch, branchMismatch.Code);
+
+    var currencyMismatch = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.ForeignCurrencyId, PaymentOrigin.CustomerReceipt, null,
+        new PaymentAllocationCommand(data.InvoiceOneId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentCurrencyMismatch, currencyMismatch.Code);
+
+    var directSourceMismatch = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.SalesInvoice,
+        data.InvoiceOneId, new PaymentAllocationCommand(data.InvoiceTwoId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentSourceInvoiceMismatch, directSourceMismatch.Code);
+
+    var directWithoutAllocation = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.SalesInvoice,
+        data.InvoiceOneId), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentAllocationsRequired, directWithoutAllocation.Code);
+
+    var directWithMultipleAllocations = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.SalesInvoice,
+        data.InvoiceOneId, new PaymentAllocationCommand(data.InvoiceOneId, 10),
+        new PaymentAllocationCommand(data.InvoiceTwoId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentSourceInvoiceMismatch, directWithMultipleAllocations.Code);
+
+    var posSourceMismatch = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.Pos,
+        data.InvoiceOneId, new PaymentAllocationCommand(data.InvoiceTwoId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentSourceInvoiceMismatch, posSourceMismatch.Code);
+
+    var posWithMultipleAllocations = await Assert.ThrowsAsync<BadRequestException>(() => payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.Pos,
+        data.InvoiceOneId, new PaymentAllocationCommand(data.InvoiceOneId, 10),
+        new PaymentAllocationCommand(data.InvoiceTwoId, 10)), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentSourceInvoiceMismatch, posWithMultipleAllocations.Code);
+
+    var receiptPayment = await payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.CustomerReceipt, null,
+        new PaymentAllocationCommand(data.InvoiceOneId, 50),
+        new PaymentAllocationCommand(data.InvoiceTwoId, 50)), data.OperatorUserId, default);
+    var posPayment = await payments.CreateAsync(
+      Command(data.CustomerId, data.BranchId, data.BaseCurrencyId, PaymentOrigin.Pos,
+        data.InvoiceOneId, new PaymentAllocationCommand(data.InvoiceOneId, 25)), data.OperatorUserId, default);
+    await db.SaveChangesAsync();
+
+    Assert.Equal(2, receiptPayment.Allocations.Count);
+    Assert.Single(posPayment.Allocations);
+    Assert.Equal(data.InvoiceOneId, posPayment.Allocations.Single().SalesInvoiceId);
+  }
+
+  [Fact]
+  public async Task Direct_payment_edit_and_delete_regenerate_effects_on_the_same_payment()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var payments = new PaymentService(db);
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    var created = await payments.CreateInvoicePaymentAsync(data.InvoiceOneId,
+      new InvoicePaymentRequest(today, data.MoneyAccountId, 100, null, "Deposit"),
+      data.OperatorUserId, default);
+    Assert.Equal("PAY-000001", created.DocumentNumber);
+    var originalJournalId = created.JournalEntryId;
+
+    var wrongSource = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.UpdateInvoicePaymentAsync(data.InvoiceTwoId, created.Id,
+        new UpdateInvoicePaymentRequest(today, data.MoneyAccountId, 80, null, "Correction",
+          "Wrong invoice", created.UpdatedAtUtc), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentSourceInvoiceMismatch, wrongSource.Code);
+
+    var updated = await payments.UpdateInvoicePaymentAsync(data.InvoiceOneId, created.Id,
+      new UpdateInvoicePaymentRequest(today, data.MoneyAccountId, 80, null, "Corrected deposit",
+        "Correct amount", created.UpdatedAtUtc), data.OperatorUserId, default);
+
+    Assert.Equal(created.Id, updated.Id);
+    Assert.Equal(created.DocumentNumber, updated.DocumentNumber);
+    Assert.Equal(80, updated.Amount);
+    Assert.NotEqual(originalJournalId, updated.JournalEntryId);
+    Assert.False(await db.JournalEntries.AnyAsync(item => item.Id == originalJournalId));
+    Assert.Equal(80, await PostedReceivedAsync(db, data.InvoiceOneId));
+
+    await payments.DeleteInvoicePaymentAsync(data.InvoiceOneId, updated.Id,
+      new DeletePaymentRequest("Entered twice", updated.UpdatedAtUtc), data.OperatorUserId, default);
+
+    Assert.False(await db.Payments.AnyAsync(item => item.Id == updated.Id));
+    var deleted = await db.Payments.IgnoreQueryFilters().SingleAsync(item => item.Id == updated.Id);
+    Assert.True(deleted.IsDeleted);
+    Assert.Null(deleted.JournalEntryId);
+    Assert.Empty(db.PaymentAllocations);
+    Assert.Empty(db.PaymentMoneyLines);
+    Assert.Empty(db.MoneyLedgerEntries);
+    Assert.Equal(2, await db.ActivityLogs.CountAsync(item => item.EntityId == updated.Id));
+  }
+
+  [Fact]
+  public async Task Customer_account_summary_and_statement_are_derived_from_invoices_and_allocations()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var payments = new PaymentService(db);
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    await payments.CreateAsync(new CreatePaymentCommand(
+      data.BranchId, data.CustomerId, today, data.BaseCurrencyId, PaymentOrigin.CustomerReceipt,
+      null, "Account settlement",
+      [new(data.InvoiceOneId, 500), new(data.InvoiceTwoId, 50)],
+      [new(data.MoneyAccountId, 550, 1, PaymentMoneyDirection.Collection)]),
+      data.OperatorUserId, default);
+    await db.SaveChangesAsync();
+
+    var reader = new CustomerAccountReader(db);
+    var summary = await reader.GetSummaryAsync(data.CustomerId, default);
+    Assert.Equal(197_750, summary.TotalReceivable);
+    Assert.Equal(550, summary.TotalCollected);
+    Assert.Equal(197_200, summary.NetBalance);
+    Assert.Equal(197_200, summary.Outstanding);
+    Assert.Equal(0, summary.Credit);
+    Assert.Equal(2, summary.Currencies.Count);
+
+    var statement = await reader.GetStatementAsync(data.CustomerId, new CustomerAccountStatementQuery
+    {
+      FromDate = today,
+      ToDate = today,
+      PageNumber = 1,
+      PageSize = 25
+    }, default);
+    Assert.Equal(0, statement.OpeningBalance);
+    Assert.Equal(197_200, statement.ClosingBalance);
+    Assert.Equal(5, statement.Entries.Count);
+    Assert.Equal(CustomerAccountEntryType.Invoice, statement.Entries[0].EntryType);
+    Assert.Equal(CustomerAccountEntryType.Payment, statement.Entries[^1].EntryType);
+    Assert.Equal(197_200, statement.Entries[^1].RunningBaseBalance);
   }
 
   private static AppDbContext CreateDb(string? databaseName = null)
@@ -320,8 +487,8 @@ public sealed class CustomerReceiptWorkflowTests
     db.MoneyLedgerEntries.Where(entry => entry.MoneyAccountId == moneyAccountId).SumAsync(entry => entry.Amount);
 
   private static Task<decimal> PostedReceivedAsync(AppDbContext db, Guid invoiceId) =>
-    db.CustomerReceiptAllocations.Where(allocation => allocation.SalesInvoiceId == invoiceId
-      && allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted).SumAsync(allocation => allocation.Amount);
+    db.PaymentAllocations.Where(allocation => allocation.SalesInvoiceId == invoiceId)
+      .SumAsync(allocation => allocation.Amount);
 
   private static async Task<TestData> SeedAsync(AppDbContext db)
   {
@@ -358,6 +525,7 @@ public sealed class CustomerReceiptWorkflowTests
     };
     db.AddRange(manager, viewer, outsider, iqd, usd, business, branch, customer, otherCustomer,
       inactiveCustomer, nonCustomer, moneyGl, foreignMoneyGl, receivable, moneyAccount, foreignMoneyAccount);
+    db.PaymentDocumentCounters.Add(new PaymentDocumentCounterEntity { Id = 1, NextValue = 1 });
     await db.SaveChangesAsync();
     foreach (var account in new[] { moneyAccount, foreignMoneyAccount })
     {
@@ -377,6 +545,8 @@ public sealed class CustomerReceiptWorkflowTests
     var draftInvoice = Invoice("SI-000004", customer, branch, iqd, iqd, manager, 100, 1, SalesInvoiceStatus.Draft);
     var foreignInvoice = Invoice("SI-000005", customer, branch, usd, iqd, manager, 100, 1310, SalesInvoiceStatus.Posted);
     var mismatchInvoice = Invoice("SI-000006", customer, branch, usd, iqd, manager, 50, 1320, SalesInvoiceStatus.Posted);
+    foreach (var invoice in new[] { invoiceOne, invoiceTwo, otherInvoice, draftInvoice, foreignInvoice, mismatchInvoice })
+      invoice.AccountsReceivableAccountId = receivable.Id;
     db.AddRange(invoiceOne, invoiceTwo, otherInvoice, draftInvoice, foreignInvoice, mismatchInvoice);
     await db.SaveChangesAsync();
     return new TestData(manager.Id, viewer.Id, outsider.Id, customer.Id, inactiveCustomer.Id, nonCustomer.Id,

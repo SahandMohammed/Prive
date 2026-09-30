@@ -52,7 +52,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
       <div className="h-16 px-4 shrink-0 border-b border-sidebar-border/60 flex items-center justify-between">
         <NavLink to="/dashboard" className="flex items-center gap-3 min-w-0">
           {/* Geometric Diamond Emblem */}
-          <div className="size-9 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 flex items-center justify-center shrink-0 shadow-xs">
+          <div className="size-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
             <svg
               className="size-5"
               viewBox="0 0 24 24"
@@ -281,7 +281,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
           >
             <div className="flex items-center gap-3 min-w-0">
               {/* User Avatar Circle */}
-              <div className="size-9 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+              <div className="size-9 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
                 {userInitials}
               </div>
 
@@ -305,7 +305,7 @@ export function Sidebar({ onCloseMobile, isCollapsed = false }: SidebarProps) {
             className="w-64 p-3.5 bg-popover text-popover-foreground border border-border shadow-lg rounded-xl space-y-3 z-50"
           >
             <div className="flex items-center gap-2.5 pb-2.5 border-b border-border/50">
-              <div className="size-9 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-bold text-xs flex items-center justify-center shrink-0">
+              <div className="size-9 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
                 {userInitials}
               </div>
               <div className="flex-1 min-w-0">

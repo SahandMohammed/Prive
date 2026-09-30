@@ -308,22 +308,23 @@ public sealed class DashboardWorkflowTests
         CreatedByUserId = user.Id
       };
 
-      var receipt = new CustomerReceiptEntity
+      var customerPayment = new PaymentEntity
       {
+        BranchId = branch.Id,
         CustomerId = customer.Id,
-        MoneyAccountId = moneyAccount.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
-        DocumentNumber = "REC-001",
-        ReceiptDate = today,
-        Status = FinanceDocumentStatus.Posted,
-        TotalAmount = 40_000m,
-        BaseTotalAmount = 40_000m,
-        CreatedByUserId = user.Id
+        DocumentNumber = "PAY-000001",
+        PaymentDate = today,
+        Amount = 40_000m,
+        BaseAmount = 40_000m,
+        Origin = PaymentOrigin.CustomerReceipt,
+        CreatedByUserId = user.Id,
+        JournalEntryId = Guid.NewGuid()
       };
-      var receiptAlloc = new CustomerReceiptAllocationEntity
+      var customerPaymentAllocation = new PaymentAllocationEntity
       {
-        CustomerReceipt = receipt,
+        Payment = customerPayment,
         SalesInvoice = customerInvoice1,
         Amount = 40_000m,
         BaseAmount = 40_000m
@@ -343,22 +344,23 @@ public sealed class DashboardWorkflowTests
         BaseTotal = 50_000m,
         CreatedByUserId = user.Id
       };
-      var receipt2 = new CustomerReceiptEntity
+      var customerPayment2 = new PaymentEntity
       {
+        BranchId = branch.Id,
         CustomerId = customer.Id,
-        MoneyAccountId = moneyAccount.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
-        DocumentNumber = "REC-002",
-        ReceiptDate = today,
-        Status = FinanceDocumentStatus.Posted,
-        TotalAmount = 50_000m,
-        BaseTotalAmount = 50_000m,
-        CreatedByUserId = user.Id
+        DocumentNumber = "PAY-000002",
+        PaymentDate = today,
+        Amount = 50_000m,
+        BaseAmount = 50_000m,
+        Origin = PaymentOrigin.CustomerReceipt,
+        CreatedByUserId = user.Id,
+        JournalEntryId = Guid.NewGuid()
       };
-      var receiptAlloc2 = new CustomerReceiptAllocationEntity
+      var customerPaymentAllocation2 = new PaymentAllocationEntity
       {
-        CustomerReceipt = receipt2,
+        Payment = customerPayment2,
         SalesInvoice = customerInvoice2,
         Amount = 50_000m,
         BaseAmount = 50_000m
@@ -400,8 +402,8 @@ public sealed class DashboardWorkflowTests
       };
 
       seed.AddRange(
-        customerInvoice1, receipt, receiptAlloc,
-        customerInvoice2, receipt2, receiptAlloc2,
+        customerInvoice1, customerPayment, customerPaymentAllocation,
+        customerInvoice2, customerPayment2, customerPaymentAllocation2,
         purchaseInvoice1, payment, paymentAlloc);
       await seed.SaveChangesAsync();
     }
@@ -498,11 +500,16 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Main", Code = "MAIN", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "user", Role = UserRole.Owner };
+    var customer = new ContactEntity { Name = "Customer", IsCustomer = true };
+    branch.WalkInCustomer = new ContactEntity
+    {
+      Name = "Walk-in Customer", IsCustomer = true, SystemRole = ContactSystemRole.WalkInCustomer
+    };
     var today = BusinessToday();
 
     await using (var seed = new AppDbContext(options))
     {
-      seed.AddRange(branch, currency, user);
+      seed.AddRange(branch, currency, user, customer);
       seed.Add(new BusinessEntity { Name = "Prive", BaseCurrencyId = currency.Id, IsActive = true, IsSetupCompleted = true });
 
       var saleToday = new SalesInvoiceEntity
@@ -510,6 +517,7 @@ public sealed class DashboardWorkflowTests
         BranchId = branch.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
+        CustomerId = customer.Id,
         DocumentNumber = "INV-TR-1",
         InvoiceDate = today,
         Status = SalesInvoiceStatus.Posted,
@@ -523,6 +531,7 @@ public sealed class DashboardWorkflowTests
         BranchId = branch.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
+        CustomerId = customer.Id,
         DocumentNumber = "INV-TR-2",
         InvoiceDate = today.AddDays(-3),
         Status = SalesInvoiceStatus.Posted,
@@ -612,11 +621,16 @@ public sealed class DashboardWorkflowTests
     var branch = new BranchEntity { Name = "Main", Code = "MAIN", IsMainBranch = true };
     var currency = new CurrencyEntity { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" };
     var user = new UserEntity { Username = "user", Role = UserRole.Owner };
+    var customer = new ContactEntity { Name = "Customer", IsCustomer = true };
+    branch.WalkInCustomer = new ContactEntity
+    {
+      Name = "Walk-in Customer", IsCustomer = true, SystemRole = ContactSystemRole.WalkInCustomer
+    };
     var now = DateTime.UtcNow;
 
     await using (var seed = new AppDbContext(options))
     {
-      seed.AddRange(branch, currency, user);
+      seed.AddRange(branch, currency, user, customer);
       seed.Add(new BusinessEntity { Name = "Prive", BaseCurrencyId = currency.Id, IsActive = true, IsSetupCompleted = true });
 
       var sale = new SalesInvoiceEntity
@@ -624,6 +638,7 @@ public sealed class DashboardWorkflowTests
         BranchId = branch.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
+        CustomerId = customer.Id,
         DocumentNumber = "INV-RECENT",
         InvoiceDate = DateOnly.FromDateTime(now),
         Status = SalesInvoiceStatus.Posted,
@@ -639,6 +654,7 @@ public sealed class DashboardWorkflowTests
         BranchId = branch.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
+        CustomerId = customer.Id,
         DocumentNumber = "POS-RECENT",
         InvoiceDate = DateOnly.FromDateTime(now),
         Status = SalesInvoiceStatus.Posted,

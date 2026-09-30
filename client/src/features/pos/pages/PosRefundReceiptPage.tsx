@@ -60,7 +60,7 @@ export function PosRefundReceiptPage() {
           <div className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
             <Info label="Original sale" value={refund.posSaleDocumentNumber} />
             <Info label="Invoice" value={refund.salesInvoiceDocumentNumber} />
-            <Info label="Customer" value={refund.customerName ?? 'Walk-in'} />
+            <Info label="Customer" value={refund.customerName} />
             <Info label="Branch" value={`${refund.branchCode} — ${refund.branchName}`} />
             <Info label="Session" value={refund.posSessionNumber} />
             <Info label="Reason" value={reasonLabels[refund.reason]} />

@@ -147,7 +147,7 @@ export function MoneyAccountsPage() {
             One cashbox or bank account per currency. Balances come only from posted Money Ledger movements.
           </p>
         </div>
-        <Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={openCreate}>
+        <Button className="gap-1.5" onClick={openCreate}>
           <Plus className="size-4" />
           New Money Account
         </Button>
@@ -247,7 +247,7 @@ export function MoneyAccountsPage() {
                       <p>No Money Accounts found.</p>
                       <Button
                         size="sm"
-                        className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                        className="gap-1.5"
                         onClick={openCreate}
                       >
                         <Plus className="size-4" /> Add Money Account
@@ -627,7 +627,7 @@ function MoneyAccountFormDialog({
               <Button type="button" variant="outline" onClick={closeDialog} disabled={save.isPending}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={save.isPending}>
+              <Button type="submit" disabled={save.isPending}>
                 {save.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
                 {account ? 'Save changes' : 'Add account'}
               </Button>
@@ -740,7 +740,6 @@ function AccountAccessDialog({
               </Button>
               <Button
                 type="submit"
-                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={replaceAccess.isPending}
               >
                 {replaceAccess.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
@@ -850,7 +849,6 @@ function OpeningBalanceDialog({
             </Button>
             <Button
               type="submit"
-              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={opening.isPending}
             >
               {opening.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}

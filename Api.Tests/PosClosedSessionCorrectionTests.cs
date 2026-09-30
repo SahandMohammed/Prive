@@ -174,7 +174,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(1, second.AddedZReports);
     Assert.Equal(1, second.ModifiedClosingCounts);
     Assert.Contains(nameof(PosSessionEntity.UpdatedAtUtc), second.ModifiedSessionProperties);
-    Assert.Equal(1, second.AddedActivityLogs);
+    Assert.Equal(2, second.AddedActivityLogs); // Sales Invoice and its owned Payment are both audited.
   }
 
   [Fact]

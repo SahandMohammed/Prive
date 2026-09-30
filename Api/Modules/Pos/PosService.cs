@@ -22,18 +22,21 @@ public sealed class PosService
   private readonly SalesService _sales;
   private readonly PosSettlementService _settlements;
   private readonly PosSessionService _sessions;
+  private readonly PaymentService _payments;
 
   public PosService(
     AppDbContext db,
     SalesService sales,
     FinanceService finance,
     PosSessionService sessions,
-    PosSettlementService? settlements = null)
+    PosSettlementService? settlements = null,
+    PaymentService? payments = null)
   {
     _db = db;
     _sales = sales;
     _sessions = sessions;
     _settlements = settlements ?? new PosSettlementService(db, finance, sessions);
+    _payments = payments ?? new PaymentService(db);
   }
 
   public async Task<PosSetupResponse> GetSetupAsync(Guid userId, CancellationToken ct)
@@ -224,7 +227,8 @@ public sealed class PosService
     PosCustomerListQuery request,
     CancellationToken ct)
   {
-    var query = _db.Contacts.AsNoTracking().Where(contact => contact.IsActive && contact.IsCustomer);
+    var query = _db.Contacts.AsNoTracking().Where(contact => contact.IsActive
+      && contact.IsCustomer && contact.SystemRole == null);
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
       var search = request.Search.Trim().ToLower();
@@ -289,14 +293,15 @@ public sealed class PosService
         sale.SalesInvoice.BranchId,
         sale.SalesInvoice.Branch.Name,
         sale.SalesInvoice.CustomerId,
-        sale.SalesInvoice.Customer == null ? null : sale.SalesInvoice.Customer.Name,
+        sale.SalesInvoice.Customer.Name,
         sale.PosSessionId,
         sale.PosSession == null ? null : sale.PosSession.SessionNumber,
         sale.SalesInvoice.Total,
         (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount),
-        sale.SalesInvoice.BaseTotal - ((sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount))
-          - (sale.SalesInvoice.ReceiptAllocations.Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted).Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
+        Math.Max(sale.SalesInvoice.BaseTotal
+          - (sale.SalesInvoice.PaymentAllocations.Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
           - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m),
+          0m),
         sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
           .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m,
         sale.SalesInvoice.BaseTotal - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
@@ -438,8 +443,16 @@ public sealed class PosService
       request.Change), userId, management: false, ct, session, business, rateAtUtc);
 
     var documentNumber = await NextDocumentNumberAsync(ct);
+    var branch = await _db.Branches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.BranchId, ct)
+      ?? throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
+    var customerId = request.CustomerId ?? branch.WalkInCustomerId;
+    if (request.PaymentMode is PosPaymentMode.Partial or PosPaymentMode.Credit
+      && !await _db.Contacts.AsNoTracking().AnyAsync(contact => contact.Id == customerId
+        && contact.IsActive && contact.IsCustomer && contact.SystemRole == null, ct))
+      throw new BadRequestException(ErrorCodes.Sales.CustomerInvalid,
+        "Partial and credit POS Sales require an active real customer.");
     var invoiceRequest = new SalesInvoiceDraftRequest(
-      request.CustomerId,
+      customerId,
       date,
       request.BranchId,
       request.WarehouseId,
@@ -448,7 +461,7 @@ public sealed class PosService
       "Immediate POS sale",
       salesLines);
     var invoice = await _sales.PrepareImmediateSaleAsync(
-      invoiceRequest, documentNumber, userId, settlement.JournalLines, ct);
+      invoiceRequest, documentNumber, userId, ct);
     var completedAt = invoice.PostedAtUtc!.Value;
     var sale = new PosSaleEntity
     {
@@ -462,9 +475,31 @@ public sealed class PosService
       RequestFingerprint = fingerprint
     };
 
-    _settlements.AddEffects(settlement, sale, invoice, date, userId, completedAt);
     _db.PosSales.Add(sale);
 
+    var settledBase = Money(settlement.Tenders.Sum(tender => tender.BaseAmount)
+      - (settlement.Change?.BaseAmount ?? 0m));
+    if (settledBase > 0)
+    {
+      var moneyLines = settlement.Tenders.Select(tender => new PaymentMoneyLineCommand(
+        tender.Account.Id, tender.Request.Amount, tender.ExchangeRate, PaymentMoneyDirection.Collection)).ToList();
+      if (settlement.Change is not null)
+        moneyLines.Add(new PaymentMoneyLineCommand(settlement.Change.Account.Id,
+          settlement.Change.Request.Amount, settlement.Change.ExchangeRate, PaymentMoneyDirection.Change));
+      var payment = await _payments.CreateAsync(new CreatePaymentCommand(
+        invoice.BranchId,
+        invoice.CustomerId,
+        date,
+        invoice.CurrencyId,
+        PaymentOrigin.Pos,
+        invoice.Id,
+        "POS checkout settlement",
+        [new PaymentAllocationCommand(invoice.Id, settledBase)],
+        moneyLines), userId, ct);
+      sale.Payment = payment;
+      sale.PaymentId = payment.Id;
+      _settlements.AddEffects(settlement, sale, payment);
+    }
     await _db.SaveChangesAsync(ct);
     if (transaction is not null) await transaction.CommitAsync(ct);
 
@@ -479,13 +514,15 @@ public sealed class PosService
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Warehouse)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Movements)
-    .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.ReceiptAllocations).ThenInclude(allocation => allocation.CustomerReceipt)
+    .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.PaymentAllocations).ThenInclude(allocation => allocation.Payment)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Product)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Professional)
     .Include(sale => sale.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(sale => sale.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
     .Include(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(sale => sale.Change).ThenInclude(change => change!.PaymentMoneyLine)
     .Include(sale => sale.Refunds).ThenInclude(refund => refund.ApprovedByUser);
 
   private static PosSaleResponse ToResponse(PosSaleEntity sale)
@@ -502,7 +539,7 @@ public sealed class PosService
       tender.TenderedAmount,
       tender.ExchangeRate,
       tender.BaseAmount,
-      tender.MoneyLedgerEntryId)).ToList();
+      tender.PaymentMoneyLine.MoneyLedgerEntryId)).ToList();
     var change = sale.Change is null ? null : new PosChangeResponse(
       sale.Change.Id,
       sale.Change.MoneyAccountId,
@@ -513,18 +550,16 @@ public sealed class PosService
       sale.Change.Amount,
       sale.Change.ExchangeRate,
       sale.Change.BaseAmount,
-      sale.Change.MoneyLedgerEntryId);
+      sale.Change.PaymentMoneyLine.MoneyLedgerEntryId);
     var tenderedBase = Money(tenders.Sum(tender => tender.BaseAmount));
     var changeBase = change?.BaseAmount ?? 0;
     var settledBase = Money(tenderedBase - changeBase);
-    var receiptBase = Money(invoice.ReceiptAllocations
-      .Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-      .Sum(allocation => allocation.BaseAmount));
+    var collectedBase = Money(invoice.PaymentAllocations.Sum(allocation => allocation.BaseAmount));
     var postedRefunds = sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
       .OrderBy(refund => refund.PostedAtUtc).ToList();
     var refundedBase = Money(postedRefunds.Sum(refund => refund.TotalRefundBase));
     var receivableReversalBase = Money(postedRefunds.Sum(refund => refund.ReceivableReversalBase));
-    var outstandingBase = Math.Max(Money(invoice.BaseTotal - settledBase - receiptBase - receivableReversalBase), 0);
+    var outstandingBase = Math.Max(Money(invoice.BaseTotal - collectedBase - receivableReversalBase), 0);
     var remainingRefundableBase = Math.Max(Money(invoice.BaseTotal - refundedBase), 0);
     var refundStatus = refundedBase <= 0
       ? PosRefundState.NotRefunded
@@ -544,7 +579,7 @@ public sealed class PosService
       sale.PosSessionId,
       invoice.Id,
       invoice.CustomerId,
-      invoice.Customer?.Name,
+      invoice.Customer.Name,
       invoice.BranchId,
       invoice.Branch.Code,
       invoice.Branch.Name,

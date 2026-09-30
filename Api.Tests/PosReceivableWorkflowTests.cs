@@ -31,17 +31,15 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(PosPaymentMode.Partial, sale.PaymentMode);
     Assert.Equal(2, sale.Tenders.Count);
 
-    var journal = await db.JournalEntries.Include(entry => entry.Lines)
+    var invoiceJournal = await db.JournalEntries.Include(entry => entry.Lines)
       .SingleAsync(entry => entry.Id == sale.JournalEntryId);
-    Assert.Equal(6_500, journal.Lines.Single(line => line.AccountId != data.IqdMoneyGlId
-      && line.DebitBaseAmount == 6_500).DebitBaseAmount);
-    Assert.Equal(3_500, journal.Lines.Single(line => line.AccountId == data.IqdMoneyGlId).DebitBaseAmount);
-    Assert.Equal(15_000, journal.Lines.Single(line => line.AccountId == data.ReceivableGlId).DebitBaseAmount);
-    Assert.Equal(25_000, journal.Lines.Single(line => line.AccountId == data.ServiceRevenueGlId).CreditBaseAmount);
-    Assert.Equal(journal.Lines.Sum(line => line.DebitBaseAmount), journal.Lines.Sum(line => line.CreditBaseAmount));
+    Assert.Equal(25_000, invoiceJournal.Lines.Single(line => line.AccountId == data.ReceivableGlId).DebitBaseAmount);
+    Assert.Equal(25_000, invoiceJournal.Lines.Single(line => line.AccountId == data.ServiceRevenueGlId).CreditBaseAmount);
+    Assert.Equal(invoiceJournal.Lines.Sum(line => line.DebitBaseAmount), invoiceJournal.Lines.Sum(line => line.CreditBaseAmount));
 
+    var paymentId = (await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId;
     var posLedger = await db.MoneyLedgerEntries
-      .Where(entry => entry.SourceType == MoneyLedgerSourceType.PosSale && entry.SourceDocumentId == sale.Id)
+      .Where(entry => entry.SourceType == MoneyLedgerSourceType.Payment && entry.SourceDocumentId == paymentId)
       .ToListAsync();
     Assert.Equal(2, posLedger.Count);
     Assert.Equal(10_000, posLedger.Sum(entry => entry.BaseAmount));
@@ -50,7 +48,7 @@ public sealed partial class PosWorkflowTests
     var outstanding = Assert.Single(await finance.GetOutstandingSalesInvoicesAsync(
       data.CustomerId, data.IqdCurrencyId, default));
     Assert.Equal(sale.SalesInvoiceId, outstanding.Id);
-    Assert.Equal(10_000, outstanding.ReceivedAmount);
+    Assert.Equal(10_000, outstanding.CollectedAmount);
     Assert.Equal(15_000, outstanding.OutstandingAmount);
 
     var receiptDraft = await finance.CreateCustomerReceiptAsync(
@@ -68,7 +66,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(FinanceDocumentStatus.Posted, receipt.Status);
 
     var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
-    Assert.Equal(25_000, invoice.ReceivedAmount);
+    Assert.Equal(25_000, invoice.CollectedAmount);
     Assert.Equal(0, invoice.OutstandingAmount);
     Assert.Equal(SalesInvoicePaymentStatus.Paid, invoice.PaymentStatus);
 
@@ -96,8 +94,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(PosPaymentMode.Credit, sale.PaymentMode);
     Assert.Empty(sale.Tenders);
     Assert.Null(sale.Change);
-    Assert.False(await db.MoneyLedgerEntries.AnyAsync(entry =>
-      entry.SourceType == MoneyLedgerSourceType.PosSale && entry.SourceDocumentId == sale.Id));
+    Assert.Null((await db.PosSales.SingleAsync(item => item.Id == sale.Id)).PaymentId);
 
     var journal = await db.JournalEntries.Include(entry => entry.Lines)
       .SingleAsync(entry => entry.Id == sale.JournalEntryId);
@@ -108,7 +105,7 @@ public sealed partial class PosWorkflowTests
 
     var outstanding = Assert.Single(await CreateReceivableFinanceService(db).GetOutstandingSalesInvoicesAsync(
       data.CustomerId, data.IqdCurrencyId, default));
-    Assert.Equal(0, outstanding.ReceivedAmount);
+    Assert.Equal(0, outstanding.CollectedAmount);
     Assert.Equal(25_000, outstanding.OutstandingAmount);
 
     var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);

@@ -13,7 +13,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
@@ -119,7 +119,7 @@ export function ContactsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Contacts</h1>
           <p className="mt-1 text-sm text-slate-500">Manage the people and businesses used by sales and purchases.</p>
         </div>
-        <Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={openCreate}>
+        <Button className="gap-1.5" onClick={openCreate}>
           <Plus className="size-4" /> Add contact
         </Button>
       </div>
@@ -196,7 +196,9 @@ export function ContactsPage() {
                         {contact.kind === 0 ? <UserRound className="size-4" /> : <Building2 className="size-4" />}
                       </span>
                       <div>
-                        <p className="font-medium text-slate-800 dark:text-slate-200">{contact.name}</p>
+                        {contact.isCustomer
+                          ? <Link className="font-medium text-primary hover:underline" to={`/finance/customers/${contact.id}/account`}>{contact.name}</Link>
+                          : <p className="font-medium text-slate-800 dark:text-slate-200">{contact.name}</p>}
                         <p className="text-xs text-slate-500">{contact.kind === 0 ? 'Individual' : 'Business'}</p>
                       </div>
                     </div>

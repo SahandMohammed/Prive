@@ -121,7 +121,7 @@ export function ExpenseCategoriesPage() {
             </p>
           </div>
         </div>
-        <Button onClick={openCreateDialog} className="bg-primarytext-primary-foregroundhover:bg-primary/90">
+        <Button onClick={openCreateDialog}>
           <Plus className="size-4 mr-1.5" />
           Add Category
         </Button>
@@ -357,7 +357,6 @@ export function ExpenseCategoriesPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                     disabled={saveCategory.isPending}
                   >
                     {saveCategory.isPending ? 'Saving…' : 'Save Category'}
