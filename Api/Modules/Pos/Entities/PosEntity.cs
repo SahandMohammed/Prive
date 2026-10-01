@@ -54,7 +54,7 @@ public sealed class PosSessionEntity
   public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
   public ICollection<PosSessionOpeningCountEntity> OpeningCounts { get; set; } = new List<PosSessionOpeningCountEntity>();
   public ICollection<PosSessionClosingCountEntity> ClosingCounts { get; set; } = new List<PosSessionClosingCountEntity>();
-  public ICollection<PosSaleEntity> Sales { get; set; } = new List<PosSaleEntity>();
+  public ICollection<PosContextEntity> PosContexts { get; set; } = new List<PosContextEntity>();
   public ICollection<PosRefundEntity> Refunds { get; set; } = new List<PosRefundEntity>();
   public ICollection<PosDrawerMovementEntity> DrawerMovements { get; set; } = new List<PosDrawerMovementEntity>();
   public PosZReportEntity? ZReport { get; set; }
@@ -185,17 +185,14 @@ public sealed class PosZDrawerSummaryEntity
   public decimal AdjustmentBaseAmount { get; set; }
 }
 
-public sealed class PosSaleEntity
+public sealed class PosContextEntity
 {
-  public Guid Id { get; set; } = Guid.NewGuid();
-  public string DocumentNumber { get; set; } = string.Empty;
   public Guid SalesInvoiceId { get; set; }
   public SalesInvoiceEntity SalesInvoice { get; set; } = null!;
   public Guid? PaymentId { get; set; }
   public PaymentEntity? Payment { get; set; }
-  public Guid? PosSessionId { get; set; }
-  public PosSessionEntity? PosSession { get; set; }
-  public PosSaleStatus Status { get; set; } = PosSaleStatus.Completed;
+  public Guid PosSessionId { get; set; }
+  public PosSessionEntity PosSession { get; set; } = null!;
   public Guid CashierUserId { get; set; }
   public UserEntity CashierUser { get; set; } = null!;
   public DateTime CompletedAtUtc { get; set; } = DateTime.UtcNow;
@@ -209,8 +206,8 @@ public sealed class PosSaleEntity
 public sealed class PosTenderEntity
 {
   public Guid Id { get; set; } = Guid.NewGuid();
-  public Guid PosSaleId { get; set; }
-  public PosSaleEntity PosSale { get; set; } = null!;
+  public Guid SalesInvoiceId { get; set; }
+  public PosContextEntity PosContext { get; set; } = null!;
   public int Sequence { get; set; }
   public Guid MoneyAccountId { get; set; }
   public MoneyAccountEntity MoneyAccount { get; set; } = null!;
@@ -224,8 +221,8 @@ public sealed class PosTenderEntity
 public sealed class PosChangeEntity
 {
   public Guid Id { get; set; } = Guid.NewGuid();
-  public Guid PosSaleId { get; set; }
-  public PosSaleEntity PosSale { get; set; } = null!;
+  public Guid SalesInvoiceId { get; set; }
+  public PosContextEntity PosContext { get; set; } = null!;
   public Guid MoneyAccountId { get; set; }
   public MoneyAccountEntity MoneyAccount { get; set; } = null!;
   public decimal Amount { get; set; }
@@ -239,10 +236,9 @@ public sealed class PosRefundEntity
 {
   public Guid Id { get; set; } = Guid.NewGuid();
   public string DocumentNumber { get; set; } = string.Empty;
-  public Guid PosSaleId { get; set; }
-  public PosSaleEntity PosSale { get; set; } = null!;
   public Guid SalesInvoiceId { get; set; }
   public SalesInvoiceEntity SalesInvoice { get; set; } = null!;
+  public PosContextEntity PosContext { get; set; } = null!;
   public Guid BranchId { get; set; }
   public BranchEntity Branch { get; set; } = null!;
   public Guid PosSessionId { get; set; }
@@ -342,11 +338,6 @@ public sealed class PosRefundTenderEntity
   public decimal BaseAmount { get; set; }
   public Guid MoneyLedgerEntryId { get; set; }
   public MoneyLedgerEntryEntity MoneyLedgerEntry { get; set; } = null!;
-}
-
-public enum PosSaleStatus
-{
-  Completed
 }
 
 public enum PosSessionStatus

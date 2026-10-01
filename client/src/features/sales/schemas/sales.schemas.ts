@@ -50,8 +50,20 @@ export const salesInvoiceSchema = z.object({
   exchangeRate: z.number().positive('Exchange rate must be greater than zero').nullable(),
   notes: z.string().max(1000, 'Maximum 1000 characters'),
   lines: z.array(salesLineSchema).min(1, 'Add at least one item'),
+  payments: z.array(z.object({
+    paymentDate: z.string().min(1, 'Payment date is required'),
+    moneyAccountId: requiredId,
+    amount: z.number().positive('Amount must be greater than zero'),
+    exchangeRate: z.number().positive('Exchange rate must be greater than zero').nullable(),
+    notes: z.string().max(1000, 'Maximum 1000 characters'),
+  })),
 }).superRefine((invoice, context) => {
   if (invoice.lines.some((line) => line.lineType === SalesLineType.Product && (line.productId || line.itemId))
     && !z.string().uuid().safeParse(invoice.warehouseId).success)
     context.addIssue({ code: 'custom', path: ['warehouseId'], message: 'Select a warehouse for Product lines' })
+  const invoiceTotal = invoice.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0)
+  const paymentTotal = invoice.payments.reduce((sum, payment) => sum + payment.amount, 0)
+  if (paymentTotal > invoiceTotal) {
+    context.addIssue({ code: 'custom', path: ['payments'], message: 'Embedded Payments cannot exceed the invoice total' })
+  }
 })

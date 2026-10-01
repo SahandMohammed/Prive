@@ -328,7 +328,7 @@ export function PosReceiptPage() {
           <CardTitle>Traceability</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          {canSalesTrace && <Link to={`/sales/invoices/${sale.salesInvoiceId}`}>
+          {canSalesTrace && <Link to={`/sales/invoices/${sale.id}`}>
             <Button variant="outline">
               <ReceiptText />
               Sales source

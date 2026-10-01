@@ -71,7 +71,7 @@ public sealed partial class AppDbContext(DbContextOptions<AppDbContext> options,
   public DbSet<PosZReportEntity> PosZReports => Set<PosZReportEntity>();
   public DbSet<PosZPaymentSummaryEntity> PosZPaymentSummaries => Set<PosZPaymentSummaryEntity>();
   public DbSet<PosZDrawerSummaryEntity> PosZDrawerSummaries => Set<PosZDrawerSummaryEntity>();
-  public DbSet<PosSaleEntity> PosSales => Set<PosSaleEntity>();
+  public DbSet<PosContextEntity> PosContexts => Set<PosContextEntity>();
   public DbSet<PosTenderEntity> PosTenders => Set<PosTenderEntity>();
   public DbSet<PosChangeEntity> PosChanges => Set<PosChangeEntity>();
   public DbSet<PosRefundEntity> PosRefunds => Set<PosRefundEntity>();

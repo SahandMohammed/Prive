@@ -48,7 +48,7 @@ export function PosRefundReceiptPage() {
     <div className="mx-auto max-w-5xl space-y-5 p-5 print:max-w-none print:p-0">
       <header className="flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
-          <Link to={`/pos/sales/${refund.posSaleId}`}><Button variant="ghost" size="icon"><ArrowLeft /></Button></Link>
+          <Link to={`/pos/sales/${refund.salesInvoiceId}`}><Button variant="ghost" size="icon"><ArrowLeft /></Button></Link>
           <div><h1 className="text-2xl font-bold">{refund.isVoid ? 'Void reversal' : 'Refund'} · <span className="font-mono text-primary">{refund.documentNumber}</span></h1><p className="text-sm text-muted-foreground">Posted atomically without changing the original sale.</p></div>
         </div>
         <Button variant="outline" onClick={() => window.print()}><Printer /> Print refund</Button>
@@ -58,7 +58,7 @@ export function PosRefundReceiptPage() {
         <CardHeader className="border-b"><div className="flex items-start justify-between gap-4"><div><CardTitle className="flex items-center gap-2"><ReceiptText /> {business?.logoReference && <img src={business.logoReference} alt="" className="size-7 rounded object-contain" />} {receiptName} {refund.isVoid ? 'Void' : 'Refund'} Receipt</CardTitle><p className="mt-1 text-xs text-muted-foreground">{[receiptContact, receiptAddress].filter(Boolean).join(' · ')}</p><p className="mt-1 font-mono text-lg text-primary">{refund.documentNumber}</p></div><div className="text-right text-sm"><p>{new Date(refund.postedAtUtc).toLocaleString()}</p><p className="text-muted-foreground">Approved by {refund.approvedByUsername}</p></div></div></CardHeader>
         <CardContent className="space-y-6 pt-6">
           <div className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
-            <Info label="Original sale" value={refund.posSaleDocumentNumber} />
+            <Info label="Original sale" value={refund.salesInvoiceDocumentNumber} />
             <Info label="Invoice" value={refund.salesInvoiceDocumentNumber} />
             <Info label="Customer" value={refund.customerName} />
             <Info label="Branch" value={`${refund.branchCode} — ${refund.branchName}`} />
@@ -82,7 +82,7 @@ export function PosRefundReceiptPage() {
       </Card>
 
       <Card className="print:hidden"><CardHeader><CardTitle>Traceability</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">
-        <Link to={`/pos/sales/${refund.posSaleId}`}><Button variant="outline"><ReceiptText /> Original sale</Button></Link>
+        <Link to={`/pos/sales/${refund.salesInvoiceId}`}><Button variant="outline"><ReceiptText /> Original sale</Button></Link>
         {hasCapability(user?.role, 'inventoryTrace') && hasStock && <Link to={`/inventory/ledger?documentNumber=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><PackageSearch /> Stock Ledger</Button></Link>}
         {hasCapability(user?.role, 'financeTrace') && refund.tenders.length > 0 && <Link to={`/finance/money-ledger?documentNumber=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><Landmark /> Money Ledger</Button></Link>}
         {hasCapability(user?.role, 'accountingTrace') && <Link to={`/accounting/journal?search=${encodeURIComponent(refund.documentNumber)}`}><Button variant="outline"><BookOpen /> Accounting journal</Button></Link>}

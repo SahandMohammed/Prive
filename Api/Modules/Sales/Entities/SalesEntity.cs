@@ -73,7 +73,7 @@ public sealed class SalesInvoiceEntity
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
   public ICollection<CustomerReceiptDraftAllocationEntity> ReceiptDraftAllocations { get; set; } = new List<CustomerReceiptDraftAllocationEntity>();
   public ICollection<PaymentAllocationEntity> PaymentAllocations { get; set; } = new List<PaymentAllocationEntity>();
-  public PosSaleEntity? PosSale { get; set; }
+  public PosContextEntity? PosContext { get; set; }
   public ICollection<PosRefundEntity> PosRefunds { get; set; } = new List<PosRefundEntity>();
 }
 

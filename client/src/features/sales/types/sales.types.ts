@@ -141,6 +141,7 @@ export interface SalesInvoicePosTender {
   tenderedAmount: number
   exchangeRate: number
   baseAmount: number
+  paymentMoneyLineId: string
   moneyLedgerEntryId: string
 }
 
@@ -149,15 +150,15 @@ export interface SalesInvoicePosChange extends Omit<SalesInvoicePosTender, 'sequ
 }
 
 export interface SalesInvoicePosContext {
-  saleId: string
-  documentNumber: string
-  posSessionId: string | null
-  posSessionNumber: string | null
-  sessionStatus: number | null
-  saleStatus: number
+  posSessionId: string
+  posSessionNumber: string
+  sessionStatus: number
+  cashierUserId: string
+  cashierUsername: string
+  paymentId: string | null
+  paymentDocumentNumber: string | null
   paymentMode: PosPaymentMode
   completedAtUtc: string
-  sessionCashboxMoneyAccountIds: string[]
   sessionCashboxes: SalesInvoicePosCashbox[]
   tenders: SalesInvoicePosTender[]
   change: SalesInvoicePosChange | null
@@ -226,7 +227,7 @@ export interface SalesInvoiceDraftInput {
     unitPrice: number
     useMasterPrice: boolean
   }[]
-  payments?: { moneyAccountId: string; amount: number; exchangeRate: number | null; notes: string | null }[]
+  payments?: { paymentDate: string; moneyAccountId: string; amount: number; exchangeRate: number | null; notes: string | null }[]
 }
 
 export interface InvoicePaymentInput { paymentDate: string; moneyAccountId: string; amount: number; exchangeRate: number | null; notes: string | null }
@@ -254,16 +255,12 @@ export interface SalesInvoiceFormValues {
   exchangeRate: number | null
   notes: string
   lines: SalesInvoiceLineForm[]
+  payments: { paymentDate: string; moneyAccountId: string; amount: number; exchangeRate: number | null; notes: string }[]
 }
 
-export interface PostedSalesInvoiceInput extends SalesInvoiceDraftInput {
+export interface PostedSalesInvoiceInput extends Omit<SalesInvoiceDraftInput, 'payments'> {
   reason?: string | null
   expectedUpdatedAtUtc: string
-  posSettlement: {
-    paymentMode: PosPaymentMode
-    tenders: { moneyAccountId: string; amount: number }[]
-    change: { moneyAccountId: string; amount: number } | null
-  } | null
 }
 
 export interface SalesInvoiceHistory {

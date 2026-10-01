@@ -221,28 +221,24 @@ public sealed class PosZDrawerSummaryEntityConfiguration : IEntityTypeConfigurat
   }
 }
 
-public sealed class PosSaleEntityConfiguration : IEntityTypeConfiguration<PosSaleEntity>
+public sealed class PosContextEntityConfiguration : IEntityTypeConfiguration<PosContextEntity>
 {
-  public void Configure(EntityTypeBuilder<PosSaleEntity> builder)
+  public void Configure(EntityTypeBuilder<PosContextEntity> builder)
   {
-    builder.ToTable("pos_sales");
-    builder.HasKey(sale => sale.Id);
-    builder.Property(sale => sale.DocumentNumber).HasMaxLength(20).IsRequired();
-    builder.HasIndex(sale => sale.DocumentNumber).IsUnique();
-    builder.Property(sale => sale.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
-    builder.Property(sale => sale.RequestFingerprint).HasMaxLength(64);
-    builder.HasIndex(sale => sale.SalesInvoiceId).IsUnique();
-    builder.HasIndex(sale => sale.PaymentId).IsUnique().HasFilter("\"PaymentId\" IS NOT NULL");
-    builder.HasIndex(sale => sale.PosSessionId);
-    builder.HasIndex(sale => new { sale.CompletedAtUtc, sale.Status });
-    builder.HasIndex(sale => sale.ClientRequestId).IsUnique().HasFilter("\"ClientRequestId\" IS NOT NULL");
-    builder.HasOne(sale => sale.SalesInvoice).WithOne(invoice => invoice.PosSale)
-      .HasForeignKey<PosSaleEntity>(sale => sale.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(sale => sale.Payment).WithOne(payment => payment.SourcePosSale).HasForeignKey<PosSaleEntity>(sale => sale.PaymentId)
+    builder.ToTable("pos_contexts");
+    builder.HasKey(context => context.SalesInvoiceId);
+    builder.Property(context => context.RequestFingerprint).HasMaxLength(64);
+    builder.HasIndex(context => context.PaymentId).IsUnique().HasFilter("\"PaymentId\" IS NOT NULL");
+    builder.HasIndex(context => context.PosSessionId);
+    builder.HasIndex(context => context.CompletedAtUtc);
+    builder.HasIndex(context => context.ClientRequestId).IsUnique().HasFilter("\"ClientRequestId\" IS NOT NULL");
+    builder.HasOne(context => context.SalesInvoice).WithOne(invoice => invoice.PosContext)
+      .HasForeignKey<PosContextEntity>(context => context.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(context => context.Payment).WithOne(payment => payment.SourcePosContext).HasForeignKey<PosContextEntity>(context => context.PaymentId)
       .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(sale => sale.PosSession).WithMany(session => session.Sales)
-      .HasForeignKey(sale => sale.PosSessionId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(sale => sale.CashierUser).WithMany().HasForeignKey(sale => sale.CashierUserId)
+    builder.HasOne(context => context.PosSession).WithMany(session => session.PosContexts)
+      .HasForeignKey(context => context.PosSessionId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(context => context.CashierUser).WithMany().HasForeignKey(context => context.CashierUserId)
       .OnDelete(DeleteBehavior.Restrict);
   }
 }
@@ -251,16 +247,16 @@ public sealed class PosTenderEntityConfiguration : IEntityTypeConfiguration<PosT
 {
   public void Configure(EntityTypeBuilder<PosTenderEntity> builder)
   {
-    builder.ToTable("pos_sale_tenders");
+    builder.ToTable("pos_tenders");
     builder.HasKey(tender => tender.Id);
     builder.Property(tender => tender.TenderedAmount).HasPrecision(19, 4).IsRequired();
     builder.Property(tender => tender.ExchangeRate).HasPrecision(19, 6).IsRequired();
     builder.Property(tender => tender.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(tender => new { tender.PosSaleId, tender.Sequence }).IsUnique();
+    builder.HasIndex(tender => new { tender.SalesInvoiceId, tender.Sequence }).IsUnique();
     builder.HasIndex(tender => tender.MoneyAccountId);
     builder.HasIndex(tender => tender.PaymentMoneyLineId).IsUnique();
-    builder.HasOne(tender => tender.PosSale).WithMany(sale => sale.Tenders)
-      .HasForeignKey(tender => tender.PosSaleId).OnDelete(DeleteBehavior.Cascade);
+    builder.HasOne(tender => tender.PosContext).WithMany(context => context.Tenders)
+      .HasForeignKey(tender => tender.SalesInvoiceId).OnDelete(DeleteBehavior.Cascade);
     builder.HasOne(tender => tender.MoneyAccount).WithMany().HasForeignKey(tender => tender.MoneyAccountId)
       .OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(tender => tender.PaymentMoneyLine).WithMany().HasForeignKey(tender => tender.PaymentMoneyLineId)
@@ -272,16 +268,16 @@ public sealed class PosChangeEntityConfiguration : IEntityTypeConfiguration<PosC
 {
   public void Configure(EntityTypeBuilder<PosChangeEntity> builder)
   {
-    builder.ToTable("pos_sale_changes");
+    builder.ToTable("pos_changes");
     builder.HasKey(change => change.Id);
     builder.Property(change => change.Amount).HasPrecision(19, 4).IsRequired();
     builder.Property(change => change.ExchangeRate).HasPrecision(19, 6).IsRequired();
     builder.Property(change => change.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(change => change.PosSaleId).IsUnique();
+    builder.HasIndex(change => change.SalesInvoiceId).IsUnique();
     builder.HasIndex(change => change.MoneyAccountId);
     builder.HasIndex(change => change.PaymentMoneyLineId).IsUnique();
-    builder.HasOne(change => change.PosSale).WithOne(sale => sale.Change)
-      .HasForeignKey<PosChangeEntity>(change => change.PosSaleId).OnDelete(DeleteBehavior.Cascade);
+    builder.HasOne(change => change.PosContext).WithOne(context => context.Change)
+      .HasForeignKey<PosChangeEntity>(change => change.SalesInvoiceId).OnDelete(DeleteBehavior.Cascade);
     builder.HasOne(change => change.MoneyAccount).WithMany().HasForeignKey(change => change.MoneyAccountId)
       .OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(change => change.PaymentMoneyLine).WithMany().HasForeignKey(change => change.PaymentMoneyLineId)
@@ -304,14 +300,14 @@ public sealed class PosRefundEntityConfiguration : IEntityTypeConfiguration<PosR
     builder.Property(refund => refund.CashRefundBase).HasPrecision(19, 4).IsRequired();
     builder.Property(refund => refund.RequestFingerprint).HasMaxLength(64);
     builder.HasIndex(refund => refund.DocumentNumber).IsUnique();
-    builder.HasIndex(refund => new { refund.PosSaleId, refund.PostedAtUtc });
+    builder.HasIndex(refund => new { refund.SalesInvoiceId, refund.PostedAtUtc });
     builder.HasIndex(refund => new { refund.PosSessionId, refund.PostedAtUtc });
     builder.HasIndex(refund => refund.SalesInvoiceId);
     builder.HasIndex(refund => refund.JournalEntryId).IsUnique();
     builder.HasIndex(refund => refund.ClientRequestId).IsUnique().HasFilter("\"ClientRequestId\" IS NOT NULL");
-    builder.HasOne(refund => refund.PosSale).WithMany(sale => sale.Refunds)
-      .HasForeignKey(refund => refund.PosSaleId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(refund => refund.SalesInvoice).WithMany(invoice => invoice.PosRefunds)
+      .HasForeignKey(refund => refund.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
+    builder.HasOne(refund => refund.PosContext).WithMany(context => context.Refunds)
       .HasForeignKey(refund => refund.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(refund => refund.Branch).WithMany().HasForeignKey(refund => refund.BranchId)
       .OnDelete(DeleteBehavior.Restrict);

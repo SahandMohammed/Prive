@@ -23,7 +23,6 @@ describe('active sales invoice lifecycle endpoints', () => {
     const update = {
       ...create,
       expectedUpdatedAtUtc: '2026-09-28T10:00:00Z',
-      posSettlement: null,
     } satisfies PostedSalesInvoiceInput
     const deletion = { reason: 'Entered in error', expectedUpdatedAtUtc: update.expectedUpdatedAtUtc }
 

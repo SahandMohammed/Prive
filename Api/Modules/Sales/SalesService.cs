@@ -388,7 +388,7 @@ public sealed class SalesService
           "Embedded Payments cannot exceed the Sales Invoice total.");
       foreach (var embedded in embeddedPayments)
         await _payments.CreateDirectInvoicePaymentAsync(invoice, new InvoicePaymentRequest(
-          invoice.InvoiceDate, embedded.MoneyAccountId, embedded.Amount,
+          embedded.PaymentDate, embedded.MoneyAccountId, embedded.Amount,
           embedded.ExchangeRate, embedded.Notes), userId, ct);
       await SaveNewInvoiceAsync(ct);
 
@@ -1080,12 +1080,14 @@ public sealed class SalesService
     .Include(invoice => invoice.Currency)
     .Include(invoice => invoice.BaseCurrency)
     .Include(invoice => invoice.CreatedByUser)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts).ThenInclude(count => count.MoneyAccount)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts).ThenInclude(count => count.Currency)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change).ThenInclude(change => change!.PaymentMoneyLine)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.PosSession).ThenInclude(session => session.OpeningCounts).ThenInclude(count => count.MoneyAccount)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.PosSession).ThenInclude(session => session.OpeningCounts).ThenInclude(count => count.Currency)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Payment)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.CashierUser)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Change).ThenInclude(change => change!.PaymentMoneyLine)
     .Include(invoice => invoice.PosRefunds)
     .Include(invoice => invoice.Movements)
     .Include(invoice => invoice.PaymentAllocations).ThenInclude(allocation => allocation.Payment)
@@ -1118,9 +1120,9 @@ public sealed class SalesService
         ? SalesInvoicePaymentStatus.Unpaid
         : SalesInvoicePaymentStatus.PartiallyPaid;
     SalesInvoicePosContextResponse? posContext = null;
-    if (invoice.PosSale is not null)
+    if (invoice.PosContext is not null)
     {
-      var sale = invoice.PosSale;
+      var sale = invoice.PosContext;
       var tenders = sale.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosTenderResponse(
         tender.Id,
         tender.Sequence,
@@ -1132,6 +1134,7 @@ public sealed class SalesService
         tender.TenderedAmount,
         tender.ExchangeRate,
         tender.BaseAmount,
+        tender.PaymentMoneyLineId,
         tender.PaymentMoneyLine.MoneyLedgerEntryId)).ToList();
       var change = sale.Change is null ? null : new PosChangeResponse(
         sale.Change.Id,
@@ -1143,6 +1146,7 @@ public sealed class SalesService
         sale.Change.Amount,
         sale.Change.ExchangeRate,
         sale.Change.BaseAmount,
+        sale.Change.PaymentMoneyLineId,
         sale.Change.PaymentMoneyLine.MoneyLedgerEntryId);
       var settledBase = Money(tenders.Sum(tender => tender.BaseAmount) - (change?.BaseAmount ?? 0m));
       var mode = settledBase <= 0
@@ -1151,16 +1155,16 @@ public sealed class SalesService
           ? PosPaymentMode.Partial
           : PosPaymentMode.Paid;
       posContext = new SalesInvoicePosContextResponse(
-        sale.Id,
-        sale.DocumentNumber,
         sale.PosSessionId,
-        sale.PosSession?.SessionNumber,
-        sale.PosSession?.Status,
-        sale.Status,
+        sale.PosSession.SessionNumber,
+        sale.PosSession.Status,
+        sale.CashierUserId,
+        sale.CashierUser.Username,
+        sale.PaymentId,
+        sale.Payment?.DocumentNumber,
         mode,
         sale.CompletedAtUtc,
-        sale.PosSession?.OpeningCounts.Select(count => count.MoneyAccountId).ToList() ?? [],
-        sale.PosSession?.OpeningCounts.OrderBy(count => count.Currency.Code)
+        sale.PosSession.OpeningCounts.OrderBy(count => count.Currency.Code)
           .Select(count => new PosSessionCountResponse(
             count.MoneyAccountId,
             count.MoneyAccount.Code,
@@ -1171,7 +1175,7 @@ public sealed class SalesService
             count.Amount,
             count.ExchangeRate,
             count.BaseAmount))
-          .ToList() ?? [],
+          .ToList(),
         tenders,
         change);
     }

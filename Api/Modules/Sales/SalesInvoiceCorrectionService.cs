@@ -18,20 +18,17 @@ public sealed class SalesInvoiceCorrectionService
   private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
   private readonly AppDbContext _db;
   private readonly SalesService _sales;
-  private readonly PosSettlementService _posSettlements;
   private readonly PosSessionService _posSessions;
   private readonly PaymentService _payments;
 
   public SalesInvoiceCorrectionService(
     AppDbContext db,
     SalesService sales,
-    PosSettlementService posSettlements,
     PosSessionService posSessions,
     PaymentService? payments = null)
   {
     _db = db;
     _sales = sales;
-    _posSettlements = posSettlements;
     _posSessions = posSessions;
     _payments = payments ?? new PaymentService(db);
   }
@@ -54,19 +51,12 @@ public sealed class SalesInvoiceCorrectionService
       EnsurePosted(invoice);
       EnsureExpectedTimestamp(invoice, request.ExpectedUpdatedAtUtc);
       await ValidateDependenciesAsync(invoice, ct);
-      var posSession = await LoadPosSessionAsync(invoice, ct);
-      var zReportIdentity = ValidateAndCaptureZReportIdentity(invoice, posSession);
-
       var draft = ToDraftRequest(request);
-      var validation = await _sales.ValidateInvoiceAsync(
-        draft, requireCustomer: invoice.PosSale is null, ct);
-      if (invoice.PosSale is null && request.PosSettlement is not null)
-        throw new BadRequestException(ErrorCodes.Sales.InvoiceHasDependentTransaction,
-          "POS settlement data is only valid for a POS-generated invoice.");
-      if (invoice.PosSale is not null && request.PosSettlement is null)
-        throw new BadRequestException(ErrorCodes.Sales.InvoiceHasDependentTransaction,
-          "POS settlement data is required when correcting a POS-generated invoice.");
-      if (invoice.PosSale is not null && request.CurrencyId != validation.BaseCurrencyId)
+      var validation = await _sales.ValidateInvoiceAsync(draft, requireCustomer: true, ct);
+      if (invoice.PosContext is not null && request.BranchId != invoice.BranchId)
+        throw new ConflictException(ErrorCodes.Sales.PosBranchImmutable,
+          "A POS-generated invoice cannot move to another branch.");
+      if (invoice.PosContext is not null && request.CurrencyId != validation.BaseCurrencyId)
         throw new BadRequestException(ErrorCodes.Sales.CurrencyInvalid,
           "A POS-generated invoice must remain in the Business base currency.");
       if (invoice.PaymentAllocations.Count > 0
@@ -76,13 +66,8 @@ public sealed class SalesInvoiceCorrectionService
         throw new ConflictException(ErrorCodes.Sales.InvoiceHasDependentTransaction,
           "Customer, branch, and currency cannot change while active Payment allocations exist.");
 
-      var posPayment = invoice.PosSale?.PaymentId is Guid paymentId
-        ? await _payments.FindTrackedAsync(paymentId, ct)
-        : null;
-
       var owned = await LoadOwnedEffectsAsync(invoice, ct);
       var before = SerializeSnapshot(CreateSnapshot(invoice, owned.StockMovements, owned.LedgerEntries));
-      RemoveZReport(posSession, zReportIdentity);
       RemoveOwnedEffects(invoice, owned);
 
       // This save only flushes removal of generated effects. The transaction is still open,
@@ -95,67 +80,17 @@ public sealed class SalesInvoiceCorrectionService
       SalesService.Recalculate(invoice);
       invoice.AccountsReceivableAccountId = null;
 
-      PosSettlementPreparation? settlement = null;
-      if (invoice.PosSale is not null)
-      {
-        var pos = request.PosSettlement!;
-        if (invoice.PosSale.PosSessionId is not Guid sessionId)
-          throw Dependent("The POS Sale has no session identity and cannot be corrected safely.");
-        settlement = await _posSettlements.PrepareAsync(new PosSettlementRequest(
-          invoice.BranchId,
-          sessionId,
-          invoice.CustomerId,
-          invoice.BaseTotal,
-          pos.PaymentMode,
-          pos.Tenders,
-          pos.Change), userId, management: true, ct, existingSession: posSession);
-      }
-
       await _sales.PreparePostingEffectsAsync(
         invoice,
         validation,
         userId,
-        invoice.PosSale is null ? "Sales invoice" : "POS sale",
+        invoice.PosContext is null ? "Sales invoice" : "POS sale",
         ct,
         originalPostedAtUtc,
         preserveInvoiceTimestamps: true);
-      if (invoice.PosSale is not null && settlement is not null)
-      {
-        var settledBase = Money(settlement.Tenders.Sum(tender => tender.BaseAmount)
-          - (settlement.Change?.BaseAmount ?? 0m));
-        if (settledBase > 0)
-        {
-          var moneyLines = settlement.Tenders.Select(tender => new PaymentMoneyLineCommand(
-            tender.Account.Id, tender.Request.Amount, tender.ExchangeRate,
-            PaymentMoneyDirection.Collection)).ToList();
-          if (settlement.Change is not null)
-            moneyLines.Add(new PaymentMoneyLineCommand(settlement.Change.Account.Id,
-              settlement.Change.Request.Amount, settlement.Change.ExchangeRate,
-              PaymentMoneyDirection.Change));
-          if (posPayment is null)
-            posPayment = await _payments.CreateAsync(new CreatePaymentCommand(
-              invoice.BranchId, invoice.CustomerId, invoice.InvoiceDate, invoice.CurrencyId,
-              PaymentOrigin.Pos, invoice.Id, "POS checkout settlement",
-              [new PaymentAllocationCommand(invoice.Id, settledBase)], moneyLines), userId, ct);
-          else
-            await _payments.ReplaceOwnedPaymentAsync(posPayment, invoice.InvoiceDate,
-              "POS checkout settlement", [new PaymentAllocationCommand(invoice.Id, settledBase)],
-              moneyLines, reason ?? "POS invoice correction", userId, ct);
-          invoice.PosSale.Payment = posPayment;
-          invoice.PosSale.PaymentId = posPayment.Id;
-          _posSettlements.AddEffects(settlement, invoice.PosSale, posPayment);
-        }
-        else if (posPayment is not null)
-        {
-          await _payments.DeleteOwnedPaymentAsync(posPayment, reason ?? "POS invoice correction", userId, ct);
-          invoice.PosSale.Payment = null;
-          invoice.PosSale.PaymentId = null;
-        }
-      }
 
       var correctedAtUtc = DateTime.UtcNow;
       invoice.UpdatedAtUtc = correctedAtUtc;
-      RegenerateZReport(posSession, zReportIdentity, correctedAtUtc);
       var after = SerializeSnapshot(CreateSnapshot(
         invoice,
         invoice.Movements.ToList(),
@@ -196,10 +131,10 @@ public sealed class SalesInvoiceCorrectionService
       EnsurePosted(invoice);
       EnsureExpectedTimestamp(invoice, request.ExpectedUpdatedAtUtc);
       await ValidateDependenciesAsync(invoice, ct);
-      if (invoice.PosSale is null && invoice.PaymentAllocations.Count > 0)
+      if (invoice.PosContext is null && invoice.PaymentAllocations.Count > 0)
         throw new ConflictException(ErrorCodes.Sales.InvoiceHasPayment,
           "Delete active Payments before deleting this Sales Invoice.");
-      var posPayment = invoice.PosSale?.PaymentId is Guid paymentId
+      var posPayment = invoice.PosContext?.PaymentId is Guid paymentId
         ? await _payments.FindTrackedAsync(paymentId, ct)
         : null;
       var posSession = await LoadPosSessionAsync(invoice, ct);
@@ -209,15 +144,27 @@ public sealed class SalesInvoiceCorrectionService
       var before = SerializeSnapshot(CreateSnapshot(invoice, owned.StockMovements, owned.LedgerEntries));
       RemoveZReport(posSession, zReportIdentity);
       RemoveOwnedEffects(invoice, owned);
+      if (invoice.PosContext is not null)
+      {
+        _db.PosTenders.RemoveRange(invoice.PosContext.Tenders);
+        invoice.PosContext.Tenders.Clear();
+        if (invoice.PosContext.Change is not null)
+        {
+          _db.PosChanges.Remove(invoice.PosContext.Change);
+          invoice.PosContext.Change = null;
+        }
+      }
+
+      // Tender/change rows reference PaymentMoneyLines, so flush their removal before
+      // deleting the Payment-owned accounting effects. This save never writes audit or deletion state.
+      await _db.SaveChangesAsync(ct);
+
       if (posPayment is not null)
       {
         await _payments.DeleteOwnedPaymentAsync(posPayment, reason, userId, ct);
-        invoice.PosSale!.Payment = null;
-        invoice.PosSale.PaymentId = null;
+        invoice.PosContext!.Payment = null;
+        invoice.PosContext.PaymentId = null;
       }
-
-      // The first save never writes audit or deletion state; it only flushes owned effects.
-      await _db.SaveChangesAsync(ct);
 
       var deletedAtUtc = DateTime.UtcNow;
       invoice.IsDeleted = true;
@@ -304,7 +251,7 @@ public sealed class SalesInvoiceCorrectionService
         invoice.DeletedByUserId!.Value,
         invoice.DeletedByUser!.Username,
         invoice.DeleteReason!,
-        invoice.PosSale != null))
+        invoice.PosContext != null))
       .ToPagedResultAsync(request, ct);
   }
 
@@ -320,10 +267,10 @@ public sealed class SalesInvoiceCorrectionService
     .Include(invoice => invoice.PosRefunds)
     .Include(invoice => invoice.JournalEntry).ThenInclude(journal => journal!.Lines)
     .Include(invoice => invoice.JournalEntry).ThenInclude(journal => journal!.ReversalJournals)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.ZReport)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.PosSession).ThenInclude(session => session!.OpeningCounts)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Tenders).ThenInclude(tender => tender.PaymentMoneyLine).ThenInclude(line => line.MoneyLedgerEntry)
-    .Include(invoice => invoice.PosSale).ThenInclude(sale => sale!.Change).ThenInclude(change => change!.PaymentMoneyLine).ThenInclude(line => line.MoneyLedgerEntry);
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.PosSession).ThenInclude(session => session.ZReport)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.PosSession).ThenInclude(session => session.OpeningCounts)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Tenders).ThenInclude(tender => tender.PaymentMoneyLine).ThenInclude(line => line.MoneyLedgerEntry)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Change).ThenInclude(change => change!.PaymentMoneyLine).ThenInclude(line => line.MoneyLedgerEntry);
 
   private async Task ValidateDependenciesAsync(SalesInvoiceEntity invoice, CancellationToken ct)
   {
@@ -357,12 +304,11 @@ public sealed class SalesInvoiceCorrectionService
 
   private async Task<PosSessionEntity?> LoadPosSessionAsync(SalesInvoiceEntity invoice, CancellationToken ct)
   {
-    if (invoice.PosSale is null) return null;
-    if (invoice.PosSale.PosSessionId is not Guid sessionId)
-      throw Dependent("The POS Sale has no session identity and cannot be corrected safely.");
+    if (invoice.PosContext is null) return null;
+    var sessionId = invoice.PosContext.PosSessionId;
     var session = await _posSessions.FindSessionForInvoiceCorrectionAsync(sessionId, invoice.BranchId, ct)
       ?? throw Dependent("The POS Session could not be identified safely.");
-    if (!session.Sales.Any(sale => sale.Id == invoice.PosSale.Id && sale.SalesInvoiceId == invoice.Id))
+    if (!session.PosContexts.Any(context => context.SalesInvoiceId == invoice.Id))
       throw Dependent("The POS Sale is not consistently linked to its original session.");
     return session;
   }
@@ -371,7 +317,7 @@ public sealed class SalesInvoiceCorrectionService
     SalesInvoiceEntity invoice,
     PosSessionEntity? session)
   {
-    if (invoice.PosSale is null) return null;
+    if (invoice.PosContext is null) return null;
     if (session is null)
       throw Dependent("The POS Session could not be identified safely.");
 
@@ -477,13 +423,6 @@ public sealed class SalesInvoiceCorrectionService
 
   private void RemoveOwnedEffects(SalesInvoiceEntity invoice, OwnedEffects owned)
   {
-    if (invoice.PosSale is not null)
-    {
-      _db.PosTenders.RemoveRange(invoice.PosSale.Tenders);
-      if (invoice.PosSale.Change is not null) _db.PosChanges.Remove(invoice.PosSale.Change);
-      invoice.PosSale.Tenders.Clear();
-      invoice.PosSale.Change = null;
-    }
     _db.StockMovements.RemoveRange(owned.StockMovements);
     invoice.Movements.Clear();
     invoice.JournalEntry = null;
@@ -552,14 +491,12 @@ public sealed class SalesInvoiceCorrectionService
         line.DebitBaseAmount,
         line.CreditBaseAmount)).ToList());
     SalesInvoiceAuditPos? pos = null;
-    if (invoice.PosSale is not null)
+    if (invoice.PosContext is not null)
     {
-      var sale = invoice.PosSale;
+      var sale = invoice.PosContext;
       pos = new SalesInvoiceAuditPos(
-        sale.Id,
-        sale.DocumentNumber,
+        sale.SalesInvoiceId,
         sale.PosSessionId,
-        sale.Status,
         sale.CashierUserId,
         sale.CompletedAtUtc,
         sale.ClientRequestId,
@@ -774,10 +711,10 @@ public sealed class SalesInvoiceCorrectionService
   }
 
   private static List<MoneyLedgerEntryEntity> CurrentPosLedgerEntries(SalesInvoiceEntity invoice) =>
-    invoice.PosSale is null
+    invoice.PosContext is null
       ? []
-      : invoice.PosSale.Tenders.Select(tender => tender.PaymentMoneyLine.MoneyLedgerEntry)
-        .Append(invoice.PosSale.Change?.PaymentMoneyLine.MoneyLedgerEntry)
+      : invoice.PosContext.Tenders.Select(tender => tender.PaymentMoneyLine.MoneyLedgerEntry)
+        .Append(invoice.PosContext.Change?.PaymentMoneyLine.MoneyLedgerEntry)
         .Where(entry => entry is not null)
         .Cast<MoneyLedgerEntryEntity>()
         .ToList();
@@ -924,10 +861,8 @@ public sealed class SalesInvoiceCorrectionService
     Guid? SalesInvoiceLineId);
 
   private sealed record SalesInvoiceAuditPos(
-    Guid SaleId,
-    string DocumentNumber,
-    Guid? PosSessionId,
-    PosSaleStatus Status,
+    Guid SalesInvoiceId,
+    Guid PosSessionId,
     Guid CashierUserId,
     DateTime CompletedAtUtc,
     Guid? ClientRequestId,

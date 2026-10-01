@@ -86,15 +86,11 @@ public sealed record SalesInvoiceDraftRequest(
   List<EmbeddedSalesInvoicePaymentRequest>? Payments = null);
 
 public sealed record EmbeddedSalesInvoicePaymentRequest(
+  [Required] DateOnly PaymentDate,
   [Required] Guid MoneyAccountId,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Amount,
   decimal? ExchangeRate,
   [MaxLength(1000)] string? Notes);
-
-public sealed record SalesInvoicePosSettlementRequest(
-  [Required, EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode,
-  [Required] List<PosTenderRequest> Tenders,
-  PosChangeRequest? Change);
 
 public sealed record UpdatePostedSalesInvoiceRequest(
   [MaxLength(1000)] string? Reason,
@@ -106,8 +102,7 @@ public sealed record UpdatePostedSalesInvoiceRequest(
   [Required] Guid CurrencyId,
   decimal? ExchangeRate,
   [MaxLength(1000)] string? Notes,
-  [Required, MinLength(1)] List<SalesInvoiceLineRequest> Lines,
-  SalesInvoicePosSettlementRequest? PosSettlement);
+  [Required, MinLength(1)] List<SalesInvoiceLineRequest> Lines);
 
 public sealed record DeletePostedSalesInvoiceRequest(
   [Required, MinLength(1), MaxLength(1000)] string Reason,
@@ -199,15 +194,15 @@ public sealed record SalesInvoicePaymentResponse(
   Guid JournalEntryId);
 
 public sealed record SalesInvoicePosContextResponse(
-  Guid SaleId,
-  string DocumentNumber,
-  Guid? PosSessionId,
-  string? PosSessionNumber,
-  PosSessionStatus? SessionStatus,
-  PosSaleStatus SaleStatus,
+  Guid PosSessionId,
+  string PosSessionNumber,
+  PosSessionStatus SessionStatus,
+  Guid CashierUserId,
+  string CashierUsername,
+  Guid? PaymentId,
+  string? PaymentDocumentNumber,
   PosPaymentMode PaymentMode,
   DateTime CompletedAtUtc,
-  List<Guid> SessionCashboxMoneyAccountIds,
   List<PosSessionCountResponse> SessionCashboxes,
   List<PosTenderResponse> Tenders,
   PosChangeResponse? Change);

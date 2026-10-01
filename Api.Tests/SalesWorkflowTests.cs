@@ -574,8 +574,7 @@ public sealed class SalesWorkflowTests
         data.BaseCurrencyId,
         null,
         "Corrected",
-        [ServiceLine(data, 1, 45_000)],
-        null),
+        [ServiceLine(data, 1, 45_000)]),
       data.UserId,
       default);
 
@@ -624,8 +623,7 @@ public sealed class SalesWorkflowTests
         data.BaseCurrencyId,
         null,
         null,
-        [ServiceLine(data, 1, 45_000)],
-        null),
+        [ServiceLine(data, 1, 45_000)]),
       data.UserId,
       default);
 
@@ -722,8 +720,7 @@ public sealed class SalesWorkflowTests
           data.BaseCurrencyId,
           null,
           posted.Notes,
-          [ProductLine(data, 20, 15_000)],
-          null),
+          [ProductLine(data, 20, 15_000)]),
         data.UserId,
         default));
       Assert.Equal(ErrorCodes.Sales.InsufficientStock, error.Code);
@@ -797,8 +794,7 @@ public sealed class SalesWorkflowTests
       data.BaseCurrencyId,
       null,
       null,
-      [ServiceLine(data, 1, 45_000)],
-      null);
+      [ServiceLine(data, 1, 45_000)]);
     var corrections = CreateCorrectionService(db);
     await corrections.UpdateAsync(posted.Id, request, data.UserId, default);
 
@@ -978,7 +974,7 @@ public sealed class SalesWorkflowTests
     var sales = CreateService(db);
     var finance = new FinanceService(db, Options.Create(new FinanceOptions()));
     var sessions = new PosSessionService(db, finance);
-    return new SalesInvoiceCorrectionService(db, sales, new PosSettlementService(db, finance, sessions), sessions);
+    return new SalesInvoiceCorrectionService(db, sales, sessions);
   }
 
   private static SalesInvoiceDraftRequest Request(
@@ -1155,7 +1151,7 @@ public sealed class SalesWorkflowTests
       if (Enabled && eventData.Context!.ChangeTracker.Entries<SalesInvoiceEntity>()
         .Any(entry => entry.State == EntityState.Added
           && entry.Entity.Status == SalesInvoiceStatus.Posted
-          && entry.Entity.PosSale is null))
+          && entry.Entity.PosContext is null))
         throw new InvalidOperationException("Forced active invoice save failure.");
 
       return base.SavingChangesAsync(eventData, result, cancellationToken);

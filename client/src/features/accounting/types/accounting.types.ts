@@ -65,7 +65,6 @@ export interface JournalEntry {
   sourceMoneyTransferId: string | null
   sourceSupplierPaymentId: string | null
   sourcePaymentId: string | null
-  sourcePosSaleId: string | null
   sourceExpenseDocumentId: string | null
   sourcePosRefundId: string | null
   sourcePosDrawerMovementId: string | null

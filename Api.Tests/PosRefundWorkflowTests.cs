@@ -216,7 +216,7 @@ public sealed partial class PosWorkflowTests
       Request(data, [ServiceLine(data)], [], data.CustomerId) with { PaymentMode = PosPaymentMode.Credit }, data.CashierId, default);
     db.PaymentAllocations.Add(new PaymentAllocationEntity
     {
-      SalesInvoiceId = sale.SalesInvoiceId,
+      SalesInvoiceId = sale.Id,
       Amount = 10_000,
       BaseAmount = 10_000,
       Payment = new PaymentEntity
@@ -358,8 +358,8 @@ public sealed partial class PosWorkflowTests
     Assert.True(refund.IsVoid);
     Assert.Equal(2, refund.Lines.Count);
     Assert.Equal(40_000, refund.TotalRefundBase);
-    Assert.Equal(PosSaleStatus.Completed, (await db.PosSales.SingleAsync(x => x.Id == sale.Id)).Status);
-    Assert.Equal(SalesInvoiceStatus.Posted, (await db.SalesInvoices.SingleAsync(x => x.Id == sale.SalesInvoiceId)).Status);
+    Assert.Equal(sale.Id, (await db.PosContexts.SingleAsync(x => x.SalesInvoiceId == sale.Id)).SalesInvoiceId);
+    Assert.Equal(SalesInvoiceStatus.Posted, (await db.SalesInvoices.SingleAsync(x => x.Id == sale.Id)).Status);
   }
 
   [Fact]

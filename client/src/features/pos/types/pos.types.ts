@@ -4,8 +4,6 @@ import type { SalesLineType } from '@/features/sales'
 
 export const PosCatalogItemType = { Service: 0, Product: 1 } as const
 export type PosCatalogItemType = (typeof PosCatalogItemType)[keyof typeof PosCatalogItemType]
-export const PosSaleStatus = { Completed: 0 } as const
-export type PosSaleStatus = (typeof PosSaleStatus)[keyof typeof PosSaleStatus]
 export const PosSessionStatus = { Open: 0, Closed: 1 } as const
 export type PosSessionStatus = (typeof PosSessionStatus)[keyof typeof PosSessionStatus]
 export const PosPaymentMode = { Paid: 0, Partial: 1, Credit: 2 } as const
@@ -131,6 +129,14 @@ export interface CompletePosSaleInput {
   change: { moneyAccountId: string; amount: number } | null
   paymentMode: PosPaymentMode
   clientRequestId?: string
+}
+
+export interface CorrectPosSettlementInput {
+  paymentMode: PosPaymentMode
+  tenders: { moneyAccountId: string; amount: number }[]
+  change: { moneyAccountId: string; amount: number } | null
+  reason: string
+  expectedUpdatedAtUtc: string
 }
 
 export interface PosRegisterCashbox {
@@ -354,6 +360,7 @@ export interface PosTender {
   tenderedAmount: number
   exchangeRate: number
   baseAmount: number
+  paymentMoneyLineId: string
   moneyLedgerEntryId: string
 }
 export interface PosChange {
@@ -366,14 +373,13 @@ export interface PosChange {
   amount: number
   exchangeRate: number
   baseAmount: number
+  paymentMoneyLineId: string
   moneyLedgerEntryId: string
 }
 export interface PosSale {
   id: string
   documentNumber: string
-  status: PosSaleStatus
-  posSessionId: string | null
-  salesInvoiceId: string
+  posSessionId: string
   customerId: string
   customerName: string
   branchId: string
@@ -395,9 +401,12 @@ export interface PosSale {
   netSaleBaseAmount: number
   refundStatus: PosRefundState
   paymentMode: PosPaymentMode
+  paymentId: string | null
+  paymentDocumentNumber: string | null
   cashierUserId: string
   cashierUsername: string
   completedAtUtc: string
+  updatedAtUtc: string
   journalEntryId: string
   stockMovementIds: string[]
   lines: PosSaleLine[]
@@ -508,8 +517,6 @@ export interface PosRefundabilityLine {
 }
 
 export interface PosRefundability {
-  posSaleId: string
-  posSaleDocumentNumber: string
   salesInvoiceId: string
   salesInvoiceDocumentNumber: string
   branchId: string
@@ -561,8 +568,6 @@ export interface PosRefundTender {
 export interface PosRefund {
   id: string
   documentNumber: string
-  posSaleId: string
-  posSaleDocumentNumber: string
   salesInvoiceId: string
   salesInvoiceDocumentNumber: string
   branchId: string

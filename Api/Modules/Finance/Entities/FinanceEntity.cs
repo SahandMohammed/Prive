@@ -84,7 +84,7 @@ public sealed class PaymentEntity
   public Guid? SourceSalesInvoiceId { get; set; }
   public SalesInvoiceEntity? SourceSalesInvoice { get; set; }
   public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
-  public PosSaleEntity? SourcePosSale { get; set; }
+  public PosContextEntity? SourcePosContext { get; set; }
   public string? Notes { get; set; }
   public Guid CreatedByUserId { get; set; }
   public UserEntity CreatedByUser { get; set; } = null!;

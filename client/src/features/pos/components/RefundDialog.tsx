@@ -169,7 +169,7 @@ export function RefundDialog({
         {data && (
           <form className="space-y-5" onSubmit={submit}>
             <div className="grid gap-3 rounded-xl bg-muted/50 p-4 sm:grid-cols-4 lg:grid-cols-8">
-              <Summary label="Sale" value={data.posSaleDocumentNumber} />
+              <Summary label="Sale" value={data.salesInvoiceDocumentNumber} />
               <Summary label="Invoice" value={data.salesInvoiceDocumentNumber} />
               <Summary label="Customer" value={data.customerName} />
               <Summary label="Original date" value={new Date(data.completedAtUtc).toLocaleString()} />

@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/apiClient'
 import type {
   ClosePosSessionInput,
   CompletePosSaleInput,
+  CorrectPosSettlementInput,
   CreatePosDrawerMovementInput,
   CreatePosRefundInput,
   OpenPosSessionInput,
@@ -46,6 +47,8 @@ export const posApi = {
     apiClient.getPaginated<PosSaleSummary>(`/pos/sales?${queryString(filters)}`),
   sale: (id: string) => apiClient.get<PosSale>(`/pos/sales/${id}`),
   complete: (body: CompletePosSaleInput) => apiClient.post<PosSale>('/pos/sales', { ...body, clientRequestId: body.clientRequestId ?? crypto.randomUUID() }),
+  correctSettlement: (salesInvoiceId: string, body: CorrectPosSettlementInput) =>
+    apiClient.put<PosSale>(`/pos/sales/${salesInvoiceId}/settlement`, body),
   refundability: (saleId: string) =>
     apiClient.get<PosRefundability>(`/pos/sales/${saleId}/refundability`),
   saleRefunds: (saleId: string) =>

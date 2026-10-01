@@ -87,6 +87,13 @@ public sealed record CompletePosSaleRequest(
   [EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode = PosPaymentMode.Paid,
   [Required] Guid ClientRequestId = default);
 
+public sealed record CorrectPosSettlementRequest(
+  [Required, EnumDataType(typeof(PosPaymentMode))] PosPaymentMode PaymentMode,
+  [Required] List<PosTenderRequest> Tenders,
+  PosChangeRequest? Change,
+  [Required, MinLength(1), MaxLength(1000)] string Reason,
+  [Required] DateTime ExpectedUpdatedAtUtc);
+
 public sealed record PosRefundLineRequest(
   [Required] Guid SalesInvoiceLineId,
   [Range(typeof(decimal), "0.0001", "9999999999999")] decimal Quantity,
@@ -462,6 +469,7 @@ public sealed record PosTenderResponse(
   decimal TenderedAmount,
   decimal ExchangeRate,
   decimal BaseAmount,
+  Guid PaymentMoneyLineId,
   Guid MoneyLedgerEntryId);
 
 public sealed record PosChangeResponse(
@@ -474,14 +482,13 @@ public sealed record PosChangeResponse(
   decimal Amount,
   decimal ExchangeRate,
   decimal BaseAmount,
+  Guid PaymentMoneyLineId,
   Guid MoneyLedgerEntryId);
 
 public sealed record PosSaleResponse(
   Guid Id,
   string DocumentNumber,
-  PosSaleStatus Status,
-  Guid? PosSessionId,
-  Guid SalesInvoiceId,
+  Guid PosSessionId,
   Guid CustomerId,
   string CustomerName,
   Guid BranchId,
@@ -503,9 +510,12 @@ public sealed record PosSaleResponse(
   decimal NetSaleBaseAmount,
   PosRefundState RefundStatus,
   PosPaymentMode PaymentMode,
+  Guid? PaymentId,
+  string? PaymentDocumentNumber,
   Guid CashierUserId,
   string CashierUsername,
   DateTime CompletedAtUtc,
+  DateTime UpdatedAtUtc,
   Guid JournalEntryId,
   List<Guid> StockMovementIds,
   List<PosSaleLineResponse> Lines,
@@ -540,8 +550,6 @@ public sealed record PosRefundabilityLineResponse(
   bool CanRestock);
 
 public sealed record PosRefundabilityResponse(
-  Guid PosSaleId,
-  string PosSaleDocumentNumber,
   Guid SalesInvoiceId,
   string SalesInvoiceDocumentNumber,
   Guid BranchId,
@@ -590,8 +598,6 @@ public sealed record PosRefundTenderResponse(
 public sealed record PosRefundResponse(
   Guid Id,
   string DocumentNumber,
-  Guid PosSaleId,
-  string PosSaleDocumentNumber,
   Guid SalesInvoiceId,
   string SalesInvoiceDocumentNumber,
   Guid BranchId,

@@ -135,6 +135,24 @@ export function useCompletePosSale() {
   })
 }
 
+export function useCorrectPosSettlement(salesInvoiceId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Parameters<typeof posApi.correctSettlement>[1]) =>
+      posApi.correctSettlement(salesInvoiceId, body),
+    onSuccess: (sale) => Promise.all([
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'sales'] }),
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'x-report', sale.posSessionId] }),
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] }),
+      client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] }),
+      client.invalidateQueries({ queryKey: ['sales'] }),
+      client.invalidateQueries({ queryKey: ['finance'] }),
+      client.invalidateQueries({ queryKey: ['accounting'] }),
+      client.invalidateQueries({ queryKey: ['dashboard'] }),
+    ]),
+  })
+}
+
 function invalidateRefundEffects(client: ReturnType<typeof useQueryClient>, saleId: string, sessionId: string) {
   client.invalidateQueries({ queryKey: [...POS_KEY, 'sales', saleId] })
   client.invalidateQueries({ queryKey: [...POS_KEY, 'sales', saleId, 'refundability'] })
@@ -157,7 +175,7 @@ export function usePostPosRefund() {
       posApi.postRefund(saleId, body),
     onSuccess: (refund) => {
       client.setQueryData([...POS_KEY, 'refunds', refund.id], refund)
-      invalidateRefundEffects(client, refund.posSaleId, refund.posSessionId)
+      invalidateRefundEffects(client, refund.salesInvoiceId, refund.posSessionId)
     },
   })
 }
@@ -169,7 +187,7 @@ export function useVoidPosSale() {
       posApi.voidSale(saleId, body),
     onSuccess: (refund) => {
       client.setQueryData([...POS_KEY, 'refunds', refund.id], refund)
-      invalidateRefundEffects(client, refund.posSaleId, refund.posSessionId)
+      invalidateRefundEffects(client, refund.salesInvoiceId, refund.posSessionId)
     },
   })
 }

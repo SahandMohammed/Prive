@@ -268,8 +268,8 @@ public sealed class PosSessionService
       .Select(session => new PosSessionListResponse(
         session.Id, session.SessionNumber, session.RegisterId, session.Register.Code, session.Register.Name,
         session.CashierUserId, session.CashierUser.Username, session.Status, session.OpenedAtUtc, session.ClosedAtUtc,
-        session.Sales.Count(sale => !sale.SalesInvoice.IsDeleted),
-        session.Sales.Where(sale => !sale.SalesInvoice.IsDeleted)
+        session.PosContexts.Count(context => !context.SalesInvoice.IsDeleted),
+        session.PosContexts.Where(context => !context.SalesInvoice.IsDeleted)
           .Sum(sale => (decimal?)sale.SalesInvoice.BaseTotal) ?? 0m,
         session.ClosingCounts.Sum(count => (decimal?)count.VarianceBaseAmount) ?? 0m,
         session.ZReport != null ? session.ZReport.BaseCurrencyCode : business.BaseCurrency.Code))
@@ -531,8 +531,8 @@ public sealed class PosSessionService
 
   private PosXReportResponse BuildXReport(PosSessionEntity session, Guid baseCurrencyId, string baseCurrencyCode)
   {
-    var sales = session.Sales
-      .Where(sale => !sale.SalesInvoice.IsDeleted && sale.Status == PosSaleStatus.Completed)
+    var sales = session.PosContexts
+      .Where(context => !context.SalesInvoice.IsDeleted)
       .ToList();
     var refunds = session.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).ToList();
     var serviceSales = Money(sales.SelectMany(sale => sale.SalesInvoice.Lines)
@@ -719,9 +719,9 @@ public sealed class PosSessionService
     .Include(session => session.OpeningCounts).ThenInclude(count => count.MoneyAccount);
 
   private IQueryable<PosSessionEntity> SessionReportQuery() => SessionQuery()
-    .Include(session => session.Sales).ThenInclude(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
-    .Include(session => session.Sales).ThenInclude(sale => sale.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(session => session.Sales).ThenInclude(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(session => session.PosContexts).ThenInclude(context => context.SalesInvoice).ThenInclude(invoice => invoice.Lines)
+    .Include(session => session.PosContexts).ThenInclude(context => context.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
+    .Include(session => session.PosContexts).ThenInclude(context => context.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(session => session.Refunds).ThenInclude(refund => refund.Lines)
     .Include(session => session.Refunds).ThenInclude(refund => refund.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(session => session.DrawerMovements)

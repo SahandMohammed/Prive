@@ -8,6 +8,7 @@ import {
   Loader2,
   PackageSearch,
   Pencil,
+  Plus,
   ReceiptText,
   Save,
   Trash2,
@@ -39,14 +40,24 @@ import { Textarea } from '@/components/ui/textarea'
 import { hasCapability, useCurrentUser } from '@/features/auth'
 import { getSelectedBranchId, useBranches, useCurrencies, useCurrentBusiness } from '@/features/business'
 import { useContacts } from '@/features/contacts'
-import { useEffectiveExchangeRate } from '@/features/finance'
+import {
+  MoneyAccountAccessLevel,
+  PaymentOrigin,
+  useEffectiveExchangeRate,
+  useMoneyAccounts,
+} from '@/features/finance'
 import {
   useProducts,
   useStockBalances,
   useWarehouses,
 } from '@/features/inventory'
 import { cn } from '@/lib/utils'
-import { SalesInvoiceItemsTable, type SalesItemOption } from '../components'
+import {
+  InvoicePaymentDialog,
+  PosSettlementDialog,
+  SalesInvoiceItemsTable,
+  type SalesItemOption,
+} from '../components'
 import {
   useCreateActiveSalesInvoice,
   useDeleteActiveSalesInvoice,
@@ -59,11 +70,11 @@ import {
 import { salesInvoiceSchema } from '../schemas/sales.schemas'
 import { PosPaymentMode, SalesInvoicePaymentStatus, SalesLineType } from '../types/sales.types'
 import type {
-  PosPaymentMode as PosPaymentModeValue,
   SalesInvoice,
   SalesInvoiceDraftInput,
   SalesInvoiceFormValues,
   SalesInvoiceLineForm,
+  SalesInvoicePayment,
   SalesLineType as SalesLineTypeValue,
 } from '../types/sales.types'
 
@@ -116,6 +127,7 @@ const invoiceToForm = (invoice: SalesInvoice): InvoiceForm => ({
     ),
     useMasterPrice: !line.isPriceOverridden,
   })),
+  payments: [],
 })
 
 export function CreateSalesInvoicePage() {
@@ -132,6 +144,7 @@ export function CreateSalesInvoicePage() {
   const currentUser = useCurrentUser().data
   const canEditPosted = hasCapability(currentUser?.role, 'editPostedInvoice')
   const canDeletePosted = hasCapability(currentUser?.role, 'deletePostedInvoice')
+  const canCorrectPosSettlement = hasCapability(currentUser?.role, 'correctPosSettlement')
 
   const [editingInvoice, setEditingInvoice] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -139,10 +152,9 @@ export function CreateSalesInvoicePage() {
   const [deleteReasonError, setDeleteReasonError] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const [posPaymentMode, setPosPaymentMode] = useState<PosPaymentModeValue>(PosPaymentMode.Paid)
-  const [tenderAmounts, setTenderAmounts] = useState<Record<string, number>>({})
-  const [changeCashboxId, setChangeCashboxId] = useState('')
-  const [changeAmount, setChangeAmount] = useState(0)
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<SalesInvoicePayment | null>(null)
+  const [posSettlementOpen, setPosSettlementOpen] = useState(false)
 
   const customers = useContacts({ page: 1, pageSize: 100, role: 0, isActive: true }).data?.data ?? []
   const branches = useBranches().data?.data ?? []
@@ -164,10 +176,12 @@ export function CreateSalesInvoicePage() {
       exchangeRate: 1,
       notes: '',
       lines: [newEmptyLine()],
+      payments: [],
     },
   })
 
   const lineFields = useFieldArray({ control: form.control, name: 'lines' })
+  const paymentFields = useFieldArray({ control: form.control, name: 'payments' })
   const values = useWatch({ control: form.control })
   const invoice = invoiceQuery.data
   const isExistingInvoice = Boolean(invoice)
@@ -177,6 +191,22 @@ export function CreateSalesInvoicePage() {
   const selectedCurrency = currencies.find((item) => item.id === selectedCurrencyId)
   const isForeign = Boolean(selectedCurrencyId && business && selectedCurrencyId !== business.baseCurrencyId)
   const rate = isForeign ? Number(values.exchangeRate) || 0 : 1
+  const embeddedMoneyAccounts = useMoneyAccounts(
+    {
+      page: 1,
+      pageSize: 100,
+      branchId: values.branchId || undefined,
+      currencyId: selectedCurrencyId || undefined,
+      isActive: true,
+    },
+    false,
+    !isExistingInvoice && Boolean(values.branchId && selectedCurrencyId)
+  ).data?.data.filter((account) =>
+    account.isActive
+    && account.branchId === values.branchId
+    && account.currencyId === selectedCurrencyId
+    && account.currentUserAccess === MoneyAccountAccessLevel.Operate
+  ) ?? []
   const effectiveRateQuery = useEffectiveExchangeRate(
     selectedCurrencyId,
     values.invoiceDate,
@@ -200,26 +230,6 @@ export function CreateSalesInvoicePage() {
     }
     form.reset(formValues)
     if (shouldEdit && canEditPosted) {
-      if (invoice.posContext) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing POS settlement state when entering edit mode via URL search param
-        setPosPaymentMode(invoice.posContext.paymentMode)
-        setTenderAmounts(
-          Object.fromEntries(
-            invoice.posContext.sessionCashboxes.map((cashbox) => [
-              cashbox.moneyAccountId,
-              invoice.posContext!.tenders.find((tender) => tender.moneyAccountId === cashbox.moneyAccountId)
-                ?.tenderedAmount ?? 0,
-            ])
-          )
-        )
-        setChangeCashboxId(
-          invoice.posContext.change?.moneyAccountId ??
-            invoice.posContext.sessionCashboxes.find((cashbox) => cashbox.currencyId === invoice.baseCurrencyId)
-              ?.moneyAccountId ??
-            ''
-        )
-        setChangeAmount(invoice.posContext.change?.amount ?? 0)
-      }
       setEditingInvoice(true)
     }
   }, [invoice, form, shouldEdit, canEditPosted])
@@ -434,27 +444,20 @@ export function CreateSalesInvoicePage() {
           useMasterPrice: line.useMasterPrice ?? true,
         }
       }),
+      payments: value.payments.map((payment) => ({
+        paymentDate: payment.paymentDate,
+        moneyAccountId: payment.moneyAccountId,
+        amount: payment.amount,
+        exchangeRate: isForeign ? value.exchangeRate : null,
+        notes: payment.notes.trim() || null,
+      })),
     }
 
     if (invoice) {
-      const posSettlement = invoice.posContext
-        ? {
-            paymentMode: posPaymentMode,
-            tenders:
-              posPaymentMode === PosPaymentMode.Credit
-                ? []
-                : Object.entries(tenderAmounts)
-                    .filter(([, amount]) => amount > 0)
-                    .map(([moneyAccountId, amount]) => ({ moneyAccountId, amount })),
-            change:
-              posPaymentMode === PosPaymentMode.Paid && changeCashboxId && changeAmount > 0
-                ? { moneyAccountId: changeCashboxId, amount: changeAmount }
-                : null,
-          }
-        : null
+      const { payments: _, ...commercialCorrection } = body
 
       update.mutate(
-        { ...body, expectedUpdatedAtUtc: invoice.updatedAtUtc, posSettlement },
+        { ...commercialCorrection, expectedUpdatedAtUtc: invoice.updatedAtUtc },
         {
           onSuccess: () => {
             setEditingInvoice(false)
@@ -479,25 +482,6 @@ export function CreateSalesInvoicePage() {
     if (!invoice) return
     update.reset()
     form.reset(invoiceToForm(invoice))
-    if (invoice.posContext) {
-      setPosPaymentMode(invoice.posContext.paymentMode)
-      setTenderAmounts(
-        Object.fromEntries(
-          invoice.posContext.sessionCashboxes.map((cashbox) => [
-            cashbox.moneyAccountId,
-            invoice.posContext!.tenders.find((tender) => tender.moneyAccountId === cashbox.moneyAccountId)
-              ?.tenderedAmount ?? 0,
-          ])
-        )
-      )
-      setChangeCashboxId(
-        invoice.posContext.change?.moneyAccountId ??
-          invoice.posContext.sessionCashboxes.find((cashbox) => cashbox.currencyId === invoice.baseCurrencyId)
-            ?.moneyAccountId ??
-          ''
-      )
-      setChangeAmount(invoice.posContext.change?.amount ?? 0)
-    }
     setEditingInvoice(true)
   }
 
@@ -574,7 +558,7 @@ export function CreateSalesInvoicePage() {
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {invoice?.posContext
-                ? `POS Sale ${invoice.posContext.documentNumber} · Session ${invoice.posContext.posSessionNumber ?? '—'}`
+                ? `POS Sale ${invoice.documentNumber} · Session ${invoice.posContext.posSessionNumber ?? '—'}`
                 : invoice
                   ? `Posted sales invoice · ${formatTimestamp(invoice.createdAtUtc)}`
                   : 'Create and post a new sales invoice'}
@@ -878,108 +862,154 @@ export function CreateSalesInvoicePage() {
           baseTotal={baseTotal}
         />
 
-        {/* POS SETTLEMENT CARD (IF POS CONTEXT) */}
+        {/* EMBEDDED PAYMENTS (NEW INVOICE ONLY) */}
+        {!invoice && (
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between gap-4 border-b border-border/50 pb-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <ReceiptText className="size-4 text-primary" />
+                  Payments
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Optionally collect one or more Payments while posting this invoice.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => paymentFields.append({
+                  paymentDate: values.invoiceDate || today(),
+                  moneyAccountId: '',
+                  amount: 0,
+                  exchangeRate: isForeign ? rate : 1,
+                  notes: '',
+                })}
+              >
+                <Plus className="size-3.5" />
+                Add Payment
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-4">
+              {paymentFields.fields.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-xs text-muted-foreground">
+                  No Payment will be collected when the invoice is posted.
+                </p>
+              ) : paymentFields.fields.map((field, index) => (
+                <div key={field.id} className="grid gap-3 rounded-lg border border-border/70 p-3 lg:grid-cols-[1fr_1.5fr_1fr_1.5fr_auto] lg:items-end">
+                  <Field label="Payment date" error={form.formState.errors.payments?.[index]?.paymentDate?.message}>
+                    <Input type="date" {...form.register(`payments.${index}.paymentDate`)} />
+                  </Field>
+                  <Field label={`Money Account (${selectedCurrency?.code ?? ''})`} error={form.formState.errors.payments?.[index]?.moneyAccountId?.message}>
+                    <Select {...form.register(`payments.${index}.moneyAccountId`)}>
+                      <option value="">Select account</option>
+                      {embeddedMoneyAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.code} — {account.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Amount" error={form.formState.errors.payments?.[index]?.amount?.message}>
+                    <Input
+                      type="number"
+                      min="0.0001"
+                      step="0.0001"
+                      className="font-mono"
+                      {...form.register(`payments.${index}.amount`, { valueAsNumber: true })}
+                    />
+                  </Field>
+                  <Field label="Notes" error={form.formState.errors.payments?.[index]?.notes?.message}>
+                    <Input placeholder="Optional" {...form.register(`payments.${index}.notes`)} />
+                  </Field>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove Payment ${index + 1}`}
+                    onClick={() => paymentFields.remove(index)}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+              {form.formState.errors.payments?.message && (
+                <p className="text-xs text-destructive">{form.formState.errors.payments.message}</p>
+              )}
+              {isForeign && paymentFields.fields.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Embedded Payments use the invoice exchange rate of {formatAmount(rate)}.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* POS DETAILS CARD (IF POS CONTEXT) */}
         {invoice?.posContext && (
           <Card>
             <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3 border-b border-border/50">
               <div>
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                   <Banknote className="size-4 text-primary" />
-                  POS Settlement
+                  POS Details
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  {invoice.posContext.documentNumber} · Session {invoice.posContext.posSessionNumber ?? '—'}
+                  {invoice.documentNumber} · Session {invoice.posContext.posSessionNumber ?? '—'}
                 </CardDescription>
               </div>
-              <Badge variant={isClosedPosSession ? 'secondary' : 'champagne'}>
-                {isClosedPosSession ? 'Closed session' : 'Open session'}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={isClosedPosSession ? 'secondary' : 'champagne'}>
+                  {isClosedPosSession ? 'Closed session' : 'Open session'}
+                </Badge>
+                {canCorrectPosSettlement && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => setPosSettlementOpen(true)}
+                  >
+                    <Pencil className="size-3.5" />
+                    Correct POS Payment
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
-              {editingInvoice ? (
-                <>
-                  <div className="max-w-sm">
-                    <Field label="Payment mode">
-                      <Select
-                        value={posPaymentMode}
-                        onChange={(event) => setPosPaymentMode(Number(event.target.value) as PosPaymentModeValue)}
-                      >
-                        <option value={PosPaymentMode.Paid}>Paid</option>
-                        <option value={PosPaymentMode.Partial}>Partial</option>
-                        <option value={PosPaymentMode.Credit}>Credit</option>
-                      </Select>
-                    </Field>
-                  </div>
-                  {posPaymentMode !== PosPaymentMode.Credit && (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {invoice.posContext.sessionCashboxes.map((cashbox) => (
-                        <Field
-                          key={cashbox.moneyAccountId}
-                          label={`${cashbox.moneyAccountCode} · ${cashbox.currencyCode}`}
-                        >
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.0001"
-                            className="h-9 font-mono text-xs"
-                            value={tenderAmounts[cashbox.moneyAccountId] ?? 0}
-                            onChange={(event) =>
-                              setTenderAmounts((current) => ({
-                                ...current,
-                                [cashbox.moneyAccountId]: Number(event.target.value) || 0,
-                              }))
-                            }
-                          />
-                        </Field>
-                      ))}
-                    </div>
-                  )}
-                  {posPaymentMode === PosPaymentMode.Paid && (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field label="Change cashbox">
-                        <Select
-                          value={changeCashboxId}
-                          onChange={(event) => setChangeCashboxId(event.target.value)}
-                        >
-                          <option value="">No change</option>
-                          {invoice.posContext.sessionCashboxes.map((cashbox) => (
-                            <option key={cashbox.moneyAccountId} value={cashbox.moneyAccountId}>
-                              {cashbox.moneyAccountCode} — {cashbox.currencyCode}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                      <Field label="Change amount">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.0001"
-                          className="h-9 font-mono text-xs"
-                          value={changeAmount}
-                          onChange={(event) => setChangeAmount(Number(event.target.value) || 0)}
-                        />
-                      </Field>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <Audit label="Payment Mode" value={posPaymentModeLabel[invoice.posContext.paymentMode]} />
-                  {invoice.posContext.tenders.map((tender) => (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Audit label="Cashier" value={invoice.posContext.cashierUsername} />
+                <Audit label="Payment Mode" value={posPaymentModeLabel[invoice.posContext.paymentMode]} />
+                <Audit label="Payment" value={invoice.posContext.paymentDocumentNumber ?? 'No payment'} />
+                <Audit label="Completed" value={formatTimestamp(invoice.posContext.completedAtUtc)} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {invoice.posContext.tenders.map((tender) => (
+                  <div key={tender.id} className="rounded-lg border border-border/70 p-3">
                     <Audit
-                      key={tender.moneyAccountId}
-                      label={tender.moneyAccountCode}
+                      label={`Tender · ${tender.moneyAccountCode}`}
                       value={`${formatAmount(tender.tenderedAmount)} ${tender.currencyCode}`}
                     />
-                  ))}
-                  {invoice.posContext.change && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">{tender.moneyAccountName}</p>
+                  </div>
+                ))}
+                {invoice.posContext.change && (
+                  <div className="rounded-lg border border-border/70 p-3">
                     <Audit
-                      label="Change Returned"
+                      label={`Change · ${invoice.posContext.change.moneyAccountCode}`}
                       value={`${formatAmount(invoice.posContext.change.amount)} ${invoice.posContext.change.currencyCode}`}
                     />
-                  )}
-                </div>
-              )}
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {invoice.posContext.change.moneyAccountName}
+                    </p>
+                  </div>
+                )}
+                {invoice.posContext.tenders.length === 0 && !invoice.posContext.change && (
+                  <p className="text-xs text-muted-foreground">Credit checkout — no drawer movement.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -987,11 +1017,25 @@ export function CreateSalesInvoicePage() {
         {/* PAYMENTS & RECEIPTS CARD (IF EXISTING) */}
         {invoice && (
           <Card>
-            <CardHeader className="pb-3 border-b border-border/50">
+            <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-border/50 pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <ReceiptText className="size-4 text-primary" />
-                Payments & Allocations
+                  <ReceiptText className="size-4 text-primary" />
+                  Payments & Allocations
               </CardTitle>
+              {!invoice.posContext && invoice.outstandingAmount > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => {
+                    setSelectedPayment(null)
+                    setPaymentDialogOpen(true)
+                  }}
+                >
+                  <Plus className="size-3.5" />
+                  Add Payment
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
               <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/30 p-4 sm:grid-cols-3">
@@ -1014,6 +1058,7 @@ export function CreateSalesInvoicePage() {
                         <TableHead className="px-4 py-2.5">Date</TableHead>
                         <TableHead className="px-4 py-2.5 text-right">Applied</TableHead>
                         <TableHead className="px-4 py-2.5 text-right">Base Applied</TableHead>
+                        <TableHead className="px-4 py-2.5 text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody className="divide-y divide-border/60">
@@ -1036,6 +1081,30 @@ export function CreateSalesInvoicePage() {
                           <TableCell className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">
                             {formatAmount(payment.baseAmount)} {invoice.baseCurrencyCode}
                           </TableCell>
+                          <TableCell className="px-4 py-2.5 text-right">
+                            {payment.origin === PaymentOrigin.SalesInvoice && !invoice.posContext ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1.5 text-xs"
+                                onClick={() => {
+                                  setSelectedPayment(payment)
+                                  setPaymentDialogOpen(true)
+                                }}
+                              >
+                                <Pencil className="size-3.5" />
+                                Edit
+                              </Button>
+                            ) : (
+                              <Link
+                                className="text-xs font-medium text-primary hover:underline"
+                                to={`/finance/payments/${payment.paymentId}`}
+                              >
+                                View source
+                              </Link>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1054,6 +1123,26 @@ export function CreateSalesInvoicePage() {
           </div>
         )}
       </form>
+
+      {invoice && (
+        <InvoicePaymentDialog
+          invoice={invoice}
+          payment={selectedPayment}
+          open={paymentDialogOpen}
+          onOpenChange={(open) => {
+            setPaymentDialogOpen(open)
+            if (!open) setSelectedPayment(null)
+          }}
+        />
+      )}
+
+      {invoice?.posContext && (
+        <PosSettlementDialog
+          invoice={invoice}
+          open={posSettlementOpen}
+          onOpenChange={setPosSettlementOpen}
+        />
+      )}
 
       {/* AUDIT HISTORY MODAL */}
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>

@@ -146,7 +146,7 @@ public sealed class PosSettlementService
 
   internal void AddEffects(
     PosSettlementPreparation preparation,
-    PosSaleEntity sale,
+    PosContextEntity context,
     PaymentEntity payment)
   {
     foreach (var tender in preparation.Tenders)
@@ -155,6 +155,8 @@ public sealed class PosSettlementService
         line.Sequence == tender.Sequence && line.Direction == PaymentMoneyDirection.Collection);
       var tenderEntity = new PosTenderEntity
       {
+        SalesInvoiceId = context.SalesInvoiceId,
+        PosContext = context,
         Sequence = tender.Sequence,
         MoneyAccountId = tender.Account.Id,
         TenderedAmount = tender.Request.Amount,
@@ -163,7 +165,7 @@ public sealed class PosSettlementService
         PaymentMoneyLine = moneyLine,
         PaymentMoneyLineId = moneyLine.Id
       };
-      sale.Tenders.Add(tenderEntity);
+      context.Tenders.Add(tenderEntity);
       _db.PosTenders.Add(tenderEntity);
     }
     if (preparation.Change is null) return;
@@ -172,6 +174,8 @@ public sealed class PosSettlementService
     var changeLine = payment.MoneyLines.Single(line => line.Direction == PaymentMoneyDirection.Change);
     var changeEntity = new PosChangeEntity
     {
+      SalesInvoiceId = context.SalesInvoiceId,
+      PosContext = context,
       MoneyAccountId = change.Account.Id,
       Amount = change.Request.Amount,
       ExchangeRate = change.ExchangeRate,
@@ -179,7 +183,7 @@ public sealed class PosSettlementService
       PaymentMoneyLine = changeLine,
       PaymentMoneyLineId = changeLine.Id
     };
-    sale.Change = changeEntity;
+    context.Change = changeEntity;
     _db.PosChanges.Add(changeEntity);
   }
 

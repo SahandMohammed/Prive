@@ -55,9 +55,9 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<PosZReportEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosZPaymentSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosZDrawerSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosSaleEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSale.SalesInvoice.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosChangeEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosSale.SalesInvoice.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosContextEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosContext.SalesInvoice.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosChangeEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosContext.SalesInvoice.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
@@ -126,33 +126,41 @@ public sealed partial class AppDbContext
     await ValidateGlobalOperationalCodesAsync(entries, ct);
 
     // Validate both row ownership and referenced scoped rows, including IDs sent directly by API clients.
-    var references = new Dictionary<Type, HashSet<Guid>>();
-    void RequireReference(Type type, Guid id)
+    var references = new Dictionary<(Type Type, string KeyProperty), HashSet<Guid>>();
+    void RequireReference(Type type, string keyProperty, Guid id)
     {
-      if (!references.TryGetValue(type, out var ids)) references[type] = ids = [];
+      if (!references.TryGetValue((type, keyProperty), out var ids))
+        references[(type, keyProperty)] = ids = [];
       ids.Add(id);
     }
 
     foreach (var entry in entries)
     {
       if (entry.State == EntityState.Modified && entry.Metadata.GetDeclaredQueryFilters().Any())
-        RequireReference(entry.Metadata.ClrType, (Guid)entry.Property("Id").OriginalValue!);
+      {
+        var key = entry.Metadata.FindPrimaryKey();
+        if (key?.Properties.Count == 1
+          && entry.Property(key.Properties[0].Name).OriginalValue is Guid id)
+          RequireReference(entry.Metadata.ClrType, key.Properties[0].Name, id);
+      }
       foreach (var fk in entry.Metadata.GetForeignKeys().Where(fk => fk.PrincipalEntityType.GetDeclaredQueryFilters().Any()))
       {
-        var idIndex = fk.PrincipalKey.Properties.ToList().FindIndex(property => property.Name == "Id");
-        if (idIndex < 0 || entry.Property(fk.Properties[idIndex].Name).CurrentValue is not Guid id) continue;
+        var keyIndex = fk.PrincipalKey.Properties.ToList().FindIndex(property => property.Name == "Id");
+        if (keyIndex < 0 && fk.PrincipalKey.Properties.Count == 1) keyIndex = 0;
+        if (keyIndex < 0 || entry.Property(fk.Properties[keyIndex].Name).CurrentValue is not Guid id) continue;
         var type = fk.PrincipalEntityType.ClrType;
+        var keyProperty = fk.PrincipalKey.Properties[keyIndex].Name;
         if (entries.Any(candidate => candidate.Metadata.ClrType == type && candidate.State == EntityState.Added
-          && (Guid)candidate.Property("Id").CurrentValue! == id)) continue;
-        RequireReference(type, id);
+          && candidate.Property(keyProperty).CurrentValue is Guid candidateId && candidateId == id)) continue;
+        RequireReference(type, keyProperty, id);
       }
     }
 
     // Batch by entity type so a document with many lines does not query once per line.
-    foreach (var (type, ids) in references)
+    foreach (var ((type, keyProperty), ids) in references)
     {
       var method = typeof(AppDbContext).GetMethod(nameof(CountVisibleAsync), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-      var count = await (Task<int>)method.MakeGenericMethod(type).Invoke(this, [ids.ToArray(), ct])!;
+      var count = await (Task<int>)method.MakeGenericMethod(type).Invoke(this, [ids.ToArray(), keyProperty, ct])!;
       if (count != ids.Count) ThrowScopeMismatch();
     }
   }
@@ -179,8 +187,8 @@ public sealed partial class AppDbContext
   }
 
   // Find uses the tracking cache; filtered database queries also catch directly attached foreign rows.
-  private Task<int> CountVisibleAsync<TEntity>(Guid[] ids, CancellationToken ct) where TEntity : class =>
-    Set<TEntity>().AsNoTracking().CountAsync(entity => ids.Contains(EF.Property<Guid>(entity, "Id")), ct);
+  private Task<int> CountVisibleAsync<TEntity>(Guid[] ids, string keyProperty, CancellationToken ct) where TEntity : class =>
+    Set<TEntity>().AsNoTracking().CountAsync(entity => ids.Contains(EF.Property<Guid>(entity, keyProperty)), ct);
 
   private static void ThrowScopeMismatch() => throw new ForbiddenException(ErrorCodes.Branch.ScopeMismatch,
     "This record or one of its references belongs to a different branch or catalog. Select the correct branch and try again.");
@@ -195,18 +203,18 @@ public sealed partial class AppDbContext
 
     foreach (var entry in entries)
     {
-      if (entry.Entity is PosSaleEntity posSale && entry.State == EntityState.Added)
+      if (entry.Entity is PosContextEntity posContext && entry.State == EntityState.Added)
       {
         ActivityLogs.Add(new ActivityLogEntity
         {
           BranchId = branchId,
-          UserId = posSale.CashierUserId,
+          UserId = posContext.CashierUserId,
           Action = "completed",
           EntityType = "POS Sale",
-          EntityId = posSale.Id,
-          DocumentNumber = posSale.DocumentNumber,
+          EntityId = posContext.SalesInvoiceId,
+          DocumentNumber = posContext.SalesInvoice.DocumentNumber,
           Description = "Completed POS sale",
-          TimestampUtc = posSale.CompletedAtUtc
+          TimestampUtc = posContext.CompletedAtUtc
         });
       }
       else if (entry.Entity is PosRefundEntity refund && entry.State == EntityState.Added)
@@ -225,7 +233,7 @@ public sealed partial class AppDbContext
       }
       else if (entry.Entity is SalesInvoiceEntity sale)
       {
-        if (entry.State == EntityState.Added && sale.PosSale == null)
+        if (entry.State == EntityState.Added && sale.PosContext == null)
         {
           ActivityLogs.Add(new ActivityLogEntity
           {
@@ -242,7 +250,7 @@ public sealed partial class AppDbContext
             TimestampUtc = sale.PostedAtUtc ?? sale.CreatedAtUtc
           });
         }
-        else if (entry.State == EntityState.Modified && sale.PosSale == null)
+        else if (entry.State == EntityState.Modified && sale.PosContext == null)
         {
           var statusProp = entry.Property(nameof(SalesInvoiceEntity.Status));
           if (statusProp.IsModified && sale.Status == SalesInvoiceStatus.Posted && (SalesInvoiceStatus)statusProp.OriginalValue! != SalesInvoiceStatus.Posted)

@@ -26,13 +26,13 @@ public sealed partial class PosWorkflowTests
     var replay = await service.CompleteSaleAsync(request, data.CashierId, default);
 
     Assert.Equal(first.Id, replay.Id);
-    Assert.Single(await db.PosSales.ToListAsync());
+    Assert.Single(await db.PosContexts.ToListAsync());
     Assert.Single(await db.JournalEntries.Where(entry => entry.Id == first.JournalEntryId).ToListAsync());
 
     var reused = await Assert.ThrowsAsync<ConflictException>(() => service.CompleteSaleAsync(
       request with { Tenders = [new(data.IqdMoneyAccountId, 24_999)] }, data.CashierId, default));
     Assert.Equal(ErrorCodes.Pos.IdempotencyKeyReused, reused.Code);
-    Assert.Single(await db.PosSales.ToListAsync());
+    Assert.Single(await db.PosContexts.ToListAsync());
   }
 
   [Fact]
@@ -187,24 +187,24 @@ public sealed partial class PosWorkflowTests
     Assert.All(results, result => Assert.Equal(sale.Id, result.Value!.Id));
 
     await using var observer = CreateDb(databaseName, data.BranchId, databaseRoot);
-    var persisted = Assert.Single(await observer.PosSales
+    var persisted = Assert.Single(await observer.PosContexts
       .Where(item => item.ClientRequestId == request.ClientRequestId).ToListAsync());
     var invoice = Assert.Single(await observer.SalesInvoices.Where(item => item.Id == persisted.SalesInvoiceId).ToListAsync());
-    Assert.Equal(sale.Id, persisted.Id);
-    Assert.Single(await observer.PosTenders.Where(item => item.PosSaleId == persisted.Id).ToListAsync());
-    Assert.Empty(await observer.PosChanges.Where(item => item.PosSaleId == persisted.Id).ToListAsync());
+    Assert.Equal(sale.Id, persisted.SalesInvoiceId);
+    Assert.Single(await observer.PosTenders.Where(item => item.SalesInvoiceId == persisted.SalesInvoiceId).ToListAsync());
+    Assert.Empty(await observer.PosChanges.Where(item => item.SalesInvoiceId == persisted.SalesInvoiceId).ToListAsync());
     Assert.NotNull(persisted.PaymentId);
     Assert.Single(await observer.MoneyLedgerEntries.Where(item =>
       item.SourceType == MoneyLedgerSourceType.Payment && item.SourceDocumentId == persisted.PaymentId).ToListAsync());
     Assert.Single(await observer.JournalEntries.Where(item => item.Id == invoice.JournalEntryId).ToListAsync());
-    Assert.Single(await observer.StockMovements.Where(item => item.Reference == persisted.DocumentNumber
+    Assert.Single(await observer.StockMovements.Where(item => item.Reference == invoice.DocumentNumber
       && item.Type == StockMovementType.Sale).ToListAsync());
 
     var reused = await Assert.ThrowsAsync<ConflictException>(() => CreateService(observer).CompleteSaleAsync(
       request with { Tenders = [new(data.IqdMoneyAccountId, 14_999)] }, data.CashierId, default));
     Assert.Equal(ErrorCodes.Pos.IdempotencyKeyReused, reused.Code);
-    Assert.Equal(15_000, (await observer.PosTenders.SingleAsync(item => item.PosSaleId == persisted.Id)).TenderedAmount);
-    Assert.Single(await observer.PosSales.Where(item => item.ClientRequestId == request.ClientRequestId).ToListAsync());
+    Assert.Equal(15_000, (await observer.PosTenders.SingleAsync(item => item.SalesInvoiceId == persisted.SalesInvoiceId)).TenderedAmount);
+    Assert.Single(await observer.PosContexts.Where(item => item.ClientRequestId == request.ClientRequestId).ToListAsync());
   }
 
   [Theory]

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
+using Api.Modules.Dashboard;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Sales;
@@ -244,11 +245,11 @@ public sealed class PosService
   {
     var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
-    var query = _db.PosSales.AsNoTracking().Where(sale => !sale.SalesInvoice.IsDeleted);
+    var query = _db.PosContexts.AsNoTracking().Where(context => !context.SalesInvoice.IsDeleted);
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
       var search = request.Search.Trim().ToLower();
-      query = query.Where(sale => sale.DocumentNumber.ToLower().Contains(search)
+      query = query.Where(sale => sale.SalesInvoice.DocumentNumber.ToLower().Contains(search)
         || (sale.SalesInvoice.Customer != null && sale.SalesInvoice.Customer.Name.ToLower().Contains(search)));
     }
     if (request.CustomerId is not null) query = query.Where(sale => sale.SalesInvoice.CustomerId == request.CustomerId);
@@ -285,17 +286,17 @@ public sealed class PosService
       };
     }
 
-    return await query.OrderByDescending(sale => sale.CompletedAtUtc).ThenByDescending(sale => sale.DocumentNumber)
+    return await query.OrderByDescending(sale => sale.CompletedAtUtc).ThenByDescending(sale => sale.SalesInvoice.DocumentNumber)
       .Select(sale => new PosSaleListResponse(
-        sale.Id,
-        sale.DocumentNumber,
+        sale.SalesInvoiceId,
+        sale.SalesInvoice.DocumentNumber,
         sale.CompletedAtUtc,
         sale.SalesInvoice.BranchId,
         sale.SalesInvoice.Branch.Name,
         sale.SalesInvoice.CustomerId,
         sale.SalesInvoice.Customer.Name,
         sale.PosSessionId,
-        sale.PosSession == null ? null : sale.PosSession.SessionNumber,
+        sale.PosSession.SessionNumber,
         sale.SalesInvoice.Total,
         (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount),
         Math.Max(sale.SalesInvoice.BaseTotal
@@ -321,9 +322,9 @@ public sealed class PosService
       .ToPagedResultAsync(request, ct);
   }
 
-  public async Task<PosSaleResponse> GetSaleAsync(Guid id, CancellationToken ct)
+  public async Task<PosSaleResponse> GetSaleAsync(Guid salesInvoiceId, CancellationToken ct)
   {
-    var sale = await SaleQuery().SingleOrDefaultAsync(item => item.Id == id, ct)
+    var sale = await SaleQuery().SingleOrDefaultAsync(item => item.SalesInvoiceId == salesInvoiceId, ct)
       ?? throw new NotFoundException(ErrorCodes.Pos.SaleNotFound, "POS Sale not found.");
     return ToResponse(sale);
   }
@@ -463,19 +464,19 @@ public sealed class PosService
     var invoice = await _sales.PrepareImmediateSaleAsync(
       invoiceRequest, documentNumber, userId, ct);
     var completedAt = invoice.PostedAtUtc!.Value;
-    var sale = new PosSaleEntity
+    var sale = new PosContextEntity
     {
-      DocumentNumber = documentNumber,
+      SalesInvoiceId = invoice.Id,
       SalesInvoice = invoice,
       PosSessionId = session.Id,
-      Status = PosSaleStatus.Completed,
+      PosSession = session,
       CashierUserId = userId,
       CompletedAtUtc = completedAt,
       ClientRequestId = request.ClientRequestId,
       RequestFingerprint = fingerprint
     };
 
-    _db.PosSales.Add(sale);
+    _db.PosContexts.Add(sale);
 
     var settledBase = Money(settlement.Tenders.Sum(tender => tender.BaseAmount)
       - (settlement.Change?.BaseAmount ?? 0m));
@@ -503,16 +504,290 @@ public sealed class PosService
     await _db.SaveChangesAsync(ct);
     if (transaction is not null) await transaction.CommitAsync(ct);
 
-    return await GetSaleAsync(sale.Id, ct);
+    return await GetSaleAsync(sale.SalesInvoiceId, ct);
   }
 
-  private IQueryable<PosSaleEntity> SaleQuery() => _db.PosSales.AsNoTracking()
+  public async Task<PosSaleResponse> CorrectSettlementAsync(
+    Guid salesInvoiceId,
+    CorrectPosSettlementRequest request,
+    Guid userId,
+    CancellationToken ct)
+  {
+    var reason = request.Reason.Trim();
+    if (reason.Length == 0)
+      throw new BadRequestException(ErrorCodes.Common.ValidationFailed,
+        "A POS settlement correction reason is required.");
+
+    await using var transaction = _db.Database.IsRelational()
+      ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
+      : null;
+    try
+    {
+      if (_db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+          $"SELECT \"SalesInvoiceId\" FROM pos_contexts WHERE \"SalesInvoiceId\" = {salesInvoiceId} FOR UPDATE", ct);
+
+      var context = await SettlementCorrectionQuery()
+        .SingleOrDefaultAsync(item => item.SalesInvoiceId == salesInvoiceId, ct)
+        ?? throw new NotFoundException(ErrorCodes.Pos.SaleNotFound, "POS Sale not found.");
+      var invoice = context.SalesInvoice;
+      EnsureSettlementTimestamp(invoice, request.ExpectedUpdatedAtUtc);
+      if (invoice.Status != SalesInvoiceStatus.Posted || invoice.IsDeleted)
+        throw new ConflictException(ErrorCodes.Sales.DocumentNotDraft,
+          "Only an active POS Sales Invoice can have its settlement corrected.");
+      if (invoice.CurrencyId != invoice.BaseCurrencyId)
+        throw new BadRequestException(ErrorCodes.Sales.CurrencyInvalid,
+          "A POS-generated invoice must use the Business base currency.");
+      if (context.Refunds.Any(refund => refund.Status == PosRefundStatus.Posted))
+        throw new ConflictException(ErrorCodes.Pos.SettlementHasRefundDependency,
+          "This POS settlement cannot be changed because a posted refund or void depends on it.");
+
+      var session = await _sessions.FindSessionForInvoiceCorrectionAsync(
+        context.PosSessionId, invoice.BranchId, ct)
+        ?? throw SettlementDependent("The original POS Session could not be identified safely.");
+      if (!session.PosContexts.Any(item => item.SalesInvoiceId == salesInvoiceId))
+        throw SettlementDependent("The POS context is not consistently linked to its original session.");
+      var zIdentity = ValidateAndCaptureZIdentity(session);
+      var preparation = await _settlements.PrepareAsync(new PosSettlementRequest(
+        invoice.BranchId,
+        context.PosSessionId,
+        invoice.CustomerId,
+        invoice.BaseTotal,
+        request.PaymentMode,
+        request.Tenders,
+        request.Change), userId, management: true, ct, existingSession: session);
+      var payment = context.PaymentId is Guid paymentId
+        ? await _payments.FindTrackedAsync(paymentId, ct)
+          ?? throw SettlementDependent("The POS Payment could not be identified safely.")
+        : null;
+      if (payment is not null
+        && (payment.Origin != PaymentOrigin.Pos
+          || payment.SourceSalesInvoiceId != invoice.Id
+          || payment.CustomerId != invoice.CustomerId
+          || payment.BranchId != invoice.BranchId
+          || payment.CurrencyId != invoice.CurrencyId))
+        throw new BadRequestException(ErrorCodes.Finance.PaymentSourceInvoiceMismatch,
+          "The POS Payment does not match its source Sales Invoice.");
+
+      var before = SettlementSnapshot(context, session);
+      RemoveZReport(session, zIdentity);
+      _db.PosTenders.RemoveRange(context.Tenders);
+      if (context.Change is not null) _db.PosChanges.Remove(context.Change);
+      context.Tenders.Clear();
+      context.Change = null;
+
+      // Tender/change rows reference PaymentMoneyLines, so flush their removal before
+      // rebuilding or deleting the Payment-owned accounting effects.
+      await _db.SaveChangesAsync(ct);
+
+      var settledBase = Money(preparation.Tenders.Sum(tender => tender.BaseAmount)
+        - (preparation.Change?.BaseAmount ?? 0m));
+      if (settledBase > 0m)
+      {
+        var moneyLines = preparation.Tenders.Select(tender => new PaymentMoneyLineCommand(
+          tender.Account.Id,
+          tender.Request.Amount,
+          tender.ExchangeRate,
+          PaymentMoneyDirection.Collection)).ToList();
+        if (preparation.Change is not null)
+          moneyLines.Add(new PaymentMoneyLineCommand(
+            preparation.Change.Account.Id,
+            preparation.Change.Request.Amount,
+            preparation.Change.ExchangeRate,
+            PaymentMoneyDirection.Change));
+
+        if (payment is null)
+          payment = await _payments.CreateAsync(new CreatePaymentCommand(
+            invoice.BranchId,
+            invoice.CustomerId,
+            invoice.InvoiceDate,
+            invoice.CurrencyId,
+            PaymentOrigin.Pos,
+            invoice.Id,
+            "POS checkout settlement",
+            [new PaymentAllocationCommand(invoice.Id, settledBase)],
+            moneyLines), userId, ct);
+        else
+          await _payments.ReplaceOwnedPaymentAsync(
+            payment,
+            invoice.InvoiceDate,
+            "POS checkout settlement",
+            [new PaymentAllocationCommand(invoice.Id, settledBase)],
+            moneyLines,
+            reason,
+            userId,
+            ct);
+
+        context.Payment = payment;
+        context.PaymentId = payment.Id;
+        _settlements.AddEffects(preparation, context, payment);
+      }
+      else if (payment is not null)
+      {
+        await _payments.DeleteOwnedPaymentAsync(payment, reason, userId, ct);
+        context.Payment = null;
+        context.PaymentId = null;
+      }
+
+      var correctedAtUtc = DateTime.UtcNow;
+      invoice.UpdatedAtUtc = correctedAtUtc;
+      RegenerateZReport(session, zIdentity, correctedAtUtc);
+      _db.ActivityLogs.Add(new ActivityLogEntity
+      {
+        BranchId = invoice.BranchId,
+        UserId = userId,
+        Action = "corrected",
+        EntityType = "POS Settlement",
+        EntityId = invoice.Id,
+        DocumentNumber = invoice.DocumentNumber,
+        Description = "Corrected POS settlement",
+        Reason = reason,
+        BeforeState = before,
+        AfterState = SettlementSnapshot(context, session),
+        TimestampUtc = correctedAtUtc
+      });
+
+      await _db.SaveChangesAsync(ct);
+      if (transaction is not null) await transaction.CommitAsync(ct);
+      return await GetSaleAsync(salesInvoiceId, ct);
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+      if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
+      throw SettlementConcurrencyConflict();
+    }
+    catch
+    {
+      if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
+      throw;
+    }
+  }
+
+  private IQueryable<PosContextEntity> SettlementCorrectionQuery() => _db.PosContexts
+    .Include(context => context.SalesInvoice).ThenInclude(invoice => invoice.Customer)
+    .Include(context => context.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
+    .Include(context => context.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
+    .Include(context => context.Change).ThenInclude(change => change!.PaymentMoneyLine)
+    .Include(context => context.Refunds);
+
+  private static void EnsureSettlementTimestamp(SalesInvoiceEntity invoice, DateTime expectedUpdatedAtUtc)
+  {
+    var expected = expectedUpdatedAtUtc.Kind == DateTimeKind.Utc
+      ? expectedUpdatedAtUtc
+      : expectedUpdatedAtUtc.ToUniversalTime();
+    if (expected == default || invoice.UpdatedAtUtc != expected)
+      throw SettlementConcurrencyConflict();
+  }
+
+  private static PosZReportIdentity? ValidateAndCaptureZIdentity(PosSessionEntity session)
+  {
+    if (session.Status == PosSessionStatus.Open)
+    {
+      if (session.ZReport is not null || session.ClosingCounts.Count > 0)
+        throw SettlementDependent("The open POS Session has closing data that cannot be classified safely.");
+      return null;
+    }
+    if (session.Status != PosSessionStatus.Closed)
+      throw SettlementDependent("The POS Session status cannot be classified safely.");
+
+    var report = session.ZReport
+      ?? throw SettlementDependent("The closed POS Session has no Z Report to regenerate safely.");
+    if (session.ClosedAtUtc is null || session.ClosedByUserId is null
+      || report.PosSessionId != session.Id
+      || report.BranchId != session.BranchId
+      || report.RegisterId != session.RegisterId
+      || report.CashierUserId != session.CashierUserId
+      || report.ClosedByUserId != session.ClosedByUserId
+      || report.OpenedAtUtc != session.OpenedAtUtc
+      || report.ClosedAtUtc != session.ClosedAtUtc)
+      throw SettlementDependent("The Z Report identity does not consistently match its closed POS Session.");
+
+    var openingAccounts = session.OpeningCounts.Select(count => count.MoneyAccountId).Order().ToList();
+    var closingAccounts = session.ClosingCounts.Select(count => count.MoneyAccountId).Order().ToList();
+    if (openingAccounts.Count == 0
+      || session.ClosingCounts.Select(count => count.MoneyAccountId).Distinct().Count() != session.ClosingCounts.Count
+      || !openingAccounts.SequenceEqual(closingAccounts))
+      throw SettlementDependent("The closed POS Session has incomplete physical closing counts.");
+
+    return new PosZReportIdentity(
+      report.Id, report.ReportNumber, report.BranchId, report.BranchCode, report.BranchName,
+      report.RegisterId, report.RegisterCode, report.RegisterName,
+      report.CashierUserId, report.CashierUsername,
+      report.ClosedByUserId, report.ClosedByUsername,
+      report.BaseCurrencyId, report.BaseCurrencyCode, report.OpenedAtUtc, report.ClosedAtUtc);
+  }
+
+  private void RemoveZReport(PosSessionEntity session, PosZReportIdentity? identity)
+  {
+    if (identity is null) return;
+    var report = session.ZReport
+      ?? throw SettlementDependent("The closed POS Session Z Report could not be removed safely.");
+    if (report.Id != identity.Id || report.ReportNumber != identity.ReportNumber)
+      throw SettlementDependent("The closed POS Session Z Report identity changed during correction.");
+    _db.PosZPaymentSummaries.RemoveRange(report.PaymentSummaries);
+    _db.PosZDrawerSummaries.RemoveRange(report.DrawerSummaries);
+    _db.PosZReports.Remove(report);
+    report.PaymentSummaries.Clear();
+    report.DrawerSummaries.Clear();
+    session.ZReport = null;
+  }
+
+  private void RegenerateZReport(
+    PosSessionEntity session,
+    PosZReportIdentity? identity,
+    DateTime correctedAtUtc)
+  {
+    if (identity is null) return;
+    if (session.Status != PosSessionStatus.Closed)
+      throw SettlementDependent("The POS Session must remain closed while its Z Report is regenerated.");
+    _db.PosZReports.Add(_sessions.RegenerateClosedSessionZReport(
+      session, identity, new DateTimeOffset(correctedAtUtc)));
+  }
+
+  private static string SettlementSnapshot(PosContextEntity context, PosSessionEntity session) =>
+    JsonSerializer.Serialize(new
+    {
+      context.SalesInvoiceId,
+      context.PaymentId,
+      context.SalesInvoice.UpdatedAtUtc,
+      Tenders = context.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new
+      {
+        tender.Id,
+        tender.Sequence,
+        tender.MoneyAccountId,
+        tender.TenderedAmount,
+        tender.ExchangeRate,
+        tender.BaseAmount,
+        tender.PaymentMoneyLineId
+      }),
+      Change = context.Change is null ? null : new
+      {
+        context.Change.Id,
+        context.Change.MoneyAccountId,
+        context.Change.Amount,
+        context.Change.ExchangeRate,
+        context.Change.BaseAmount,
+        context.Change.PaymentMoneyLineId
+      },
+      ZReportId = session.ZReport?.Id,
+      ZReportNumber = session.ZReport?.ReportNumber
+    });
+
+  private static ConflictException SettlementDependent(string message) =>
+    new(ErrorCodes.Sales.InvoiceHasDependentTransaction, message);
+
+  private static ConflictException SettlementConcurrencyConflict() =>
+    new(ErrorCodes.Pos.SettlementConcurrencyConflict,
+      "This POS sale changed after it was loaded. Refresh it and try again.");
+
+  private IQueryable<PosContextEntity> SaleQuery() => _db.PosContexts.AsNoTracking()
     .Where(sale => !sale.SalesInvoice.IsDeleted)
     .Include(sale => sale.CashierUser)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Branch)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Warehouse)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
+    .Include(sale => sale.Payment)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Movements)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.PaymentAllocations).ThenInclude(allocation => allocation.Payment)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Service)
@@ -525,7 +800,7 @@ public sealed class PosService
     .Include(sale => sale.Change).ThenInclude(change => change!.PaymentMoneyLine)
     .Include(sale => sale.Refunds).ThenInclude(refund => refund.ApprovedByUser);
 
-  private static PosSaleResponse ToResponse(PosSaleEntity sale)
+  private static PosSaleResponse ToResponse(PosContextEntity sale)
   {
     var invoice = sale.SalesInvoice;
     var tenders = sale.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosTenderResponse(
@@ -539,6 +814,7 @@ public sealed class PosService
       tender.TenderedAmount,
       tender.ExchangeRate,
       tender.BaseAmount,
+      tender.PaymentMoneyLineId,
       tender.PaymentMoneyLine.MoneyLedgerEntryId)).ToList();
     var change = sale.Change is null ? null : new PosChangeResponse(
       sale.Change.Id,
@@ -550,6 +826,7 @@ public sealed class PosService
       sale.Change.Amount,
       sale.Change.ExchangeRate,
       sale.Change.BaseAmount,
+      sale.Change.PaymentMoneyLineId,
       sale.Change.PaymentMoneyLine.MoneyLedgerEntryId);
     var tenderedBase = Money(tenders.Sum(tender => tender.BaseAmount));
     var changeBase = change?.BaseAmount ?? 0;
@@ -573,11 +850,9 @@ public sealed class PosService
         : PosPaymentMode.Paid;
 
     return new PosSaleResponse(
-      sale.Id,
-      sale.DocumentNumber,
-      sale.Status,
+      sale.SalesInvoiceId,
+      invoice.DocumentNumber,
       sale.PosSessionId,
-      invoice.Id,
       invoice.CustomerId,
       invoice.Customer.Name,
       invoice.BranchId,
@@ -599,9 +874,12 @@ public sealed class PosService
       Money(invoice.BaseTotal - refundedBase),
       refundStatus,
       paymentMode,
+      sale.PaymentId,
+      sale.Payment?.DocumentNumber,
       sale.CashierUserId,
       sale.CashierUser.Username,
       sale.CompletedAtUtc,
+      invoice.UpdatedAtUtc,
       invoice.JournalEntryId!.Value,
       invoice.Movements.OrderBy(movement => movement.Id).Select(movement => movement.Id).ToList(),
       invoice.Lines.OrderBy(line => line.LineType).ThenBy(line => line.Id).Select(line => new PosSaleLineResponse(
@@ -683,7 +961,9 @@ public sealed class PosService
 
   private async Task<string> NextDocumentNumberAsync(CancellationToken ct)
   {
-    var last = await _db.PosSales.IgnoreQueryFilters().Select(sale => sale.DocumentNumber)
+    var last = await _db.SalesInvoices.IgnoreQueryFilters()
+      .Where(invoice => invoice.PosContext != null)
+      .Select(invoice => invoice.DocumentNumber)
       .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
     var next = last is not null && last.StartsWith("POS-") && int.TryParse(last[4..], out var value) ? value + 1 : 1;
     return $"POS-{next:000000}";
@@ -693,7 +973,7 @@ public sealed class PosService
 
   private async Task<PosSaleResponse?> FindIdempotentSaleAsync(Guid clientRequestId, string fingerprint, CancellationToken ct)
   {
-    var query = _db.PosSales.IgnoreQueryFilters().AsNoTracking()
+    var query = _db.PosContexts.IgnoreQueryFilters().AsNoTracking()
       .Include(sale => sale.SalesInvoice)
       .Where(sale => sale.ClientRequestId == clientRequestId);
     if (_db.SelectedBranchId is Guid branchId)
@@ -706,7 +986,7 @@ public sealed class PosService
     if (existing.SalesInvoice.IsDeleted)
       throw new ConflictException(ErrorCodes.Pos.IdempotencyKeyReused,
         "This client request ID belongs to a deleted POS Sale and cannot be reused.");
-    return await GetSaleAsync(existing.Id, ct);
+    return await GetSaleAsync(existing.SalesInvoiceId, ct);
   }
 
   private static string Fingerprint(CompletePosSaleRequest request) => Hash(new

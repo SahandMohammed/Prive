@@ -8,10 +8,8 @@ import { PosRefundReason, type PosRefund } from '../types/pos.types'
 const refund: PosRefund = {
   id: 'refund-1',
   documentNumber: 'REF-000001',
-  posSaleId: 'sale-1',
-  posSaleDocumentNumber: 'POS-000001',
   salesInvoiceId: 'invoice-1',
-  salesInvoiceDocumentNumber: 'SI-000001',
+  salesInvoiceDocumentNumber: 'POS-000001',
   branchId: 'branch',
   branchCode: 'MAIN',
   branchName: 'Main',
@@ -97,7 +95,7 @@ describe('PosRefundReceiptPage', () => {
     expect(screen.getByText('Physical payout')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Original sale/ })).toHaveAttribute(
       'href',
-      '/pos/sales/sale-1'
+      '/pos/sales/invoice-1'
     )
   })
 })

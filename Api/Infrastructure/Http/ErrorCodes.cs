@@ -186,6 +186,7 @@ public static class ErrorCodes
     public const string PaymentBranchMismatch = "FINANCE_PAYMENT_BRANCH_MISMATCH";
     public const string PaymentSourceInvoiceMismatch = "FINANCE_PAYMENT_SOURCE_INVOICE_MISMATCH";
     public const string PaymentMoneyLinesInvalid = "FINANCE_PAYMENT_MONEY_LINES_INVALID";
+    public const string PaymentMoneyAccountCurrencyMismatch = "FINANCE_PAYMENT_MONEY_ACCOUNT_CURRENCY_MISMATCH";
     public const string PaymentMoneyLinesUnbalanced = "FINANCE_PAYMENT_MONEY_LINES_UNBALANCED";
     public const string PaymentReceivableAccountMissing = "FINANCE_PAYMENT_RECEIVABLE_ACCOUNT_MISSING";
     public const string PaymentHasRefundDependency = "FINANCE_PAYMENT_HAS_REFUND_DEPENDENCY";
@@ -235,6 +236,7 @@ public static class ErrorCodes
     public const string InvoiceHasRefundOrVoid = "SALES_INVOICE_HAS_REFUND_OR_VOID";
     public const string InvoiceHasDependentTransaction = "SALES_INVOICE_HAS_DEPENDENT_TRANSACTION";
     public const string ConcurrencyConflict = "SALES_INVOICE_CONCURRENCY_CONFLICT";
+    public const string PosBranchImmutable = "SALES_POS_BRANCH_IMMUTABLE";
   }
 
   public static class Pos
@@ -254,6 +256,8 @@ public static class ErrorCodes
     public const string ChangeMismatch = "POS_CHANGE_MISMATCH";
     public const string ChangeBalanceInsufficient = "POS_CHANGE_BALANCE_INSUFFICIENT";
     public const string ConcurrentCheckout = "POS_CONCURRENT_CHECKOUT";
+    public const string SettlementConcurrencyConflict = "POS_SETTLEMENT_CONCURRENCY_CONFLICT";
+    public const string SettlementHasRefundDependency = "POS_SETTLEMENT_HAS_REFUND_DEPENDENCY";
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
     public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
     public const string RegisterInactive = "POS_REGISTER_INACTIVE";

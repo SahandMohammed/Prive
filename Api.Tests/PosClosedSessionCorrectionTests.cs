@@ -48,9 +48,9 @@ public sealed partial class PosWorkflowTests
     db.ChangeTracker.Clear();
 
     var sales = new SalesService(db, SalesOptions());
-    var invoice = await sales.GetInvoiceAsync(sale.SalesInvoiceId, default);
-    await CreatePosCorrectionService(db).UpdateAsync(invoice.Id,
-      CorrectedServiceRequest(data, invoice, 20_000),
+    var invoice = await sales.GetInvoiceAsync(sale.Id, default);
+    await CreateService(db).CorrectSettlementAsync(invoice.Id,
+      CorrectedSettlementRequest(data, invoice, 20_000),
       data.CashierId,
       default);
 
@@ -71,7 +71,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(original.ClosedByUsername, rebuilt.ClosedByUsername);
     Assert.Equal(original.OpenedAtUtc, rebuilt.OpenedAtUtc);
     Assert.Equal(original.ClosedAtUtc, rebuilt.ClosedAtUtc);
-    Assert.Equal(20_000, rebuilt.GrossSalesBase);
+    Assert.Equal(25_000, rebuilt.GrossSalesBase);
     Assert.Equal(20_000, Assert.Single(rebuilt.PaymentSummaries).NetBaseAmount);
     var drawer = rebuilt.DrawerSummaries.Single(summary => summary.MoneyAccountId == data.IqdMoneyAccountId);
     Assert.Equal(20_000, drawer.ExpectedAmount);
@@ -89,13 +89,12 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(20_000, close.ExpectedAmount);
     Assert.Equal(4_900, close.VarianceAmount);
 
-    var audit = await db.ActivityLogs.SingleAsync(log => log.EntityId == invoice.Id && log.Action == "edited");
+    var audit = await db.ActivityLogs.SingleAsync(log => log.EntityId == invoice.Id
+      && log.EntityType == "POS Settlement" && log.Action == "corrected");
     using var before = JsonDocument.Parse(audit.BeforeState!);
     using var after = JsonDocument.Parse(audit.AfterState!);
-    Assert.Equal(25_000, before.RootElement.GetProperty("pos").GetProperty("session")
-      .GetProperty("zReport").GetProperty("grossSalesBase").GetDecimal());
-    Assert.Equal(20_000, after.RootElement.GetProperty("pos").GetProperty("session")
-      .GetProperty("zReport").GetProperty("grossSalesBase").GetDecimal());
+    Assert.Equal(25_000, before.RootElement.GetProperty("Tenders")[0].GetProperty("BaseAmount").GetDecimal());
+    Assert.Equal(20_000, after.RootElement.GetProperty("Tenders")[0].GetProperty("BaseAmount").GetDecimal());
   }
 
   [Fact]
@@ -112,9 +111,12 @@ public sealed partial class PosWorkflowTests
       data.SessionId,
       new([new(data.IqdMoneyAccountId, 25_000), new(data.UsdMoneyAccountId, 0)], "Counted"),
       default);
-    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
+    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.Id, default);
 
-    await CreatePosCorrectionService(db).DeleteAsync(invoice.Id,
+    await new SalesInvoiceCorrectionService(
+      db,
+      new SalesService(db, SalesOptions()),
+      CreateSessionService(db)).DeleteAsync(invoice.Id,
       new DeletePostedSalesInvoiceRequest("Duplicate sale", invoice.UpdatedAtUtc),
       data.CashierId,
       default);
@@ -134,11 +136,11 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(0, drawer.ExpectedAmount);
     Assert.Equal(25_000, drawer.CountedAmount);
     Assert.Equal(25_000, drawer.VarianceAmount);
-    Assert.NotNull(await db.PosSales.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == sale.Id));
+    Assert.NotNull(await db.PosContexts.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.SalesInvoiceId == sale.Id));
   }
 
   [Fact]
-  public async Task Closed_pos_correction_first_save_only_removes_z_and_invoice_owned_effects()
+  public async Task Closed_pos_settlement_correction_first_save_only_removes_z_and_payment_owned_effects()
   {
     var observer = new ClosedSessionCorrectionSaveObserver();
     await using var db = CreateDb(interceptors: observer);
@@ -149,12 +151,12 @@ public sealed partial class PosWorkflowTests
       default);
     await CreateSessionService(db).CloseSessionAsync(data.CashierId, data.SessionId,
       new([new(data.IqdMoneyAccountId, 25_000), new(data.UsdMoneyAccountId, 0)], null), default);
-    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
+    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.Id, default);
     observer.Observations.Clear();
     observer.Enabled = true;
 
-    await CreatePosCorrectionService(db).UpdateAsync(invoice.Id,
-      CorrectedServiceRequest(data, invoice, 20_000),
+    await CreateService(db).CorrectSettlementAsync(invoice.Id,
+      CorrectedSettlementRequest(data, invoice, 20_000),
       data.CashierId,
       default);
 
@@ -169,7 +171,7 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(0, first.AddedActivityLogs);
 
     var second = observer.Observations[1];
-    Assert.Equal(20_000, second.InvoiceTotal);
+    Assert.Equal(25_000, second.InvoiceTotal);
     Assert.Equal(0, second.DeletedZReports);
     Assert.Equal(1, second.AddedZReports);
     Assert.Equal(1, second.ModifiedClosingCounts);
@@ -209,7 +211,7 @@ public sealed partial class PosWorkflowTests
         .Include(item => item.PaymentSummaries)
         .Include(item => item.DrawerSummaries)
         .SingleAsync(item => item.Id == report.Id);
-      var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
+      var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.Id, default);
       invoiceId = invoice.Id;
       reportId = stored.Id;
       reportNumber = stored.ReportNumber;
@@ -218,9 +220,9 @@ public sealed partial class PosWorkflowTests
       updatedAtUtc = invoice.UpdatedAtUtc;
       failure.Enabled = true;
 
-      await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePosCorrectionService(db).UpdateAsync(
+      await Assert.ThrowsAsync<InvalidOperationException>(() => CreateService(db).CorrectSettlementAsync(
         invoice.Id,
-        CorrectedServiceRequest(data, invoice with
+        CorrectedSettlementRequest(data, invoice with
         {
           UpdatedAtUtc = DateTime.SpecifyKind(invoice.UpdatedAtUtc, DateTimeKind.Utc)
         }, 20_000),
@@ -240,7 +242,8 @@ public sealed partial class PosWorkflowTests
     Assert.Equal(25_000, restoredReport.GrossSalesBase);
     Assert.Equal(paymentSummaryId, Assert.Single(restoredReport.PaymentSummaries).Id);
     Assert.Contains(restoredReport.DrawerSummaries, item => item.Id == drawerSummaryId);
-    Assert.False(await fresh.ActivityLogs.AnyAsync(log => log.EntityId == invoiceId && log.Action == "edited"));
+    Assert.False(await fresh.ActivityLogs.AnyAsync(log => log.EntityId == invoiceId
+      && log.EntityType == "POS Settlement" && log.Action == "corrected"));
   }
 
   [Fact]
@@ -261,52 +264,26 @@ public sealed partial class PosWorkflowTests
     db.PosZReports.Remove(report);
     await db.SaveChangesAsync();
     db.ChangeTracker.Clear();
-    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.SalesInvoiceId, default);
+    var invoice = await new SalesService(db, SalesOptions()).GetInvoiceAsync(sale.Id, default);
 
-    var error = await Assert.ThrowsAsync<ConflictException>(() => CreatePosCorrectionService(db).UpdateAsync(
+    var error = await Assert.ThrowsAsync<ConflictException>(() => CreateService(db).CorrectSettlementAsync(
       invoice.Id,
-      CorrectedServiceRequest(data, invoice, 20_000),
+      CorrectedSettlementRequest(data, invoice, 20_000),
       data.CashierId,
       default));
 
     Assert.Equal(ErrorCodes.Sales.InvoiceHasDependentTransaction, error.Code);
   }
 
-  private static UpdatePostedSalesInvoiceRequest CorrectedServiceRequest(
+  private static CorrectPosSettlementRequest CorrectedSettlementRequest(
     TestData data,
     SalesInvoiceResponse invoice,
     decimal amount) => new(
-      "Correct closed-session sale",
-      invoice.UpdatedAtUtc,
-      invoice.CustomerId,
-      invoice.InvoiceDate,
-      data.BranchId,
-      invoice.WarehouseId,
-      data.IqdCurrencyId,
+      PosPaymentMode.Partial,
+      [new PosTenderRequest(data.IqdMoneyAccountId, amount)],
       null,
-      invoice.Notes,
-      [new SalesInvoiceLineRequest(
-        SalesLineType.Service,
-        data.ServiceId,
-        null,
-        null,
-        "Classic Haircut",
-        1,
-        amount,
-        data.ProfessionalId)],
-      new SalesInvoicePosSettlementRequest(
-        PosPaymentMode.Paid,
-        [new PosTenderRequest(data.IqdMoneyAccountId, amount)],
-        null));
-
-  private static SalesInvoiceCorrectionService CreatePosCorrectionService(AppDbContext db)
-  {
-    var sales = new SalesService(db, SalesOptions());
-    var finance = new FinanceService(db, Options.Create(new FinanceOptions()));
-    var sessions = new PosSessionService(db, finance);
-    return new SalesInvoiceCorrectionService(
-      db, sales, new PosSettlementService(db, finance, sessions), sessions);
-  }
+      "Correct closed-session settlement",
+      invoice.UpdatedAtUtc);
 
   private sealed class ClosedSessionCorrectionSaveObserver : SaveChangesInterceptor
   {
@@ -320,8 +297,7 @@ public sealed partial class PosWorkflowTests
     {
       if (!Enabled) return base.SavingChangesAsync(eventData, result, cancellationToken);
       var context = eventData.Context!;
-      var invoice = context.ChangeTracker.Entries<SalesInvoiceEntity>()
-        .Single(entry => entry.State == EntityState.Modified);
+      var invoice = context.ChangeTracker.Entries<SalesInvoiceEntity>().Single();
       Observations.Add(new ClosedSessionCorrectionSaveObservation(
         invoice.Entity.Total,
         context.ChangeTracker.Entries<PosZReportEntity>().Count(entry => entry.State == EntityState.Added),

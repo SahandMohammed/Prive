@@ -128,7 +128,7 @@ public sealed class DashboardWorkflowTests
         CreatedByUserId = user.Id
       };
 
-      // 2. POS sales invoice + PosSaleEntity linked to it
+      // 2. POS sales invoice + shared-key PosContext linked to it
       var posInvoice = new SalesInvoiceEntity
       {
         BranchId = branch.Id,
@@ -141,12 +141,12 @@ public sealed class DashboardWorkflowTests
         BaseTotal = 25_000m,
         CreatedByUserId = user.Id
       };
-      var posSale = new PosSaleEntity
+      var posSale = new PosContextEntity
       {
-        DocumentNumber = "POS-001",
+        SalesInvoiceId = posInvoice.Id,
         SalesInvoice = posInvoice,
+        PosSessionId = Guid.NewGuid(),
         CashierUserId = user.Id,
-        Status = PosSaleStatus.Completed,
         CompletedAtUtc = DateTime.UtcNow
       };
 
@@ -664,12 +664,12 @@ public sealed class DashboardWorkflowTests
         CreatedAtUtc = now.AddMinutes(-5),
         PostedAtUtc = now.AddMinutes(-5)
       };
-      var pos = new PosSaleEntity
+      var pos = new PosContextEntity
       {
-        DocumentNumber = "POS-RECENT",
+        SalesInvoiceId = posInvoice.Id,
         SalesInvoice = posInvoice,
+        PosSessionId = Guid.NewGuid(),
         CashierUserId = user.Id,
-        Status = PosSaleStatus.Completed,
         CompletedAtUtc = now.AddMinutes(-5)
       };
 

@@ -1,3 +1,5 @@
 export * from './SalesInvoiceItemsTable'
+export * from './InvoicePaymentDialog'
+export * from './PosSettlementDialog'
 export * from './SalesItemCombobox'
 export * from './AddSalesItemModal'

@@ -7,6 +7,7 @@ using Api.Modules.Pos;
 using Api.Modules.Sales;
 using Api.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Api.Modules.Finance;
 
@@ -79,7 +80,7 @@ public sealed class PaymentService
       if (request.Amount > maxAmount)
         throw new BadRequestException(ErrorCodes.Finance.PaymentAllocationExceedsOutstanding,
           "A Payment correction may retain or reduce an existing overpayment, but cannot increase it.");
-      var rate = await ResolveLineRateAsync(request.MoneyAccountId, invoice.BaseCurrencyId, request.ExchangeRate, ct);
+      var rate = await ResolveDirectInvoiceLineRateAsync(request.MoneyAccountId, invoice, request.ExchangeRate, ct);
       RemoveEffects(payment);
       payment.PaymentDate = request.PaymentDate;
       payment.Notes = Trim(request.Notes);
@@ -175,7 +176,7 @@ public sealed class PaymentService
     Guid userId,
     CancellationToken ct)
   {
-    var rate = await ResolveLineRateAsync(request.MoneyAccountId, invoice.BaseCurrencyId, request.ExchangeRate, ct);
+    var rate = await ResolveDirectInvoiceLineRateAsync(request.MoneyAccountId, invoice, request.ExchangeRate, ct);
     return await CreateAsync(new CreatePaymentCommand(
       invoice.BranchId, invoice.CustomerId, request.PaymentDate, invoice.CurrencyId,
       PaymentOrigin.SalesInvoice, invoice.Id, request.Notes,
@@ -428,24 +429,37 @@ public sealed class PaymentService
         "This Payment cannot be changed because an allocated invoice has a posted refund or void.");
   }
 
-  private async Task<SalesInvoiceEntity> RequireInvoiceAsync(Guid invoiceId, CancellationToken ct) =>
-    await _db.SalesInvoices.SingleOrDefaultAsync(invoice => invoice.Id == invoiceId
-      && invoice.Status == SalesInvoiceStatus.Posted, ct)
-    ?? throw new NotFoundException(ErrorCodes.Sales.InvoiceNotFound, "Sales Invoice not found.");
+  private async Task<SalesInvoiceEntity> RequireInvoiceAsync(Guid invoiceId, CancellationToken ct)
+  {
+    var invoice = await _db.SalesInvoices
+      .Include(item => item.PosContext)
+      .SingleOrDefaultAsync(item => item.Id == invoiceId && item.Status == SalesInvoiceStatus.Posted, ct)
+      ?? throw new NotFoundException(ErrorCodes.Sales.InvoiceNotFound, "Sales Invoice not found.");
+    if (invoice.PosContext is not null)
+      throw new BadRequestException(ErrorCodes.Finance.PaymentSourceInvoiceMismatch,
+        "A POS invoice settlement can only be changed through the POS settlement workflow.");
+    return invoice;
+  }
 
-  private async Task<decimal> ResolveLineRateAsync(
+  private async Task<decimal> ResolveDirectInvoiceLineRateAsync(
     Guid accountId,
-    Guid baseCurrencyId,
+    SalesInvoiceEntity invoice,
     decimal? explicitRate,
     CancellationToken ct)
   {
     var account = await _db.MoneyAccounts.AsNoTracking().SingleOrDefaultAsync(item => item.Id == accountId, ct)
       ?? throw new NotFoundException(ErrorCodes.Finance.MoneyAccountNotFound, "Money Account not found.");
-    if (account.CurrencyId == baseCurrencyId) return 1m;
-    if (explicitRate is null or <= 0)
-      throw new BadRequestException(ErrorCodes.Finance.ExchangeRateRequired,
-        "Enter an exchange rate for the selected Money Account currency.");
-    return explicitRate.Value;
+    if (account.CurrencyId != invoice.CurrencyId)
+      throw new BadRequestException(ErrorCodes.Finance.PaymentMoneyAccountCurrencyMismatch,
+        "A direct Sales Invoice Payment must use a Money Account in the invoice currency.");
+
+    var expectedRate = invoice.CurrencyId == invoice.BaseCurrencyId ? 1m : invoice.ExchangeRate;
+    if (explicitRate is not null
+      && decimal.Round(explicitRate.Value, 6, MidpointRounding.AwayFromZero)
+        != decimal.Round(expectedRate, 6, MidpointRounding.AwayFromZero))
+      throw new BadRequestException(ErrorCodes.Finance.PaymentExchangeRateMismatch,
+        "The Payment exchange rate must match the Sales Invoice exchange rate.");
+    return expectedRate;
   }
 
   private async Task EnsureMoneyAccountAccessAsync(Guid accountId, Guid userId, CancellationToken ct)
@@ -463,9 +477,29 @@ public sealed class PaymentService
     long value;
     if (_db.Database.ProviderName?.Contains("Npgsql", StringComparison.Ordinal) == true)
     {
-      value = await _db.Database.SqlQueryRaw<long>(
-          "UPDATE payment_document_counters SET \"NextValue\" = \"NextValue\" + 1 WHERE \"Id\" = 1 RETURNING \"NextValue\" - 1 AS \"Value\"")
-        .SingleAsync(ct);
+      var connection = _db.Database.GetDbConnection();
+      var closeConnection = connection.State != ConnectionState.Open;
+      if (closeConnection) await connection.OpenAsync(ct);
+      try
+      {
+        await using var command = connection.CreateCommand();
+        command.Transaction = _db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+          INSERT INTO payment_document_counters ("Id", "NextValue")
+          VALUES (1, 2)
+          ON CONFLICT ("Id") DO UPDATE
+          SET "NextValue" = payment_document_counters."NextValue" + 1
+          RETURNING "NextValue" - 1;
+          """;
+        var result = await command.ExecuteScalarAsync(ct);
+        if (result is null or DBNull)
+          throw new InvalidOperationException("Payment document counter did not return a value.");
+        value = Convert.ToInt64(result);
+      }
+      finally
+      {
+        if (closeConnection) await connection.CloseAsync();
+      }
     }
     else
     {
@@ -487,7 +521,7 @@ public sealed class PaymentService
     .Include(payment => payment.CreatedByUser)
     .Include(payment => payment.SourceSalesInvoice)
     .Include(payment => payment.SourceCustomerReceipt)
-    .Include(payment => payment.SourcePosSale)
+    .Include(payment => payment.SourcePosContext).ThenInclude(context => context!.SalesInvoice)
     .Include(payment => payment.Allocations).ThenInclude(allocation => allocation.SalesInvoice)
     .Include(payment => payment.MoneyLines).ThenInclude(line => line.MoneyAccount)
     .ThenInclude(account => account.Currency)
@@ -508,14 +542,14 @@ public sealed class PaymentService
     {
       PaymentOrigin.SalesInvoice => payment.SourceSalesInvoiceId,
       PaymentOrigin.CustomerReceipt => payment.SourceCustomerReceipt?.Id,
-      PaymentOrigin.Pos => payment.SourcePosSale?.Id,
+      PaymentOrigin.Pos => payment.SourceSalesInvoiceId,
       _ => null
     },
     payment.Origin switch
     {
       PaymentOrigin.SalesInvoice => payment.SourceSalesInvoice?.DocumentNumber,
       PaymentOrigin.CustomerReceipt => payment.SourceCustomerReceipt?.DocumentNumber,
-      PaymentOrigin.Pos => payment.SourcePosSale?.DocumentNumber,
+      PaymentOrigin.Pos => payment.SourceSalesInvoice?.DocumentNumber,
       _ => null
     },
     payment.Notes, payment.JournalEntryId!.Value,

@@ -108,7 +108,6 @@ public sealed record JournalEntryResponse(
   Guid? SourceMoneyTransferId,
   Guid? SourceSupplierPaymentId,
   Guid? SourcePaymentId,
-  Guid? SourcePosSaleId,
   Guid? SourceExpenseDocumentId,
   Guid? SourcePosRefundId,
   Guid? SourcePosDrawerMovementId,

@@ -277,13 +277,13 @@ public sealed class DashboardService
     var transactions = new List<DashboardRecentTransactionResponse>();
 
     // 1. POS Sales
-    var posSales = await _db.PosSales.AsNoTracking()
+    var posSales = await _db.PosContexts.AsNoTracking()
       .Where(p => p.SalesInvoice.BranchId == branchId && !p.SalesInvoice.IsDeleted)
       .OrderByDescending(p => p.CompletedAtUtc)
       .Take(safeLimit)
       .Select(p => new DashboardRecentTransactionResponse(
-        p.Id,
-        p.DocumentNumber,
+        p.SalesInvoiceId,
+        p.SalesInvoice.DocumentNumber,
         "POS Sale",
         p.CompletedAtUtc,
         p.SalesInvoice.Total,
@@ -291,7 +291,7 @@ public sealed class DashboardService
         p.SalesInvoice.BaseTotal,
         "in",
         p.SalesInvoice.Customer != null ? p.SalesInvoice.Customer.Name : "Walk-in Customer",
-        $"/pos/sales/{p.Id}"))
+        $"/pos/sales/{p.SalesInvoiceId}"))
       .ToListAsync(ct);
     transactions.AddRange(posSales);
 
@@ -315,7 +315,7 @@ public sealed class DashboardService
 
     // 2. Regular Sales Invoices (non-POS)
     var salesInvoices = await _db.SalesInvoices.AsNoTracking()
-      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.PosSale == null)
+      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.PosContext == null)
       .OrderByDescending(s => s.PostedAtUtc ?? s.CreatedAtUtc)
       .Take(safeLimit)
       .Select(s => new DashboardRecentTransactionResponse(
@@ -440,9 +440,9 @@ public sealed class DashboardService
     var deletedInvoiceIds = _db.SalesInvoices.IgnoreQueryFilters()
       .Where(invoice => invoice.BranchId == branchId && invoice.IsDeleted)
       .Select(invoice => invoice.Id);
-    var deletedPosSaleIds = _db.PosSales.IgnoreQueryFilters()
+    var deletedPosSaleIds = _db.PosContexts.IgnoreQueryFilters()
       .Where(sale => sale.SalesInvoice.BranchId == branchId && sale.SalesInvoice.IsDeleted)
-      .Select(sale => sale.Id);
+      .Select(context => context.SalesInvoiceId);
 
     var loggedActivities = await _db.ActivityLogs.AsNoTracking()
       .Include(a => a.User)
@@ -471,19 +471,19 @@ public sealed class DashboardService
     var seenDocNumbers = new HashSet<string>(loggedActivities.Select(a => a.DocumentNumber));
 
     // POS Sales
-    var recentPos = await _db.PosSales.AsNoTracking()
+    var recentPos = await _db.PosContexts.AsNoTracking()
       .Include(p => p.CashierUser)
       .Where(p => p.SalesInvoice.BranchId == branchId
         && !p.SalesInvoice.IsDeleted
-        && !seenDocNumbers.Contains(p.DocumentNumber))
+        && !seenDocNumbers.Contains(p.SalesInvoice.DocumentNumber))
       .OrderByDescending(p => p.CompletedAtUtc)
       .Take(safeLimit)
       .Select(p => new DashboardRecentActivityResponse(
-        p.Id,
+        p.SalesInvoiceId,
         p.CashierUser.Username,
         "completed",
         "POS Sale",
-        p.DocumentNumber,
+        p.SalesInvoice.DocumentNumber,
         p.CompletedAtUtc,
         "Completed sale at POS"))
       .ToListAsync(ct);
@@ -494,7 +494,7 @@ public sealed class DashboardService
       .Include(s => s.CreatedByUser)
       .Where(s => s.BranchId == branchId
         && s.Status == SalesInvoiceStatus.Posted
-        && s.PosSale == null
+        && s.PosContext == null
         && !seenDocNumbers.Contains(s.DocumentNumber))
       .OrderByDescending(s => s.PostedAtUtc ?? s.CreatedAtUtc)
       .Take(safeLimit)

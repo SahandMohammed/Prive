@@ -150,9 +150,13 @@ vi.mock('@/features/contacts', () => ({
 }))
 
 vi.mock('@/features/finance', () => ({
+  MoneyAccountAccessLevel: { View: 0, Operate: 1 },
+  PaymentOrigin: { SalesInvoice: 0, CustomerReceipt: 1, Pos: 2 },
   useEffectiveExchangeRate: () => ({
     data: { rate: 1500 },
   }),
+  useMoneyAccounts: () => ({ data: { data: [] } }),
+  usePayment: () => ({ data: undefined }),
 }))
 
 vi.mock('@/features/inventory', () => ({
@@ -215,6 +219,11 @@ vi.mock('../hooks/useSales', () => ({
   useCreateActiveSalesInvoice: () => mockCreateMutation,
   useUpdateActiveSalesInvoice: () => mockUpdateMutation,
   useDeleteActiveSalesInvoice: () => mockDeleteMutation,
+  useInvoicePaymentActions: () => ({
+    create: { mutateAsync: vi.fn(), isPending: false },
+    update: { mutateAsync: vi.fn(), isPending: false },
+    remove: { mutateAsync: vi.fn(), isPending: false },
+  }),
 }))
 
 function renderPage(initialEntries = ['/sales/invoices/new']) {

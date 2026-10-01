@@ -5,7 +5,7 @@ import { MoneyAccountType } from '@/features/finance'
 import { CheckoutDialog } from './CheckoutDialog'
 import { OpenSessionScreen } from './OpenSessionScreen'
 import { PosReceiptPage } from '../pages/PosReceiptPage'
-import { PosCatalogItemType, PosPaymentMode, PosSaleStatus } from '../types/pos.types'
+import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
 import type { PosCartLine, PosSale, PosSession, PosSetup } from '../types/pos.types'
 
 const hooks = vi.hoisted(() => ({
@@ -269,11 +269,9 @@ function registerCashboxes() {
 
 function receiptSale(): PosSale {
   return {
-    id: 'sale-1',
+    id: 'invoice-1',
     documentNumber: 'POS-000001',
-    status: PosSaleStatus.Completed,
     posSessionId: 'session-1',
-    salesInvoiceId: 'invoice-1',
     customerId: 'walk-in-customer',
     customerName: 'Walk-in Customer',
     branchId: ids.branch,
@@ -295,9 +293,12 @@ function receiptSale(): PosSale {
     netSaleBaseAmount: 25_000,
     refundStatus: 0,
     paymentMode: PosPaymentMode.Paid,
+    paymentId: 'payment-1',
+    paymentDocumentNumber: 'PAY-000001',
     cashierUserId: 'cashier-1',
     cashierUsername: 'cashier',
     completedAtUtc: '2026-09-13T13:00:00Z',
+    updatedAtUtc: '2026-09-13T13:00:00Z',
     journalEntryId: 'journal-1',
     stockMovementIds: [],
     lines: [],
@@ -313,6 +314,7 @@ function receiptSale(): PosSale {
         tenderedAmount: 10,
         exchangeRate: 1_300,
         baseAmount: 13_000,
+        paymentMoneyLineId: 'money-line-usd',
         moneyLedgerEntryId: 'ledger-usd',
       },
       {
@@ -326,6 +328,7 @@ function receiptSale(): PosSale {
         tenderedAmount: 12_000,
         exchangeRate: 1,
         baseAmount: 12_000,
+        paymentMoneyLineId: 'money-line-iqd',
         moneyLedgerEntryId: 'ledger-iqd',
       },
     ],

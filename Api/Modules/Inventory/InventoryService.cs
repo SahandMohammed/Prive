@@ -1646,7 +1646,7 @@ public sealed class InventoryService
       .Include(x => x.WarehouseTransferDocument)
       .Include(x => x.PurchaseInvoice)
       .Include(x => x.SalesInvoice)
-      .ThenInclude(x => x!.PosSale)
+      .ThenInclude(x => x!.PosContext)
       .Include(x => x.PosRefundLine)
       .ThenInclude(x => x!.PosRefund)
       .AsQueryable();
@@ -1714,13 +1714,13 @@ public sealed class InventoryService
     if (query.DocumentType is InventoryDocumentType.SalesInvoice)
     {
       movementsQuery = movementsQuery.Where(
-        x => x.SalesInvoiceId != null && x.SalesInvoice!.PosSale == null);
+        x => x.SalesInvoiceId != null && x.SalesInvoice!.PosContext == null);
     }
 
     if (query.DocumentType is InventoryDocumentType.PosSale)
     {
       movementsQuery = movementsQuery.Where(
-        x => x.SalesInvoiceId != null && x.SalesInvoice!.PosSale != null);
+        x => x.SalesInvoiceId != null && x.SalesInvoice!.PosContext != null);
     }
 
     if (query.DocumentType is InventoryDocumentType.PosRefund)
@@ -1752,10 +1752,6 @@ public sealed class InventoryService
            .Contains(documentNumber)) ||
         (x.SalesInvoice != null &&
          x.SalesInvoice.DocumentNumber
-           .ToLower()
-           .Contains(documentNumber)) ||
-        (x.SalesInvoice != null && x.SalesInvoice.PosSale != null &&
-         x.SalesInvoice.PosSale.DocumentNumber
            .ToLower()
            .Contains(documentNumber)) ||
         (x.PosRefundLine != null &&
@@ -2541,7 +2537,7 @@ public sealed class InventoryService
             ? InventoryDocumentType.Transfer
             : movement.PurchaseInvoiceId is not null
               ? InventoryDocumentType.Purchase
-              : movement.SalesInvoice?.PosSale is not null
+              : movement.SalesInvoice?.PosContext is not null
                 ? InventoryDocumentType.PosSale
                 : movement.SalesInvoiceId is not null
                   ? InventoryDocumentType.SalesInvoice
@@ -2553,7 +2549,6 @@ public sealed class InventoryService
       movement.StockAdjustmentDocumentId ??
       movement.WarehouseTransferDocumentId ??
       movement.PurchaseInvoiceId ??
-      movement.SalesInvoice?.PosSale?.Id ??
       movement.SalesInvoiceId;
 
     var lineId =
@@ -2570,7 +2565,6 @@ public sealed class InventoryService
       movement.StockAdjustmentDocument?.DocumentNumber ??
       movement.WarehouseTransferDocument?.DocumentNumber ??
       movement.PurchaseInvoice?.DocumentNumber ??
-      movement.SalesInvoice?.PosSale?.DocumentNumber ??
       movement.SalesInvoice?.DocumentNumber;
 
     return new StockMovementResponse(

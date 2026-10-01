@@ -28,20 +28,20 @@ public sealed class PosRefundService
     _sessions = sessions;
   }
 
-  public async Task<PosRefundabilityResponse> GetRefundabilityAsync(Guid saleId, CancellationToken ct)
+  public async Task<PosRefundabilityResponse> GetRefundabilityAsync(Guid salesInvoiceId, CancellationToken ct)
   {
     var sale = await RefundableSaleQuery(trackChanges: false)
-      .SingleOrDefaultAsync(item => item.Id == saleId, ct) ?? throw SaleNotFound();
+      .SingleOrDefaultAsync(item => item.SalesInvoiceId == salesInvoiceId, ct) ?? throw SaleNotFound();
     return BuildRefundability(sale);
   }
 
   public async Task<PagedResult<PosRefundSummaryResponse>> GetSaleRefundsAsync(
     Guid saleId, PosRefundListQuery request, CancellationToken ct)
   {
-    if (!await _db.PosSales.AsNoTracking()
-      .AnyAsync(sale => sale.Id == saleId && !sale.SalesInvoice.IsDeleted, ct)) throw SaleNotFound();
+    if (!await _db.PosContexts.AsNoTracking()
+      .AnyAsync(context => context.SalesInvoiceId == saleId && !context.SalesInvoice.IsDeleted, ct)) throw SaleNotFound();
     return await _db.PosRefunds.AsNoTracking()
-      .Where(refund => refund.PosSaleId == saleId && refund.Status == PosRefundStatus.Posted)
+      .Where(refund => refund.SalesInvoiceId == saleId && refund.Status == PosRefundStatus.Posted)
       .OrderBy(refund => refund.PostedAtUtc)
       .Select(refund => new PosRefundSummaryResponse(
         refund.Id, refund.DocumentNumber, refund.IsVoid, refund.Reason,
@@ -144,11 +144,11 @@ public sealed class PosRefundService
     if (existing is not null) return existing;
     if (_db.Database.IsRelational())
       await _db.Database.ExecuteSqlInterpolatedAsync(
-        $"SELECT \"Id\" FROM pos_sales WHERE \"Id\" = {saleId} FOR UPDATE", ct);
+        $"SELECT \"SalesInvoiceId\" FROM pos_contexts WHERE \"SalesInvoiceId\" = {saleId} FOR UPDATE", ct);
 
     var sale = await RefundableSaleQuery(trackChanges: true)
-      .SingleOrDefaultAsync(item => item.Id == saleId, ct) ?? throw SaleNotFound();
-    if (sale.Status != PosSaleStatus.Completed || sale.SalesInvoice.Status != SalesInvoiceStatus.Posted)
+      .SingleOrDefaultAsync(item => item.SalesInvoiceId == saleId, ct) ?? throw SaleNotFound();
+    if (sale.SalesInvoice.Status != SalesInvoiceStatus.Posted)
       throw new BadRequestException(ErrorCodes.Pos.RefundNothingAvailable,
         "Only a completed POS Sale with an active Sales Invoice can be refunded.");
     if (sale.SalesInvoice.BranchId != branchId)
@@ -284,7 +284,7 @@ public sealed class PosRefundService
     {
       EntryDate = date,
       Reference = documentNumber,
-      Description = $"POS {(isVoid ? "void" : "refund")} {documentNumber} for {sale.DocumentNumber}",
+      Description = $"POS {(isVoid ? "void" : "refund")} {documentNumber} for {sale.SalesInvoice.DocumentNumber}",
       BranchId = branchId,
       Status = JournalEntryStatus.Posted,
       Type = JournalEntryType.Reversal,
@@ -294,8 +294,8 @@ public sealed class PosRefundService
     var refund = new PosRefundEntity
     {
       DocumentNumber = documentNumber,
-      PosSaleId = sale.Id,
       SalesInvoiceId = sale.SalesInvoiceId,
+      PosContext = sale,
       BranchId = branchId,
       PosSessionId = sessionId,
       CustomerId = sale.SalesInvoice.CustomerId,
@@ -456,9 +456,9 @@ public sealed class PosRefundService
     return postings;
   }
 
-  private IQueryable<PosSaleEntity> RefundableSaleQuery(bool trackChanges)
+  private IQueryable<PosContextEntity> RefundableSaleQuery(bool trackChanges)
   {
-    var query = _db.PosSales
+    var query = _db.PosContexts
       .Where(sale => !sale.SalesInvoice.IsDeleted)
       .Include(sale => sale.CashierUser)
       .Include(sale => sale.Tenders)
@@ -487,7 +487,7 @@ public sealed class PosRefundService
   }
 
   private IQueryable<PosRefundEntity> RefundQuery() => _db.PosRefunds.AsNoTracking()
-    .Include(refund => refund.PosSale)
+    .Include(refund => refund.PosContext)
     .Include(refund => refund.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(refund => refund.Branch)
     .Include(refund => refund.PosSession)
@@ -498,7 +498,7 @@ public sealed class PosRefundService
     .Include(refund => refund.Lines).ThenInclude(line => line.StockMovements)
     .Include(refund => refund.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency);
 
-  private static PosRefundabilityResponse BuildRefundability(PosSaleEntity sale)
+  private static PosRefundabilityResponse BuildRefundability(PosContextEntity sale)
   {
     var postedRefunds = sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).ToList();
     var refundedBase = Money(postedRefunds.Sum(refund => refund.TotalRefundBase));
@@ -527,7 +527,7 @@ public sealed class PosRefundService
     }).ToList();
 
     return new PosRefundabilityResponse(
-      sale.Id, sale.DocumentNumber, sale.SalesInvoiceId, sale.SalesInvoice.DocumentNumber,
+      sale.SalesInvoiceId, sale.SalesInvoice.DocumentNumber,
       sale.SalesInvoice.BranchId, sale.SalesInvoice.CustomerId, sale.SalesInvoice.Customer.Name,
       sale.SalesInvoice.WarehouseId, sale.CompletedAtUtc, sale.CashierUser.Username,
       sale.SalesInvoice.BaseTotal, refundedBase, remainingBase, outstandingBase, refundState,
@@ -536,8 +536,7 @@ public sealed class PosRefundService
   }
 
   private static PosRefundResponse ToResponse(PosRefundEntity refund) => new(
-    refund.Id, refund.DocumentNumber, refund.PosSaleId, refund.PosSale.DocumentNumber,
-    refund.SalesInvoiceId, refund.SalesInvoice.DocumentNumber,
+    refund.Id, refund.DocumentNumber, refund.SalesInvoiceId, refund.SalesInvoice.DocumentNumber,
     refund.BranchId, refund.Branch.Code, refund.Branch.Name,
     refund.PosSessionId, refund.PosSession.SessionNumber,
     refund.SalesInvoice.CustomerId, refund.SalesInvoice.Customer.Name,
