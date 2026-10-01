@@ -146,7 +146,8 @@ export function CreateSalesInvoicePage() {
   const canDeletePosted = hasCapability(currentUser?.role, 'deletePostedInvoice')
   const canCorrectPosSettlement = hasCapability(currentUser?.role, 'correctPosSettlement')
 
-  const [editingInvoice, setEditingInvoice] = useState(false)
+  const [editingInvoiceOverride, setEditingInvoice] = useState<boolean | null>(null)
+  const editingInvoice = editingInvoiceOverride ?? (shouldEdit && canEditPosted)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteReason, setDeleteReason] = useState('')
   const [deleteReasonError, setDeleteReasonError] = useState('')
@@ -191,7 +192,7 @@ export function CreateSalesInvoicePage() {
   const selectedCurrency = currencies.find((item) => item.id === selectedCurrencyId)
   const isForeign = Boolean(selectedCurrencyId && business && selectedCurrencyId !== business.baseCurrencyId)
   const rate = isForeign ? Number(values.exchangeRate) || 0 : 1
-  const embeddedMoneyAccounts = useMoneyAccounts(
+  const embeddedMoneyAccountsQuery = useMoneyAccounts(
     {
       page: 1,
       pageSize: 100,
@@ -201,7 +202,8 @@ export function CreateSalesInvoicePage() {
     },
     false,
     !isExistingInvoice && Boolean(values.branchId && selectedCurrencyId)
-  ).data?.data.filter((account) =>
+  )
+  const embeddedMoneyAccounts = embeddedMoneyAccountsQuery.data?.data.filter((account) =>
     account.isActive
     && account.branchId === values.branchId
     && account.currencyId === selectedCurrencyId
@@ -219,6 +221,37 @@ export function CreateSalesInvoicePage() {
   )
   const balances = useStockBalances({ warehouseId: values.warehouseId || undefined }).data?.data ?? []
 
+  useEffect(() => {
+    if (isExistingInvoice
+      || !values.branchId
+      || !selectedCurrencyId
+      || !embeddedMoneyAccountsQuery.isSuccess
+      || embeddedMoneyAccountsQuery.isFetching) return
+
+    const validAccountIds = new Set((embeddedMoneyAccountsQuery.data?.data ?? [])
+      .filter((account) => account.isActive
+        && account.branchId === values.branchId
+        && account.currencyId === selectedCurrencyId
+        && account.currentUserAccess === MoneyAccountAccessLevel.Operate)
+      .map((account) => account.id))
+    form.getValues('payments').forEach((payment, index) => {
+      if (payment.moneyAccountId && !validAccountIds.has(payment.moneyAccountId)) {
+        form.setValue(`payments.${index}.moneyAccountId`, '', {
+          shouldDirty: true,
+          shouldValidate: true,
+        })
+      }
+    })
+  }, [
+    embeddedMoneyAccountsQuery.data,
+    embeddedMoneyAccountsQuery.isFetching,
+    embeddedMoneyAccountsQuery.isSuccess,
+    form,
+    isExistingInvoice,
+    selectedCurrencyId,
+    values.branchId,
+  ])
+
   // Initialize form on invoice load or URL edit flag
   useEffect(() => {
     if (!invoice) return
@@ -229,10 +262,7 @@ export function CreateSalesInvoicePage() {
       formValues.lines = [newEmptyLine()]
     }
     form.reset(formValues)
-    if (shouldEdit && canEditPosted) {
-      setEditingInvoice(true)
-    }
-  }, [invoice, form, shouldEdit, canEditPosted])
+  }, [invoice, form])
 
   // Default currency for new invoice
   useEffect(() => {
@@ -454,7 +484,16 @@ export function CreateSalesInvoicePage() {
     }
 
     if (invoice) {
-      const { payments: _, ...commercialCorrection } = body
+      const commercialCorrection: Omit<SalesInvoiceDraftInput, 'payments'> = {
+        customerId: body.customerId,
+        invoiceDate: body.invoiceDate,
+        branchId: body.branchId,
+        warehouseId: body.warehouseId,
+        currencyId: body.currencyId,
+        exchangeRate: body.exchangeRate,
+        notes: body.notes,
+        lines: body.lines,
+      }
 
       update.mutate(
         { ...commercialCorrection, expectedUpdatedAtUtc: invoice.updatedAtUtc },
@@ -1177,6 +1216,7 @@ export function CreateSalesInvoicePage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold capitalize text-foreground">{entry.action}</span>
+                          <Badge variant="outline" className="text-[10px]">{entry.source}</Badge>
                           <span className="rounded bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
                             {entry.changedByUsername}
                           </span>

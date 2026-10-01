@@ -440,7 +440,7 @@ public sealed class DashboardService
     var deletedInvoiceIds = _db.SalesInvoices.IgnoreQueryFilters()
       .Where(invoice => invoice.BranchId == branchId && invoice.IsDeleted)
       .Select(invoice => invoice.Id);
-    var deletedPosSaleIds = _db.PosContexts.IgnoreQueryFilters()
+    var deletedPosInvoiceIds = _db.PosContexts.IgnoreQueryFilters()
       .Where(sale => sale.SalesInvoice.BranchId == branchId && sale.SalesInvoice.IsDeleted)
       .Select(context => context.SalesInvoiceId);
 
@@ -448,7 +448,7 @@ public sealed class DashboardService
       .Include(a => a.User)
       .Where(a => a.BranchId == branchId
         && (a.EntityType != "Sales Invoice" || !deletedInvoiceIds.Contains(a.EntityId))
-        && (a.EntityType != "POS Sale" || !deletedPosSaleIds.Contains(a.EntityId)))
+        && (a.EntityType != "POS Sale" || !deletedPosInvoiceIds.Contains(a.EntityId)))
       .OrderByDescending(a => a.TimestampUtc)
       .Take(safeLimit)
       .Select(a => new DashboardRecentActivityResponse(

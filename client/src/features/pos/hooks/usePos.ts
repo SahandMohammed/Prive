@@ -9,6 +9,8 @@ import type {
 } from '../types/pos.types'
 
 export const POS_KEY = ['pos'] as const
+export const POS_Z_REPORTS_KEY = [...POS_KEY, 'z-reports'] as const
+export const POS_Z_REPORT_KEY = [...POS_KEY, 'z-report'] as const
 
 export const usePosSetup = () =>
   useQuery({ queryKey: [...POS_KEY, 'setup'], queryFn: posApi.setup })
@@ -46,9 +48,9 @@ export const usePosXReport = (id?: string, enabled = true) =>
 export const usePosDrawerMovements = (id?: string) =>
   useQuery({ queryKey: [...POS_KEY, 'drawer-movements', id], queryFn: () => posApi.drawerMovements(id!), enabled: Boolean(id) })
 export const usePosZReports = (filters: PosZReportFilters) =>
-  useQuery({ queryKey: [...POS_KEY, 'z-reports', filters], queryFn: () => posApi.zReports(filters) })
+  useQuery({ queryKey: [...POS_Z_REPORTS_KEY, filters], queryFn: () => posApi.zReports(filters) })
 export const usePosZReport = (id?: string) =>
-  useQuery({ queryKey: [...POS_KEY, 'z-report', id], queryFn: () => posApi.zReport(id!), enabled: Boolean(id) })
+  useQuery({ queryKey: [...POS_Z_REPORT_KEY, id], queryFn: () => posApi.zReport(id!), enabled: Boolean(id) })
 
 export function useOpenPosSession() {
   const client = useQueryClient()
@@ -70,12 +72,12 @@ export function useClosePosSession() {
       posApi.closeSession(id, body),
     onSuccess: (report) => {
       client.setQueryData([...POS_KEY, 'session', 'active'], null)
-      client.setQueryData([...POS_KEY, 'z-report', report.id], report)
+      client.setQueryData([...POS_Z_REPORT_KEY, report.id], report)
       client.removeQueries({ queryKey: [...POS_KEY, 'x-report', report.posSessionId] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'session', report.posSessionId] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] })
       client.invalidateQueries({ queryKey: [...POS_KEY, 'registers'] })
-      client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] })
+      client.invalidateQueries({ queryKey: POS_Z_REPORTS_KEY })
     },
   })
 }
@@ -144,7 +146,8 @@ export function useCorrectPosSettlement(salesInvoiceId: string) {
       client.invalidateQueries({ queryKey: [...POS_KEY, 'sales'] }),
       client.invalidateQueries({ queryKey: [...POS_KEY, 'x-report', sale.posSessionId] }),
       client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] }),
-      client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] }),
+      client.invalidateQueries({ queryKey: POS_Z_REPORTS_KEY }),
+      client.invalidateQueries({ queryKey: POS_Z_REPORT_KEY }),
       client.invalidateQueries({ queryKey: ['sales'] }),
       client.invalidateQueries({ queryKey: ['finance'] }),
       client.invalidateQueries({ queryKey: ['accounting'] }),
@@ -160,7 +163,8 @@ function invalidateRefundEffects(client: ReturnType<typeof useQueryClient>, sale
   client.invalidateQueries({ queryKey: [...POS_KEY, 'catalog'] })
   client.invalidateQueries({ queryKey: [...POS_KEY, 'x-report', sessionId] })
   client.invalidateQueries({ queryKey: [...POS_KEY, 'sessions'] })
-  client.invalidateQueries({ queryKey: [...POS_KEY, 'z-reports'] })
+  client.invalidateQueries({ queryKey: POS_Z_REPORTS_KEY })
+  client.invalidateQueries({ queryKey: POS_Z_REPORT_KEY })
   client.invalidateQueries({ queryKey: ['sales'] })
   client.invalidateQueries({ queryKey: ['inventory'] })
   client.invalidateQueries({ queryKey: ['finance'] })

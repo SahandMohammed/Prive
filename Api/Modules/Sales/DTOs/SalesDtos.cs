@@ -247,6 +247,7 @@ public sealed record SalesInvoiceResponse(
 
 public sealed record SalesInvoiceHistoryResponse(
   Guid Id,
+  string Source,
   string Action,
   string? Reason,
   Guid ChangedByUserId,

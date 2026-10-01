@@ -190,7 +190,8 @@ public sealed class CustomerAccountReader
 
     var payments = _db.PaymentAllocations.AsNoTracking()
       .Where(allocation => allocation.SalesInvoice.CustomerId == customerId
-        && allocation.SalesInvoice.Status == SalesInvoiceStatus.Posted)
+        && allocation.SalesInvoice.Status == SalesInvoiceStatus.Posted
+        && !allocation.Payment.IsDeleted)
       .GroupBy(allocation => new
       {
         allocation.PaymentId,

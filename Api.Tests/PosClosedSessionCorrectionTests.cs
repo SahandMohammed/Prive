@@ -20,7 +20,7 @@ public sealed partial class PosWorkflowTests
     await using var db = CreateDb();
     var data = await SeedAsync(db);
     var sale = await CreateService(db).CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)], data.CustomerId),
       data.CashierId,
       default);
     (await db.Users.FindAsync(data.CashierId))!.Role = UserRole.Manager;
@@ -103,7 +103,7 @@ public sealed partial class PosWorkflowTests
     await using var db = CreateDb();
     var data = await SeedAsync(db);
     var sale = await CreateService(db).CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)], data.CustomerId),
       data.CashierId,
       default);
     var originalReport = await CreateSessionService(db).CloseSessionAsync(
@@ -146,7 +146,7 @@ public sealed partial class PosWorkflowTests
     await using var db = CreateDb(interceptors: observer);
     var data = await SeedAsync(db);
     var sale = await CreateService(db).CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)], data.CustomerId),
       data.CashierId,
       default);
     await CreateSessionService(db).CloseSessionAsync(data.CashierId, data.SessionId,
@@ -202,7 +202,7 @@ public sealed partial class PosWorkflowTests
       await db.Database.EnsureCreatedAsync();
       var data = await SeedAsync(db);
       var sale = await CreateService(db).CompleteSaleAsync(
-        Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+        Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)], data.CustomerId),
         data.CashierId,
         default);
       var report = await CreateSessionService(db).CloseSessionAsync(data.CashierId, data.SessionId,
@@ -252,7 +252,7 @@ public sealed partial class PosWorkflowTests
     await using var db = CreateDb();
     var data = await SeedAsync(db);
     var sale = await CreateService(db).CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)], data.CustomerId),
       data.CashierId,
       default);
     await CreateSessionService(db).CloseSessionAsync(data.CashierId, data.SessionId,

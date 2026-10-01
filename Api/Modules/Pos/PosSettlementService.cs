@@ -31,6 +31,11 @@ public sealed class PosSettlementService
     DateTime? rateAtUtc = null)
   {
     ValidateShape(request);
+    if (request.PaymentMode is PosPaymentMode.Partial or PosPaymentMode.Credit
+      && !await _db.Contacts.AsNoTracking().AnyAsync(contact => contact.Id == request.CustomerId
+        && contact.IsActive && contact.IsCustomer && contact.SystemRole == null, ct))
+      throw new BadRequestException(ErrorCodes.Pos.RealCustomerRequired,
+        "Partial and credit POS settlement requires an active real customer.");
     var session = existingSession ?? (management
       ? await _sessions.RequireOpenSessionForManagementAsync(userId, request.PosSessionId, request.BranchId, ct)
       : await _sessions.RequireOpenSessionAsync(userId, request.PosSessionId, request.BranchId, ct));
@@ -196,10 +201,6 @@ public sealed class PosSettlementService
     if (request.PaymentMode == PosPaymentMode.Credit && request.Tenders.Count > 0)
       throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
         "Credit POS Sales cannot include a tender. Choose Partial when money is received now.");
-    if (request.PaymentMode is PosPaymentMode.Partial or PosPaymentMode.Credit
-      && (request.CustomerId is null || request.CustomerId == Guid.Empty))
-      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired,
-        "Select a customer before creating a Partial or Credit POS Sale.");
     if (request.Tenders.Any(tender => tender.MoneyAccountId == Guid.Empty || tender.Amount <= 0)
       || request.Tenders.Select(tender => tender.MoneyAccountId).Distinct().Count() != request.Tenders.Count)
       throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,

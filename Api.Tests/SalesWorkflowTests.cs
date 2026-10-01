@@ -201,6 +201,124 @@ public sealed class SalesWorkflowTests
   }
 
   [Fact]
+  public async Task Active_invoice_embedded_payments_derive_partial_and_settled_truth()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    await AddStockAsync(db, data, 10, 10);
+    var account = await AddPaymentAccountAsync(
+      db, data, data.BranchId, data.BaseCurrencyId, "EMBED-IQD", grantOperateAccess: true);
+    var sales = CreateService(db);
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    var partial = await sales.CreateActiveInvoiceAsync(
+      EmbeddedPaymentRequest(data,
+        [new EmbeddedSalesInvoicePaymentRequest(today, account.Id, 40, 1, "Deposit")]),
+      data.UserId,
+      default);
+    Assert.Equal(40, partial.CollectedAmount);
+    Assert.Equal(60, partial.OutstandingAmount);
+    Assert.Equal(SalesInvoicePaymentStatus.PartiallyPaid, partial.PaymentStatus);
+    Assert.Single(partial.Payments);
+
+    var settled = await sales.CreateActiveInvoiceAsync(
+      EmbeddedPaymentRequest(data,
+        [
+          new EmbeddedSalesInvoicePaymentRequest(today, account.Id, 40, 1, "Deposit"),
+          new EmbeddedSalesInvoicePaymentRequest(today, account.Id, 60, 1, "Balance")
+        ]),
+      data.UserId,
+      default);
+    Assert.Equal(100, settled.CollectedAmount);
+    Assert.Equal(0, settled.OutstandingAmount);
+    Assert.Equal(SalesInvoicePaymentStatus.Paid, settled.PaymentStatus);
+    Assert.Equal(2, settled.Payments.Count);
+  }
+
+  [Theory]
+  [InlineData("over-total")]
+  [InlineData("wrong-currency")]
+  [InlineData("wrong-branch")]
+  [InlineData("no-access")]
+  [InlineData("bad-rate")]
+  public async Task Invalid_embedded_payment_rolls_back_invoice_and_every_owned_effect(string scenario)
+  {
+    await using var connection = new SqliteConnection("Data Source=:memory:");
+    await connection.OpenAsync();
+    var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+    var branchContext = new BranchContext();
+    await using var db = new AppDbContext(options, branchContext);
+    await db.Database.EnsureCreatedAsync();
+    var data = await SeedAsync(db);
+    branchContext.BranchId = data.BranchId;
+    await AddStockAsync(db, data, 10, 10);
+    var valid = await AddPaymentAccountAsync(
+      db, data, data.BranchId, data.BaseCurrencyId, "VALID-IQD", grantOperateAccess: true);
+    var selectedAccount = valid;
+    decimal amount = 40;
+    decimal? rate = 1;
+
+    if (scenario == "wrong-currency")
+      selectedAccount = await AddPaymentAccountAsync(
+        db, data, data.BranchId, data.ForeignCurrencyId, "WRONG-USD", grantOperateAccess: true);
+    else if (scenario == "wrong-branch")
+    {
+      branchContext.BranchId = null;
+      var walkInCustomerId = await db.Branches
+        .Where(branch => branch.Id == data.BranchId)
+        .Select(branch => branch.WalkInCustomerId)
+        .SingleAsync();
+      var otherBranch = new BranchEntity
+      {
+        Code = "OTHER",
+        Name = "Other",
+        Address = "A",
+        City = "C",
+        Region = "R",
+        Country = "IQ",
+        WalkInCustomerId = walkInCustomerId
+      };
+      db.Branches.Add(otherBranch);
+      await db.SaveChangesAsync();
+      selectedAccount = await AddPaymentAccountAsync(
+        db, data, otherBranch.Id, data.BaseCurrencyId, "OTHER-IQD", grantOperateAccess: true);
+      branchContext.BranchId = data.BranchId;
+    }
+    else if (scenario == "no-access")
+      selectedAccount = await AddPaymentAccountAsync(
+        db, data, data.BranchId, data.BaseCurrencyId, "NOACCESS-IQD", grantOperateAccess: false);
+    else if (scenario == "over-total")
+      amount = 101;
+    else if (scenario == "bad-rate")
+      rate = 2;
+
+    var before = new
+    {
+      Invoices = await db.SalesInvoices.CountAsync(),
+      Journals = await db.JournalEntries.CountAsync(),
+      Stock = await db.StockMovements.CountAsync(),
+      Payments = await db.Payments.CountAsync(),
+      Ledgers = await db.MoneyLedgerEntries.CountAsync(),
+      Audits = await db.ActivityLogs.CountAsync()
+    };
+    var request = EmbeddedPaymentRequest(data,
+      [new EmbeddedSalesInvoicePaymentRequest(
+        DateOnly.FromDateTime(DateTime.UtcNow), selectedAccount.Id, amount, rate, scenario)]);
+
+    await Assert.ThrowsAnyAsync<ApiException>(() =>
+      CreateService(db).CreateActiveInvoiceAsync(request, data.UserId, default));
+
+    db.ChangeTracker.Clear();
+    Assert.Equal(before.Invoices, await db.SalesInvoices.CountAsync());
+    Assert.Equal(before.Journals, await db.JournalEntries.CountAsync());
+    Assert.Equal(before.Stock, await db.StockMovements.CountAsync());
+    Assert.Equal(before.Payments, await db.Payments.CountAsync());
+    Assert.Equal(before.Ledgers, await db.MoneyLedgerEntries.CountAsync());
+    Assert.Equal(before.Audits, await db.ActivityLogs.CountAsync());
+    Assert.Equal(10, await QuantityAsync(db, data.WarehouseId, data.ProductId));
+  }
+
+  [Fact]
   public async Task Posting_service_only_sale_creates_receivable_and_revenue_without_inventory_or_cogs()
   {
     await using var db = CreateDb();
@@ -1011,6 +1129,49 @@ public sealed class SalesWorkflowTests
       PerformedByUserId = data.UserId
     });
     await db.SaveChangesAsync();
+  }
+
+  private static SalesInvoiceDraftRequest EmbeddedPaymentRequest(
+    TestData data,
+    List<EmbeddedSalesInvoicePaymentRequest> payments) =>
+    Request(data, data.CustomerId, data.BaseCurrencyId, null, [ProductLine(data, 1, 100)]) with
+    {
+      Payments = payments
+    };
+
+  private static async Task<MoneyAccountEntity> AddPaymentAccountAsync(
+    AppDbContext db,
+    TestData data,
+    Guid branchId,
+    Guid currencyId,
+    string code,
+    bool grantOperateAccess)
+  {
+    var ledgerAccount = new AccountEntity
+    {
+      Code = $"GL-{code}",
+      Name = code,
+      Classification = AccountClassification.Asset
+    };
+    var moneyAccount = new MoneyAccountEntity
+    {
+      Code = code,
+      Name = code,
+      Type = MoneyAccountType.Cashbox,
+      BranchId = branchId,
+      CurrencyId = currencyId,
+      AccountingAccount = ledgerAccount
+    };
+    db.MoneyAccounts.Add(moneyAccount);
+    if (grantOperateAccess)
+      db.MoneyAccountAccess.Add(new MoneyAccountAccessEntity
+      {
+        MoneyAccount = moneyAccount,
+        UserId = data.UserId,
+        AccessLevel = MoneyAccountAccessLevel.Operate
+      });
+    await db.SaveChangesAsync();
+    return moneyAccount;
   }
 
   private static Task<decimal> QuantityAsync(AppDbContext db, Guid warehouseId, Guid productId) =>

@@ -51,6 +51,9 @@ public sealed class SalesInvoiceCorrectionService
       EnsurePosted(invoice);
       EnsureExpectedTimestamp(invoice, request.ExpectedUpdatedAtUtc);
       await ValidateDependenciesAsync(invoice, ct);
+      if (invoice.PosContext is not null && request.InvoiceDate != invoice.InvoiceDate)
+        throw new ConflictException(ErrorCodes.Sales.PosInvoiceDateImmutable,
+          "A completed POS Sales Invoice cannot move to another invoice date.");
       var draft = ToDraftRequest(request);
       var validation = await _sales.ValidateInvoiceAsync(draft, requireCustomer: true, ct);
       if (invoice.PosContext is not null && request.BranchId != invoice.BranchId)
@@ -66,8 +69,12 @@ public sealed class SalesInvoiceCorrectionService
         throw new ConflictException(ErrorCodes.Sales.InvoiceHasDependentTransaction,
           "Customer, branch, and currency cannot change while active Payment allocations exist.");
 
+      var posSession = await LoadPosSessionAsync(invoice, ct);
+      var zReportIdentity = ValidateAndCaptureZReportIdentity(invoice, posSession);
+
       var owned = await LoadOwnedEffectsAsync(invoice, ct);
       var before = SerializeSnapshot(CreateSnapshot(invoice, owned.StockMovements, owned.LedgerEntries));
+      RemoveZReport(posSession, zReportIdentity);
       RemoveOwnedEffects(invoice, owned);
 
       // This save only flushes removal of generated effects. The transaction is still open,
@@ -91,6 +98,7 @@ public sealed class SalesInvoiceCorrectionService
 
       var correctedAtUtc = DateTime.UtcNow;
       invoice.UpdatedAtUtc = correctedAtUtc;
+      RegenerateZReport(posSession, zReportIdentity, correctedAtUtc);
       var after = SerializeSnapshot(CreateSnapshot(
         invoice,
         invoice.Movements.ToList(),
@@ -200,13 +208,15 @@ public sealed class SalesInvoiceCorrectionService
     if (!await invoiceQuery.AnyAsync(ct)) throw InvoiceNotFound();
 
     var activities = await _db.ActivityLogs.AsNoTracking()
-      .Where(activity => activity.EntityType == "Sales Invoice" && activity.EntityId == id)
+      .Where(activity => (activity.EntityType == "Sales Invoice" || activity.EntityType == "POS Settlement")
+        && activity.EntityId == id)
       .OrderBy(activity => activity.TimestampUtc)
       .ThenBy(activity => activity.Id)
       .Include(activity => activity.User)
       .ToListAsync(ct);
     return activities.Select(activity => new SalesInvoiceHistoryResponse(
         activity.Id,
+        activity.EntityType == "POS Settlement" ? "POS Settlement" : "Invoice",
         activity.Action,
         activity.Reason,
         activity.UserId,
@@ -496,6 +506,7 @@ public sealed class SalesInvoiceCorrectionService
       var sale = invoice.PosContext;
       pos = new SalesInvoiceAuditPos(
         sale.SalesInvoiceId,
+        sale.PaymentMode,
         sale.PosSessionId,
         sale.CashierUserId,
         sale.CompletedAtUtc,
@@ -862,6 +873,7 @@ public sealed class SalesInvoiceCorrectionService
 
   private sealed record SalesInvoiceAuditPos(
     Guid SalesInvoiceId,
+    PosPaymentMode PaymentMode,
     Guid PosSessionId,
     Guid CashierUserId,
     DateTime CompletedAtUtc,

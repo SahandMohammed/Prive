@@ -227,6 +227,7 @@ public sealed class PosContextEntityConfiguration : IEntityTypeConfiguration<Pos
   {
     builder.ToTable("pos_contexts");
     builder.HasKey(context => context.SalesInvoiceId);
+    builder.Property(context => context.PaymentMode).HasConversion<string>().HasMaxLength(16).IsRequired();
     builder.Property(context => context.RequestFingerprint).HasMaxLength(64);
     builder.HasIndex(context => context.PaymentId).IsUnique().HasFilter("\"PaymentId\" IS NOT NULL");
     builder.HasIndex(context => context.PosSessionId);

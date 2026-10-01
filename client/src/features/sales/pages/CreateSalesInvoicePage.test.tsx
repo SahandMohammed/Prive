@@ -1,9 +1,14 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CreateSalesInvoicePage } from './CreateSalesInvoicePage'
 
 const mockCurrentUser = vi.hoisted(() => ({ role: 'SuperAdmin' }))
+const mockMoneyAccountsQuery = vi.hoisted(() => ({
+  accounts: [] as Array<Record<string, unknown>>,
+  isSuccess: true,
+  isFetching: false,
+}))
 
 const mockExistingInvoice = vi.hoisted(() => ({
   id: 'inv-123',
@@ -90,6 +95,7 @@ const mockExistingInvoice = vi.hoisted(() => ({
 const mockAuditHistory = vi.hoisted(() => [
   {
     id: 'aud-1',
+    source: 'Invoice',
     action: 'Created',
     changedByUserId: 'user-1',
     changedByUsername: 'manager',
@@ -127,13 +133,13 @@ vi.mock('@/features/auth', () => ({
 
 vi.mock('@/features/business', () => ({
   useBranches: () => ({
-    data: { data: [{ id: 'branch-1', name: 'Main Atelier' }] },
+    data: { data: [{ id: 'branch-1', code: 'MAIN', name: 'Main Atelier', isActive: true }] },
   }),
   useCurrencies: () => ({
     data: {
       data: [
-        { id: 'curr-usd', code: 'USD', name: 'US Dollar', symbol: '$' },
-        { id: 'curr-iqd', code: 'IQD', name: 'Iraqi Dinar', symbol: 'IQD' },
+        { id: 'curr-usd', code: 'USD', name: 'US Dollar', symbol: '$', isActive: true },
+        { id: 'curr-iqd', code: 'IQD', name: 'Iraqi Dinar', symbol: 'IQD', isActive: true },
       ],
     },
   }),
@@ -155,7 +161,11 @@ vi.mock('@/features/finance', () => ({
   useEffectiveExchangeRate: () => ({
     data: { rate: 1500 },
   }),
-  useMoneyAccounts: () => ({ data: { data: [] } }),
+  useMoneyAccounts: () => ({
+    data: { data: mockMoneyAccountsQuery.accounts },
+    isSuccess: mockMoneyAccountsQuery.isSuccess,
+    isFetching: mockMoneyAccountsQuery.isFetching,
+  }),
   usePayment: () => ({ data: undefined }),
 }))
 
@@ -240,6 +250,9 @@ function renderPage(initialEntries = ['/sales/invoices/new']) {
 describe('CreateSalesInvoicePage', () => {
   beforeEach(() => {
     currentInvoiceData = null
+    mockMoneyAccountsQuery.accounts = []
+    mockMoneyAccountsQuery.isSuccess = true
+    mockMoneyAccountsQuery.isFetching = false
     vi.clearAllMocks()
   })
 
@@ -293,6 +306,47 @@ describe('CreateSalesInvoicePage', () => {
       expect(screen.getByRole('combobox', { name: /service for line 1/i })).toHaveValue('Full Hair Coloring')
       expect(screen.getByRole('combobox', { name: /product for line 2/i })).toHaveValue('Argan Hair Oil 100ml (OIL-100)')
     })
+
+    it('preserves a valid embedded Payment account and clears it only after a successful scoped query proves it invalid', async () => {
+      mockMoneyAccountsQuery.accounts = [{
+        id: 'account-iqd',
+        code: 'CASH-IQD',
+        name: 'Reception IQD',
+        branchId: 'branch-1',
+        currencyId: 'curr-iqd',
+        isActive: true,
+        currentUserAccess: 1,
+      }]
+      const view = renderPage(['/sales/invoices/new'])
+
+      fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'curr-iqd' } })
+      fireEvent.click(screen.getByRole('button', { name: /add payment/i }))
+      const accountSelect = screen.getByLabelText('Money Account (IQD)')
+      fireEvent.change(accountSelect, { target: { value: 'account-iqd' } })
+      expect(accountSelect).toHaveValue('account-iqd')
+
+      mockMoneyAccountsQuery.isFetching = true
+      view.rerender(
+        <MemoryRouter initialEntries={['/sales/invoices/new']}>
+          <Routes>
+            <Route path="/sales/invoices/new" element={<CreateSalesInvoicePage />} />
+          </Routes>
+        </MemoryRouter>
+      )
+      expect(screen.getByLabelText('Money Account (IQD)')).toHaveValue('account-iqd')
+
+      mockMoneyAccountsQuery.accounts = []
+      mockMoneyAccountsQuery.isFetching = false
+      view.rerender(
+        <MemoryRouter initialEntries={['/sales/invoices/new']}>
+          <Routes>
+            <Route path="/sales/invoices/new" element={<CreateSalesInvoicePage />} />
+          </Routes>
+        </MemoryRouter>
+      )
+
+      await waitFor(() => expect(screen.getByLabelText('Money Account (IQD)')).toHaveValue(''))
+    })
   })
 
   describe('Existing Invoice Read-Only Mode', () => {
@@ -327,6 +381,7 @@ describe('CreateSalesInvoicePage', () => {
       expect(screen.getByRole('heading', { name: /audit history/i })).toBeInTheDocument()
       expect(screen.getByText('Initial sale creation')).toBeInTheDocument()
       expect(screen.getByText('manager')).toBeInTheDocument()
+      expect(screen.getByText('Invoice')).toBeInTheDocument()
     })
 
     it('enters edit mode when clicking Edit button', () => {

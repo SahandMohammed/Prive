@@ -266,15 +266,7 @@ public sealed class PosService
       query = query.Where(sale => sale.CompletedAtUtc < to);
     }
     if (request.PaymentMode is not null)
-    {
-      query = request.PaymentMode switch
-      {
-        PosPaymentMode.Credit => query.Where(sale => (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) <= 0m),
-        PosPaymentMode.Partial => query.Where(sale => (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) > 0m
-          && (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) < sale.SalesInvoice.BaseTotal),
-        _ => query.Where(sale => (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) >= sale.SalesInvoice.BaseTotal)
-      };
-    }
+      query = query.Where(sale => sale.PaymentMode == request.PaymentMode);
     if (request.RefundState is not null)
     {
       query = request.RefundState switch
@@ -313,10 +305,7 @@ public sealed class PosService
               .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) >= sale.SalesInvoice.BaseTotal
             ? PosRefundState.FullyRefunded
             : PosRefundState.PartiallyRefunded,
-        (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) <= 0m
-          ? PosPaymentMode.Credit
-          : (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount) < sale.SalesInvoice.BaseTotal
-            ? PosPaymentMode.Partial : PosPaymentMode.Paid,
+        sale.PaymentMode,
         sale.SalesInvoice.BaseCurrency.Code,
         sale.CashierUser.Username))
       .ToPagedResultAsync(request, ct);
@@ -447,11 +436,6 @@ public sealed class PosService
     var branch = await _db.Branches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.BranchId, ct)
       ?? throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
     var customerId = request.CustomerId ?? branch.WalkInCustomerId;
-    if (request.PaymentMode is PosPaymentMode.Partial or PosPaymentMode.Credit
-      && !await _db.Contacts.AsNoTracking().AnyAsync(contact => contact.Id == customerId
-        && contact.IsActive && contact.IsCustomer && contact.SystemRole == null, ct))
-      throw new BadRequestException(ErrorCodes.Sales.CustomerInvalid,
-        "Partial and credit POS Sales require an active real customer.");
     var invoiceRequest = new SalesInvoiceDraftRequest(
       customerId,
       date,
@@ -468,6 +452,7 @@ public sealed class PosService
     {
       SalesInvoiceId = invoice.Id,
       SalesInvoice = invoice,
+      PaymentMode = request.PaymentMode,
       PosSessionId = session.Id,
       PosSession = session,
       CashierUserId = userId,
@@ -630,6 +615,7 @@ public sealed class PosService
       }
 
       var correctedAtUtc = DateTime.UtcNow;
+      context.PaymentMode = request.PaymentMode;
       invoice.UpdatedAtUtc = correctedAtUtc;
       RegenerateZReport(session, zIdentity, correctedAtUtc);
       _db.ActivityLogs.Add(new ActivityLogEntity
@@ -748,6 +734,7 @@ public sealed class PosService
     JsonSerializer.Serialize(new
     {
       context.SalesInvoiceId,
+      context.PaymentMode,
       context.PaymentId,
       context.SalesInvoice.UpdatedAtUtc,
       Tenders = context.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new
@@ -843,12 +830,6 @@ public sealed class PosService
       : remainingRefundableBase <= 0
         ? PosRefundState.FullyRefunded
         : PosRefundState.PartiallyRefunded;
-    var paymentMode = settledBase <= 0
-      ? PosPaymentMode.Credit
-      : settledBase < invoice.BaseTotal
-        ? PosPaymentMode.Partial
-        : PosPaymentMode.Paid;
-
     return new PosSaleResponse(
       sale.SalesInvoiceId,
       invoice.DocumentNumber,
@@ -873,7 +854,7 @@ public sealed class PosService
       remainingRefundableBase,
       Money(invoice.BaseTotal - refundedBase),
       refundStatus,
-      paymentMode,
+      sale.PaymentMode,
       sale.PaymentId,
       sale.Payment?.DocumentNumber,
       sale.CashierUserId,
@@ -922,10 +903,6 @@ public sealed class PosService
     if (request.PaymentMode == PosPaymentMode.Credit && request.Tenders.Count > 0)
       throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
         "Credit POS Sales cannot include a tender. Choose Partial when money is received now.");
-    if (request.PaymentMode is PosPaymentMode.Partial or PosPaymentMode.Credit
-      && (request.CustomerId is null || request.CustomerId == Guid.Empty))
-      throw new BadRequestException(ErrorCodes.Sales.CustomerRequired,
-        "Select a customer before creating a Partial or Credit POS Sale.");
     if (request.PaymentMode != PosPaymentMode.Paid && request.Change is not null)
       throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue,
         "Change can only be recorded for a fully paid POS Sale.");

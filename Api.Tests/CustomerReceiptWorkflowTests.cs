@@ -407,6 +407,75 @@ public sealed class CustomerReceiptWorkflowTests
   }
 
   [Fact]
+  public async Task Direct_invoice_payments_enforce_invoice_currency_and_exchange_rate_on_create_and_update()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var payments = new PaymentService(db);
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    var basePayment = await payments.CreateInvoicePaymentAsync(data.InvoiceOneId,
+      new InvoicePaymentRequest(today, data.MoneyAccountId, 25, null, null),
+      data.OperatorUserId, default);
+    Assert.Equal(1, Assert.Single(basePayment.MoneyLines).ExchangeRate);
+
+    var badBaseCreate = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.CreateInvoicePaymentAsync(data.InvoiceTwoId,
+        new InvoicePaymentRequest(today, data.MoneyAccountId, 25, 999, null),
+        data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentExchangeRateMismatch, badBaseCreate.Code);
+
+    var badBaseUpdate = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.UpdateInvoicePaymentAsync(data.InvoiceOneId, basePayment.Id,
+        new UpdateInvoicePaymentRequest(today, data.MoneyAccountId, 20, 2, null,
+          "Invalid base rate", basePayment.UpdatedAtUtc), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentExchangeRateMismatch, badBaseUpdate.Code);
+
+    var badForeignCreateRate = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.CreateInvoicePaymentAsync(data.ForeignRateMismatchInvoiceId,
+        new InvoicePaymentRequest(today, data.ForeignMoneyAccountId, 10, 1330, null),
+        data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentExchangeRateMismatch, badForeignCreateRate.Code);
+
+    var badForeignCreateAccount = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.CreateInvoicePaymentAsync(data.ForeignRateMismatchInvoiceId,
+        new InvoicePaymentRequest(today, data.MoneyAccountId, 10, 1320, null),
+        data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentMoneyAccountCurrencyMismatch, badForeignCreateAccount.Code);
+
+    var foreignPayment = await payments.CreateInvoicePaymentAsync(data.ForeignRateMismatchInvoiceId,
+      new InvoicePaymentRequest(today, data.ForeignMoneyAccountId, 10, 1320, null),
+      data.OperatorUserId, default);
+    Assert.Equal(1320, Assert.Single(foreignPayment.MoneyLines).ExchangeRate);
+    Assert.Equal(13_200, foreignPayment.BaseAmount);
+    var originalJournalId = foreignPayment.JournalEntryId;
+
+    var badForeignUpdateRate = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.UpdateInvoicePaymentAsync(data.ForeignRateMismatchInvoiceId, foreignPayment.Id,
+        new UpdateInvoicePaymentRequest(today, data.ForeignMoneyAccountId, 9, 1330, null,
+          "Invalid foreign rate", foreignPayment.UpdatedAtUtc), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentExchangeRateMismatch, badForeignUpdateRate.Code);
+
+    var badForeignUpdateAccount = await Assert.ThrowsAsync<BadRequestException>(() =>
+      payments.UpdateInvoicePaymentAsync(data.ForeignRateMismatchInvoiceId, foreignPayment.Id,
+        new UpdateInvoicePaymentRequest(today, data.MoneyAccountId, 9, 1320, null,
+          "Invalid account currency", foreignPayment.UpdatedAtUtc), data.OperatorUserId, default));
+    Assert.Equal(ErrorCodes.Finance.PaymentMoneyAccountCurrencyMismatch, badForeignUpdateAccount.Code);
+
+    var unchanged = await payments.GetAsync(foreignPayment.Id);
+    Assert.Equal(10, unchanged.Amount);
+    Assert.Equal(1320, Assert.Single(unchanged.MoneyLines).ExchangeRate);
+    Assert.Equal(originalJournalId, unchanged.JournalEntryId);
+
+    var corrected = await payments.UpdateInvoicePaymentAsync(data.ForeignRateMismatchInvoiceId, foreignPayment.Id,
+      new UpdateInvoicePaymentRequest(today, data.ForeignMoneyAccountId, 9, 1320, null,
+        "Correct amount", foreignPayment.UpdatedAtUtc), data.OperatorUserId, default);
+    Assert.Equal(9, corrected.Amount);
+    Assert.Equal(11_880, corrected.BaseAmount);
+    Assert.Equal(1320, Assert.Single(corrected.MoneyLines).ExchangeRate);
+  }
+
+  [Fact]
   public async Task Customer_account_summary_and_statement_are_derived_from_invoices_and_allocations()
   {
     await using var db = CreateDb();

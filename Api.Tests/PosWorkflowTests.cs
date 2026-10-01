@@ -86,7 +86,7 @@ public sealed partial class PosWorkflowTests
     var data = await SeedAsync(db);
     var pos = CreateService(db);
     var sale = await pos.CompleteSaleAsync(
-      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)]),
+      Request(data, [ServiceLine(data)], [new(data.IqdMoneyAccountId, 25_000)], data.CustomerId),
       data.CashierId,
       default);
     var original = await db.PosContexts.AsNoTracking().SingleAsync(item => item.SalesInvoiceId == sale.Id);

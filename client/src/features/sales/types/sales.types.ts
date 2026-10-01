@@ -265,6 +265,7 @@ export interface PostedSalesInvoiceInput extends Omit<SalesInvoiceDraftInput, 'p
 
 export interface SalesInvoiceHistory {
   id: string
+  source: 'Invoice' | 'POS Settlement'
   action: string
   reason: string | null
   changedByUserId: string

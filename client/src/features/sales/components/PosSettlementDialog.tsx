@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,7 +64,7 @@ export function PosSettlementDialog({
     defaultValues: valuesFromInvoice(invoice),
   })
   const tenders = useFieldArray({ control: form.control, name: 'tenders' })
-  const mode = form.watch('paymentMode')
+  const mode = useWatch({ control: form.control, name: 'paymentMode' })
 
   useEffect(() => {
     if (open) form.reset(valuesFromInvoice(invoice))

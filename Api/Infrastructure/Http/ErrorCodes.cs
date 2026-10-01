@@ -237,6 +237,7 @@ public static class ErrorCodes
     public const string InvoiceHasDependentTransaction = "SALES_INVOICE_HAS_DEPENDENT_TRANSACTION";
     public const string ConcurrencyConflict = "SALES_INVOICE_CONCURRENCY_CONFLICT";
     public const string PosBranchImmutable = "SALES_POS_BRANCH_IMMUTABLE";
+    public const string PosInvoiceDateImmutable = "SALES_POS_INVOICE_DATE_IMMUTABLE";
   }
 
   public static class Pos
@@ -258,6 +259,7 @@ public static class ErrorCodes
     public const string ConcurrentCheckout = "POS_CONCURRENT_CHECKOUT";
     public const string SettlementConcurrencyConflict = "POS_SETTLEMENT_CONCURRENCY_CONFLICT";
     public const string SettlementHasRefundDependency = "POS_SETTLEMENT_HAS_REFUND_DEPENDENCY";
+    public const string RealCustomerRequired = "POS_REAL_CUSTOMER_REQUIRED";
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
     public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
     public const string RegisterInactive = "POS_REGISTER_INACTIVE";

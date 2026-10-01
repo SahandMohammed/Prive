@@ -127,13 +127,13 @@ public sealed partial class PosWorkflowTests
       },
       data.CashierId,
       default));
-    Assert.Equal(ErrorCodes.Sales.CustomerRequired, partial.Code);
+    Assert.Equal(ErrorCodes.Pos.RealCustomerRequired, partial.Code);
 
     var credit = await Assert.ThrowsAsync<BadRequestException>(() => pos.CompleteSaleAsync(
       Request(data, [ServiceLine(data)], []) with { PaymentMode = PosPaymentMode.Credit },
       data.CashierId,
       default));
-    Assert.Equal(ErrorCodes.Sales.CustomerRequired, credit.Code);
+    Assert.Equal(ErrorCodes.Pos.RealCustomerRequired, credit.Code);
 
     Assert.Empty(db.PosContexts);
     Assert.Empty(db.SalesInvoices);

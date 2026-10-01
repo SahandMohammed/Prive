@@ -189,6 +189,7 @@ public sealed class PosContextEntity
 {
   public Guid SalesInvoiceId { get; set; }
   public SalesInvoiceEntity SalesInvoice { get; set; } = null!;
+  public PosPaymentMode PaymentMode { get; set; } = PosPaymentMode.Paid;
   public Guid? PaymentId { get; set; }
   public PaymentEntity? Payment { get; set; }
   public Guid PosSessionId { get; set; }

@@ -1,6 +1,9 @@
 # Unified Payment Engine
 
-**Status:** implemented and verified locally on 2026-09-30.
+**Status:** implemented and verified locally on 2026-10-01.
+
+The final Sales/POS/Payment hardening changes are recorded in
+[unified-sales-pos-payment-hardening.md](unified-sales-pos-payment-hardening.md).
 
 This document is the implementation guide and maintenance contract for Privé's
 customer-payment architecture. It describes the code that is currently in the
@@ -26,8 +29,8 @@ Customer
 │   └── Payment                          posted manual-receipt state
 └── CustomerAccountReader                derived account projection
 
-PosSale                                  operational checkout context
-├── SalesInvoice
+PosContext                               operational checkout context
+├── SalesInvoice                        shared identity and document number
 ├── Payment?
 ├── PosTender[]
 ├── PosChange?
@@ -46,12 +49,14 @@ The boundaries are intentional:
 - `PaymentMoneyLine` says which Money Accounts physically moved.
 - `MoneyLedger` is the generated Money Account effect of a money line.
 - `CustomerReceipt` is a draft voucher that produces a Payment when posted.
-- `PosSale`, `PosTender`, and `PosChange` remain the drawer, session, receipt,
+- `PosContext`, `PosTender`, and `PosChange` remain the drawer, session, receipt,
   idempotency, and X/Z reporting truth.
 - `CustomerAccountReader` derives customer balances; it does not store them.
 - `Refund` remains a separate business transaction.
 
-`PosSale` is not replaced by a new POS context in this implementation.
+`PosContext.SalesInvoiceId` is both its primary key and required foreign key.
+There is no independent POS sale identity, document number, or persisted sale
+status. POS routes use the SalesInvoice ID and SalesInvoice document number.
 
 ## Payment invariants
 
@@ -339,7 +344,7 @@ Checkout is atomic:
 ```text
 resolve selected customer or branch Walk-in Customer
 → create SalesInvoice and full-AR sale journal
-→ create PosSale
+→ create PosContext using the SalesInvoice identity
 → create PosTender[] and optional PosChange
 → if net settlement > 0, create one POS-origin Payment
 → allocate it only to the POS SalesInvoice
@@ -390,7 +395,7 @@ Active customer-collection ledgers use only:
 PaymentMoneyLine → MoneyLedgerSourceType.Payment
 ```
 
-CustomerReceipt and PosSale do not own collection ledger entries. Refund ledgers
+CustomerReceipt and PosContext do not own collection ledger entries. Refund ledgers
 continue to use `MoneyLedgerSourceType.PosRefund`.
 
 ## Public read APIs
@@ -443,6 +448,8 @@ FINANCE_PAYMENT_BRANCH_MISMATCH
 FINANCE_PAYMENT_CURRENCY_MISMATCH
 FINANCE_PAYMENT_SOURCE_INVOICE_MISMATCH
 FINANCE_PAYMENT_MONEY_LINES_INVALID
+FINANCE_PAYMENT_MONEY_ACCOUNT_CURRENCY_MISMATCH
+FINANCE_PAYMENT_EXCHANGE_RATE_MISMATCH
 FINANCE_PAYMENT_MONEY_LINES_UNBALANCED
 FINANCE_PAYMENT_ALLOCATION_EXCEEDS_OUTSTANDING
 FINANCE_PAYMENT_RECEIVABLE_ACCOUNT_MISSING
@@ -451,6 +458,9 @@ FINANCE_PAYMENT_CONCURRENCY_CONFLICT
 FINANCE_CUSTOMER_ACCOUNT_DATE_RANGE_INVALID
 CONTACT_SYSTEM_PROTECTED
 SALES_INVOICE_HAS_PAYMENT
+SALES_POS_INVOICE_DATE_IMMUTABLE
+POS_REAL_CUSTOMER_REQUIRED
+POS_SETTLEMENT_CONCURRENCY_CONFLICT
 ```
 
 Controllers do not construct error bodies. Services throw the centralized typed
@@ -501,6 +511,7 @@ The schema is defined by these migrations after the previously existing chain:
 1. `20260930125119_UnifiedPaymentEngine`
 2. `20260930134110_PaymentDeletionJournalLifecycle`
 3. `20260930135142_RequireFinalZReportNetSales`
+4. `20261001082333_PreservePosCheckoutPaymentMode`
 
 These are schema migrations for the final model, not historical transaction data
 migrations. Do not treat this release as an in-place compatibility upgrade for a
@@ -553,7 +564,7 @@ pnpm --dir client build
 dotnet ef migrations has-pending-model-changes --project Api/api.csproj
 ```
 
-The latest local run completed with 197 backend tests and 148 frontend tests.
+The latest local run completed with 224 backend tests and 155 frontend tests.
 The production client build succeeds with Vite's existing large-chunk advisory.
 
 For a fresh-database smoke test, verify at minimum:
@@ -583,4 +594,4 @@ When adding a new customer-collection path:
 
 Do not add a stored customer balance, a payment-level exchange rate, a generic
 free-floating Payment write endpoint, one POS Payment per tender, settlement
-fallbacks, or CustomerReceipt/PosSale-owned collection accounting.
+fallbacks, or CustomerReceipt/PosContext-owned collection accounting.
