@@ -1,0 +1,84 @@
+{
+  "title": "Contacts",
+  "description": "Manage the people and businesses used by sales and purchases.",
+  "addContact": "Add contact",
+  "saveChanges": "Save changes",
+  "cancel": "Cancel",
+  "deleteConfirm": "Permanently delete {{name}}? This cannot be undone.",
+  "searchPlaceholder": "Search name, phone, or email",
+  "contactsCount_one": "{{count}} contact",
+  "contactsCount_other": "{{count}} contacts",
+  "loadingContacts": "Loading contacts…",
+  "loadingContact": "Loading contact…",
+  "failedToLoad": "Failed to load contacts.",
+  "noContacts": "No contacts found.",
+  "roles": {
+    "all": "All",
+    "customer": "Customer",
+    "customers": "Customers",
+    "supplier": "Supplier",
+    "suppliers": "Suppliers",
+    "both": "Both",
+    "customerSupplier": "Customer · Supplier"
+  },
+  "kinds": {
+    "all": "All types",
+    "individual": "Individual",
+    "business": "Business"
+  },
+  "statuses": {
+    "all": "All statuses",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "filters": {
+    "role": "Role",
+    "status": "Status",
+    "type": "Type"
+  },
+  "th": {
+    "contact": "Contact",
+    "role": "Role",
+    "phone": "Phone",
+    "email": "Email",
+    "city": "City",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "View {{name}}",
+    "edit": "Edit {{name}}",
+    "activate": "Activate {{name}}",
+    "deactivate": "Deactivate {{name}}",
+    "delete": "Delete {{name}}"
+  },
+  "form": {
+    "createTitle": "Add contact",
+    "editTitle": "Edit {{name}}",
+    "dialogDesc": "Keep the record practical; only the name and at least one role are required.",
+    "basicInfo": "Basic information",
+    "name": "Name",
+    "type": "Type",
+    "roles": "Roles",
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "contactInfo": "Contact information",
+    "primaryPhone": "Primary phone",
+    "secondaryPhone": "Secondary phone",
+    "email": "Email",
+    "address": "Address",
+    "city": "City",
+    "region": "Region / governorate",
+    "country": "Country",
+    "additional": "Additional",
+    "notes": "Notes",
+    "active": "Active"
+  },
+  "detail": {
+    "title": "Contact details",
+    "description": "Commercial identity and contact information.",
+    "contactInfo": "Contact information",
+    "address": "Address",
+    "notes": "Notes"
+  }
+}

@@ -15,7 +15,7 @@ public sealed class ContactService
     ContactListQuery request,
     CancellationToken ct = default)
   {
-    var query = _db.Contacts.AsNoTracking().AsQueryable();
+    var query = _db.Contacts.AsNoTracking().Where(contact => contact.SystemRole == null);
 
     if (!string.IsNullOrWhiteSpace(request.Search))
     {
@@ -55,7 +55,7 @@ public sealed class ContactService
   {
     var contact = await _db.Contacts
       .AsNoTracking()
-      .SingleOrDefaultAsync(contact => contact.Id == id, ct)
+      .SingleOrDefaultAsync(contact => contact.Id == id && contact.SystemRole == null, ct)
       ?? throw new NotFoundException(
         ErrorCodes.Contact.NotFound,
         $"Contact with id '{id}' was not found.");
@@ -87,6 +87,7 @@ public sealed class ContactService
       ?? throw new NotFoundException(
         ErrorCodes.Contact.NotFound,
         $"Contact with id '{id}' was not found.");
+    EnsureNotSystem(contact);
 
     ValidateRoles(request.IsCustomer, request.IsSupplier);
     Apply(contact, request);
@@ -105,6 +106,7 @@ public sealed class ContactService
       ?? throw new NotFoundException(
         ErrorCodes.Contact.NotFound,
         $"Contact with id '{id}' was not found.");
+    EnsureNotSystem(contact);
 
     if (await _db.PurchaseInvoices.IgnoreQueryFilters().AnyAsync(invoice => invoice.SupplierId == id, ct)
       || await _db.SalesInvoices.IgnoreQueryFilters().AnyAsync(invoice => invoice.CustomerId == id, ct))
@@ -120,6 +122,7 @@ public sealed class ContactService
       ?? throw new NotFoundException(
         ErrorCodes.Contact.NotFound,
         $"Contact with id '{id}' was not found.");
+    EnsureNotSystem(contact);
 
     contact.IsActive = isActive;
     await _db.SaveChangesAsync(ct);
@@ -167,6 +170,13 @@ public sealed class ContactService
       throw new BadRequestException(
         ErrorCodes.Contact.RoleRequired,
         "A contact must be a customer, a supplier, or both.");
+  }
+
+  private static void EnsureNotSystem(ContactEntity contact)
+  {
+    if (contact.SystemRole is not null)
+      throw new BadRequestException(ErrorCodes.Contact.SystemProtected,
+        "System contacts cannot be edited, deactivated, or deleted.");
   }
 
   private static string? TrimOrNull(string? value) =>

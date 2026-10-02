@@ -5,6 +5,7 @@ using Api.Modules.Currency;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Pos;
+using Api.Modules.Professional;
 using Api.Modules.User;
 
 namespace Api.Modules.Sales;
@@ -38,8 +39,8 @@ public sealed class SalesInvoiceEntity
 {
   public Guid Id { get; set; } = Guid.NewGuid();
   public string DocumentNumber { get; set; } = string.Empty;
-  public Guid? CustomerId { get; set; }
-  public ContactEntity? Customer { get; set; }
+  public Guid CustomerId { get; set; }
+  public ContactEntity Customer { get; set; } = null!;
   public DateOnly InvoiceDate { get; set; }
   public Guid BranchId { get; set; }
   public BranchEntity Branch { get; set; } = null!;
@@ -60,13 +61,19 @@ public sealed class SalesInvoiceEntity
   public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
   public DateTime? PostedAtUtc { get; set; }
+  public bool IsDeleted { get; set; }
+  public DateTime? DeletedAtUtc { get; set; }
+  public Guid? DeletedByUserId { get; set; }
+  public UserEntity? DeletedByUser { get; set; }
+  public string? DeleteReason { get; set; }
   public Guid? JournalEntryId { get; set; }
   public JournalEntryEntity? JournalEntry { get; set; }
   public Guid? AccountsReceivableAccountId { get; set; }
   public ICollection<SalesInvoiceLineEntity> Lines { get; set; } = new List<SalesInvoiceLineEntity>();
   public ICollection<StockMovementEntity> Movements { get; set; } = new List<StockMovementEntity>();
-  public ICollection<CustomerReceiptAllocationEntity> ReceiptAllocations { get; set; } = new List<CustomerReceiptAllocationEntity>();
-  public PosSaleEntity? PosSale { get; set; }
+  public ICollection<CustomerReceiptDraftAllocationEntity> ReceiptDraftAllocations { get; set; } = new List<CustomerReceiptDraftAllocationEntity>();
+  public ICollection<PaymentAllocationEntity> PaymentAllocations { get; set; } = new List<PaymentAllocationEntity>();
+  public PosContextEntity? PosContext { get; set; }
   public ICollection<PosRefundEntity> PosRefunds { get; set; } = new List<PosRefundEntity>();
 }
 
@@ -93,8 +100,8 @@ public sealed class SalesInvoiceLineEntity
   public decimal LineSubtotal { get; set; }
   public decimal LineAmount { get; set; }
   public decimal BaseLineAmount { get; set; }
-  public Guid? ProfessionalUserId { get; set; }
-  public UserEntity? ProfessionalUser { get; set; }
+  public Guid? ProfessionalId { get; set; }
+  public ProfessionalEntity? Professional { get; set; }
   public Guid? RevenueAccountId { get; set; }
   public Guid? InventoryAccountId { get; set; }
   public Guid? CostOfGoodsSoldAccountId { get; set; }

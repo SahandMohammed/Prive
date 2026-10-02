@@ -3,9 +3,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, Loader2, Pencil, Plus, Save, Trash2 } from 'lucide-react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCurrentBusiness } from '@/features/business'
+import { formatNumber } from '@/lib/i18n'
 import { useCategories, useProduct, useSaveProduct, useSubcategories, useUnits } from '../hooks/useInventory'
 import { productSchema } from '../schemas/inventory.schemas'
 import { UnitConversionOperation, type Category, type ProductInput, type Subcategory } from '../types/inventory.types'
@@ -35,6 +37,7 @@ const defaults: ItemForm = {
 }
 
 export function ItemEditorPage() {
+  const { t } = useTranslation(['inventory', 'common'])
   const { id } = useParams()
   const navigate = useNavigate()
   const product = useProduct(id)
@@ -78,7 +81,7 @@ export function ItemEditorPage() {
   const baseUnit = units.find((unit) => unit.id === baseUnitId)
   const selectedCategory = categories.find((category) => category.id === categoryId)
   const selectedSubcategory = subcategories.find((subcategory) => subcategory.id === subcategoryId)
-  const currency = business?.baseCurrencySymbol ?? business?.baseCurrencyCode ?? 'Base currency'
+  const currency = business?.baseCurrencySymbol ?? business?.baseCurrencyCode ?? 'IQD'
   const submit = form.handleSubmit((values) => save.mutate({
     ...values,
     barcode: values.barcode.trim() || null,
@@ -91,60 +94,206 @@ export function ItemEditorPage() {
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link to="/settings/items" aria-label="Back to items"><Button variant="outline" size="icon"><ArrowLeft className="size-4" /></Button></Link>
-          <div><h1 className="text-2xl font-bold tracking-tight">{id ? 'Edit item' : 'Create item'}</h1><p className="text-sm text-muted-foreground">Inventory quantities and costing always use the base unit.</p></div>
+          <Link to="/settings/items" aria-label={t('common:actions.previous')}>
+            <Button variant="outline" size="icon">
+              <ArrowLeft className="size-4 rtl:rotate-180" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {id ? t('inventory:editor.editTitle') : t('inventory:editor.createTitle')}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {t('inventory:editor.subtitle')}
+            </p>
+          </div>
         </div>
-        <Button onClick={submit} disabled={save.isPending}>{save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}Save item</Button>
+        <Button onClick={submit} disabled={save.isPending}>
+          {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          {t('inventory:editor.saveItem')}
+        </Button>
       </div>
 
       <form onSubmit={submit} className="space-y-6">
         <section className="space-y-4 rounded-lg border bg-card p-6">
-          <div><h2 className="font-semibold">Item details</h2><p className="text-sm text-muted-foreground">Classification and operational defaults for this inventory item.</p></div>
+          <div>
+            <h2 className="font-semibold">{t('inventory:editor.detailsTitle')}</h2>
+            <p className="text-sm text-muted-foreground">{t('inventory:editor.detailsSubtitle')}</p>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Name" error={form.formState.errors.name?.message}><Input {...form.register('name')} /></Field>
-            <Field label="SKU" error={form.formState.errors.sku?.message}><Input className="uppercase" {...form.register('sku')} /></Field>
-            <Field label="Barcode"><Input {...form.register('barcode')} /></Field>
-            <Field label="Purpose" error={form.formState.errors.purpose?.message}><Select {...form.register('purpose', { valueAsNumber: true })}><option value={0}>Resale</option><option value={1}>Consumable</option><option value={2}>Both</option></Select></Field>
+            <Field label={t('inventory:editor.name')} error={form.formState.errors.name?.message}>
+              <Input {...form.register('name')} />
+            </Field>
+            <Field label={t('inventory:editor.sku')} error={form.formState.errors.sku?.message}>
+              <Input className="uppercase" {...form.register('sku')} />
+            </Field>
+            <Field label={t('inventory:editor.barcode')}>
+              <Input {...form.register('barcode')} />
+            </Field>
+            <Field label={t('inventory:editor.purpose')} error={form.formState.errors.purpose?.message}>
+              <Select {...form.register('purpose', { valueAsNumber: true })}>
+                <option value={0}>{t('inventory:editor.purposes.resale')}</option>
+                <option value={1}>{t('inventory:editor.purposes.consumable')}</option>
+                <option value={2}>{t('inventory:editor.purposes.both')}</option>
+              </Select>
+            </Field>
             <DefinitionSelectField
-              label="Category"
+              label={t('inventory:editor.category')}
               error={form.formState.errors.categoryId?.message}
-              select={<Select {...form.register('categoryId', { onChange: () => form.setValue('subcategoryId', '') })}><option value="">Select category</option>{categories.filter((item) => item.isActive || item.id === product.data?.categoryId).map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select>}
+              select={
+                <Select {...form.register('categoryId', { onChange: () => form.setValue('subcategoryId', '') })}>
+                  <option value="">{t('inventory:editor.selectCategory')}</option>
+                  {categories.filter((item) => item.isActive || item.id === product.data?.categoryId).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}{!item.isActive ? ` ${t('inventory:subcategories.inactiveSuffix')}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              }
               onAdd={() => setCategoryDialog(null)}
               onEdit={selectedCategory ? () => setCategoryDialog(selectedCategory) : undefined}
             />
             <DefinitionSelectField
-              label="Subcategory"
+              label={t('inventory:editor.subcategory')}
               error={form.formState.errors.subcategoryId?.message}
-              select={<Select {...form.register('subcategoryId')} disabled={!categoryId}><option value="">No subcategory</option>{subcategories.filter((item) => item.isActive || item.id === product.data?.subcategoryId).map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select>}
+              select={
+                <Select {...form.register('subcategoryId')} disabled={!categoryId}>
+                  <option value="">{t('inventory:editor.noSubcategory')}</option>
+                  {subcategories.filter((item) => item.isActive || item.id === product.data?.subcategoryId).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}{!item.isActive ? ` ${t('inventory:subcategories.inactiveSuffix')}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              }
               onAdd={categoryId ? () => setSubcategoryDialog(null) : undefined}
               onEdit={selectedSubcategory ? () => setSubcategoryDialog(selectedSubcategory) : undefined}
             />
-            <Field label="Base unit" error={form.formState.errors.unitOfMeasureId?.message}><Select {...form.register('unitOfMeasureId')}><option value="">Select base unit</option>{units.filter((item) => item.isActive || item.id === product.data?.unitOfMeasureId).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}</Select><span className="text-xs font-normal text-muted-foreground">Cannot change after purchase, sale, or stock history exists.</span></Field>
-            <Field label={`Purchase price (${currency})`} error={form.formState.errors.purchasePriceBase?.message}><Input type="number" min="0" step="0.0001" {...form.register('purchasePriceBase', { valueAsNumber: true })} /></Field>
-            <Field label={`Selling price (${currency})`} error={form.formState.errors.sellingPriceBase?.message}><Input type="number" min="0" step="0.0001" {...form.register('sellingPriceBase', { valueAsNumber: true })} /></Field>
+            <Field label={t('inventory:editor.baseUnit')} error={form.formState.errors.unitOfMeasureId?.message}>
+              <Select {...form.register('unitOfMeasureId')}>
+                <option value="">{t('inventory:editor.selectBaseUnit')}</option>
+                {units.filter((item) => item.isActive || item.id === product.data?.unitOfMeasureId).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.code} — {item.name}{!item.isActive ? ` ${t('inventory:subcategories.inactiveSuffix')}` : ''}
+                  </option>
+                ))}
+              </Select>
+              <span className="text-xs font-normal text-muted-foreground">{t('inventory:editor.baseUnitWarning')}</span>
+            </Field>
+            <Field label={t('inventory:editor.purchasePrice', { currency })} error={form.formState.errors.purchasePriceBase?.message}>
+              <Input type="number" min="0" step="0.0001" {...form.register('purchasePriceBase', { valueAsNumber: true })} />
+            </Field>
+            <Field label={t('inventory:editor.sellingPrice', { currency })} error={form.formState.errors.sellingPriceBase?.message}>
+              <Input type="number" min="0" step="0.0001" {...form.register('sellingPriceBase', { valueAsNumber: true })} />
+            </Field>
           </div>
-          <Field label="Description" error={form.formState.errors.description?.message}><textarea {...form.register('description')} className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm" /></Field>
-          <div className="flex flex-wrap gap-5"><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('trackInventory')} />Track inventory</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} />Active</label></div>
+          <Field label={t('inventory:editor.description')} error={form.formState.errors.description?.message}>
+            <textarea {...form.register('description')} className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          </Field>
+          <div className="flex flex-wrap gap-5">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" {...form.register('trackInventory')} />
+              {t('inventory:editor.trackInventory')}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" {...form.register('isActive')} />
+              {t('inventory:editor.active')}
+            </label>
+          </div>
         </section>
 
         <section className="space-y-4 rounded-lg border bg-card p-6">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div><h2 className="font-semibold">Unit conversions</h2><p className="text-sm text-muted-foreground">Conversions are item-specific and always resolve to {baseUnit?.name ?? 'the base unit'}.</p></div>
-            <Button type="button" variant="outline" onClick={() => conversionFields.append({ unitOfMeasureId: '', operation: UnitConversionOperation.Multiply, factor: 1 })} disabled={!baseUnitId}><Plus className="size-4" />Add conversion</Button>
+            <div>
+              <h2 className="font-semibold">{t('inventory:editor.conversionsTitle')}</h2>
+              <p className="text-sm text-muted-foreground">
+                {t('inventory:editor.conversionsSubtitle', { baseUnit: baseUnit?.name ?? t('inventory:editor.baseUnit') })}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => conversionFields.append({ unitOfMeasureId: '', operation: UnitConversionOperation.Multiply, factor: 1 })}
+              disabled={!baseUnitId}
+            >
+              <Plus className="size-4" />
+              {t('inventory:editor.addConversion')}
+            </Button>
           </div>
-          {conversionFields.fields.length === 0 ? <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">No alternate units. Transactions use only the base unit.</p> : conversionFields.fields.map((field, index) => {
-            const conversion = conversions[index]
-            const unit = units.find((item) => item.id === conversion?.unitOfMeasureId)
-            const factor = Number(conversion?.factor) || 0
-            const equivalent = conversion?.operation === UnitConversionOperation.Divide && factor > 0 ? 1 / factor : factor
-            return <div key={field.id} className="space-y-2 rounded-md border p-4"><div className="grid gap-3 md:grid-cols-[1fr_160px_1fr_auto]"><Field label="Unit" error={form.formState.errors.unitConversions?.[index]?.unitOfMeasureId?.message}><Select {...form.register(`unitConversions.${index}.unitOfMeasureId`)}><option value="">Select unit</option>{units.filter((item) => item.id !== baseUnitId && (item.isActive || item.id === unit?.id)).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</Select></Field><Field label="Operation" error={form.formState.errors.unitConversions?.[index]?.operation?.message}><Select {...form.register(`unitConversions.${index}.operation`, { valueAsNumber: true })}><option value={UnitConversionOperation.Multiply}>Multiply</option><option value={UnitConversionOperation.Divide}>Divide</option></Select></Field><Field label="Factor" error={form.formState.errors.unitConversions?.[index]?.factor?.message}><Input type="number" min="0.000001" step="0.000001" {...form.register(`unitConversions.${index}.factor`, { valueAsNumber: true })} /></Field><Button type="button" variant="ghost" size="icon" className="mt-6" onClick={() => conversionFields.remove(index)} aria-label="Remove conversion"><Trash2 className="size-4" /></Button></div>{unit && baseUnit && factor > 0 && <p className="text-sm text-muted-foreground">1 {unit.name} equals <strong className="text-foreground">{equivalent.toLocaleString(undefined, { maximumFractionDigits: 6 })} {baseUnit.name}</strong>. Entered quantity is {conversion.operation === UnitConversionOperation.Multiply ? 'multiplied by' : 'divided by'} {factor.toLocaleString()}.</p>}</div>
-          })}
-          {form.formState.errors.unitConversions?.message && <p className="text-sm text-destructive">{form.formState.errors.unitConversions.message}</p>}
+          {conversionFields.fields.length === 0 ? (
+            <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              {t('inventory:editor.noConversions')}
+            </p>
+          ) : (
+            conversionFields.fields.map((field, index) => {
+              const conversion = conversions[index]
+              const unit = units.find((item) => item.id === conversion?.unitOfMeasureId)
+              const factor = Number(conversion?.factor) || 0
+              const equivalent = conversion?.operation === UnitConversionOperation.Divide && factor > 0 ? 1 / factor : factor
+              return (
+                <div key={field.id} className="space-y-2 rounded-md border p-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_160px_1fr_auto]">
+                    <Field label={t('inventory:editor.unit')} error={form.formState.errors.unitConversions?.[index]?.unitOfMeasureId?.message}>
+                      <Select {...form.register(`unitConversions.${index}.unitOfMeasureId`)}>
+                        <option value="">{t('inventory:editor.selectUnit')}</option>
+                        {units.filter((item) => item.id !== baseUnitId && (item.isActive || item.id === unit?.id)).map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.code} — {item.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label={t('inventory:editor.operation')} error={form.formState.errors.unitConversions?.[index]?.operation?.message}>
+                      <Select {...form.register(`unitConversions.${index}.operation`, { valueAsNumber: true })}>
+                        <option value={UnitConversionOperation.Multiply}>{t('inventory:editor.multiply')}</option>
+                        <option value={UnitConversionOperation.Divide}>{t('inventory:editor.divide')}</option>
+                      </Select>
+                    </Field>
+                    <Field label={t('inventory:editor.factor')} error={form.formState.errors.unitConversions?.[index]?.factor?.message}>
+                      <Input type="number" min="0.000001" step="0.000001" {...form.register(`unitConversions.${index}.factor`, { valueAsNumber: true })} />
+                    </Field>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="mt-6"
+                      onClick={() => conversionFields.remove(index)}
+                      aria-label={t('common:actions.delete')}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  {unit && baseUnit && factor > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {t('inventory:editor.conversionExplanation', {
+                        unit: unit.name,
+                        equivalent: formatNumber(equivalent, { maximumFractionDigits: 6 }),
+                        baseUnit: baseUnit.name,
+                        operation: conversion.operation === UnitConversionOperation.Multiply ? t('inventory:editor.multipliedBy') : t('inventory:editor.dividedBy'),
+                        factor: formatNumber(factor),
+                      })}
+                    </p>
+                  )}
+                </div>
+              )
+            })
+          )}
+          {form.formState.errors.unitConversions?.message && (
+            <p className="text-sm text-destructive">{form.formState.errors.unitConversions.message}</p>
+          )}
         </section>
 
         {product.isError && <p className="text-sm text-destructive">{product.error.message}</p>}
         {save.isError && <p className="text-sm text-destructive">{save.error.message}</p>}
-        <div className="flex justify-end gap-3"><Link to="/settings/items"><Button type="button" variant="outline">Cancel</Button></Link><Button type="submit" disabled={save.isPending}>{save.isPending && <Loader2 className="size-4 animate-spin" />}Save item</Button></div>
+        <div className="flex justify-end gap-3">
+          <Link to="/settings/items">
+            <Button type="button" variant="outline">{t('common:actions.cancel')}</Button>
+          </Link>
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending && <Loader2 className="size-4 animate-spin" />}
+            {t('inventory:editor.saveItem')}
+          </Button>
+        </div>
       </form>
       <CategoryDialog
         open={categoryDialog !== undefined}
@@ -187,12 +336,16 @@ export function ItemEditorPage() {
 
 function DefinitionSelectField({ label, error, select, onAdd, onEdit }: { label: string; error?: string; select: React.ReactNode; onAdd?: () => void; onEdit?: () => void }) {
   return (
-    <div className="grid gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+    <div className="grid gap-1.5 text-start text-sm font-medium text-slate-700 dark:text-slate-300">
       <span>{label}</span>
       <div className="flex gap-2">
         {select}
-        <Button type="button" variant="outline" size="icon" onClick={onAdd} disabled={!onAdd} aria-label={`Add ${label.toLowerCase()}`} title={`Add ${label.toLowerCase()}`}><Plus className="size-4" /></Button>
-        <Button type="button" variant="outline" size="icon" onClick={onEdit} disabled={!onEdit} aria-label={`Edit selected ${label.toLowerCase()}`} title={`Edit selected ${label.toLowerCase()}`}><Pencil className="size-4" /></Button>
+        <Button type="button" variant="outline" size="icon" onClick={onAdd} disabled={!onAdd} aria-label={`Add ${label}`} title={`Add ${label}`}>
+          <Plus className="size-4" />
+        </Button>
+        <Button type="button" variant="outline" size="icon" onClick={onEdit} disabled={!onEdit} aria-label={`Edit ${label}`} title={`Edit ${label}`}>
+          <Pencil className="size-4" />
+        </Button>
       </div>
       {error && <span className="text-xs font-normal text-destructive">{error}</span>}
     </div>

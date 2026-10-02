@@ -1,4 +1,5 @@
 using Api.Infrastructure.Http;
+using Api.Modules.Contact;
 using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
@@ -9,8 +10,13 @@ namespace Api.Modules.Branch;
 public sealed class BranchService
 {
   private readonly AppDbContext _db;
+  private readonly WalkInCustomerProvisioner _walkInCustomers;
 
-  public BranchService(AppDbContext db) => _db = db;
+  public BranchService(AppDbContext db, WalkInCustomerProvisioner? walkInCustomers = null)
+  {
+    _db = db;
+    _walkInCustomers = walkInCustomers ?? new WalkInCustomerProvisioner(db);
+  }
 
   public async Task<PagedResult<BranchResponse>> GetAccessibleAsync(Guid userId, BranchListQuery request, CancellationToken ct = default)
   {
@@ -95,7 +101,13 @@ public sealed class BranchService
     if (request.IsMainBranch && !request.IsActive)
       throw new BadRequestException(ErrorCodes.Branch.MainBranchDeactivationNotAllowed, "The main branch must remain active.");
 
-    var branch = new BranchEntity { IsMainBranch = false, CatalogMode = request.CatalogMode };
+    var sharedWalkIn = await _walkInCustomers.EnsureSharedAsync(ct);
+    var branch = new BranchEntity
+    {
+      IsMainBranch = false,
+      CatalogMode = request.CatalogMode,
+      WalkInCustomerId = sharedWalkIn.Id
+    };
     Apply(branch, request, code);
     branch.IsMainBranch = false;
     _db.Branches.Add(branch);
@@ -106,6 +118,13 @@ public sealed class BranchService
       _db.UserBranchAccess.AddRange(staffIds.Select(userId => new UserBranchAccessEntity { UserId = userId, BranchId = branch.Id }));
     }
     await _db.SaveChangesAsync(ct);
+
+    if (branch.CatalogMode == BranchCatalogMode.Separate)
+    {
+      var walkIn = await _walkInCustomers.EnsureForBranchAsync(branch, ct);
+      branch.WalkInCustomerId = walkIn.Id;
+      await _db.SaveChangesAsync(ct);
+    }
 
     if (request.IsMainBranch)
     {
@@ -206,5 +225,6 @@ public sealed class BranchService
     branch.Country,
     branch.IsMainBranch,
     branch.IsActive,
+    branch.WalkInCustomerId,
     branch.CatalogMode);
 }

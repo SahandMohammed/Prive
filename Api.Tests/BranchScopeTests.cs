@@ -11,6 +11,8 @@ using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Branch;
 using Api.Modules.Contact;
+using Api.Modules.Currency;
+using Api.Modules.Dashboard;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Sales;
@@ -22,6 +24,74 @@ namespace Api.Tests;
 
 public sealed class BranchScopeTests
 {
+  [Fact]
+  public async Task Activity_logs_allow_adds_but_reject_existing_modification_and_deletion_without_branch_context()
+  {
+    var options = Options();
+    var branch = new BranchEntity { Code = "MAIN", Name = "Main" };
+    var user = new UserEntity { Username = "auditor", PasswordHash = "test", Role = UserRole.SuperAdmin };
+    var customer = new ContactEntity { Name = "Customer", IsCustomer = true };
+    branch.WalkInCustomer = new ContactEntity
+    {
+      Name = "Walk-in Customer", IsCustomer = true, SystemRole = ContactSystemRole.WalkInCustomer
+    };
+    await using (var seed = new AppDbContext(options))
+    {
+      seed.AddRange(branch, user, customer);
+      await seed.SaveChangesAsync();
+    }
+
+    Guid activityId;
+    await using (var add = new AppDbContext(options))
+    {
+      var activity = new ActivityLogEntity
+      {
+        BranchId = branch.Id,
+        UserId = user.Id,
+        Action = "edited",
+        EntityType = "Sales Invoice",
+        EntityId = Guid.NewGuid(),
+        DocumentNumber = "SI-TEST",
+        Description = "Manual audit",
+        Reason = "Test",
+        BeforeState = "{}",
+        AfterState = "{}"
+      };
+      add.ActivityLogs.Add(activity);
+      await add.SaveChangesAsync();
+      activityId = activity.Id;
+    }
+
+    await using (var modify = new AppDbContext(options))
+    {
+      var activity = await modify.ActivityLogs.SingleAsync(log => log.Id == activityId);
+      activity.Reason = "Changed";
+      await Assert.ThrowsAsync<InvalidOperationException>(() => modify.SaveChangesAsync());
+    }
+
+    using (var delete = new AppDbContext(options))
+    {
+      var activity = delete.ActivityLogs.Single(log => log.Id == activityId);
+      delete.ActivityLogs.Remove(activity);
+      Assert.Throws<InvalidOperationException>(() => delete.SaveChanges());
+    }
+
+    await using (var automatic = new AppDbContext(options, new BranchContext { BranchId = branch.Id }))
+    {
+      automatic.SalesInvoices.Add(new SalesInvoiceEntity
+      {
+        DocumentNumber = "SI-AUTO",
+        BranchId = branch.Id,
+        CustomerId = customer.Id,
+        CurrencyId = Guid.NewGuid(),
+        BaseCurrencyId = Guid.NewGuid(),
+        CreatedByUserId = user.Id
+      });
+      await automatic.SaveChangesAsync();
+      Assert.True(await automatic.ActivityLogs.AnyAsync(log => log.DocumentNumber == "SI-AUTO" && log.Action == "created"));
+    }
+  }
+
   [Fact]
   public async Task Access_uses_active_assignments_and_privileged_roles_and_rechecks_revocation()
   {
@@ -58,13 +128,15 @@ public sealed class BranchScopeTests
     var options = Options();
     var a = new BranchEntity();
     var b = new BranchEntity();
+    var currency = new CurrencyEntity { Code = "IQD" };
     await using (var seed = new AppDbContext(options))
     {
+      seed.Add(currency);
       foreach (var branch in new[] { a, b })
       {
         var journal = new JournalEntryEntity { Branch = branch };
         var warehouse = new WarehouseEntity { Branch = branch };
-        var account = new MoneyAccountEntity { Branch = branch };
+        var account = new MoneyAccountEntity { Branch = branch, Currency = currency };
         seed.AddRange(new JournalLineEntity { JournalEntry = journal, DebitBaseAmount = branch == a ? 10 : 90 },
           new StockMovementEntity { Warehouse = warehouse, QuantityIn = branch == a ? 2 : 8 },
           new MoneyLedgerEntryEntity { MoneyAccount = account, JournalEntry = journal, Amount = branch == a ? 5 : 50 },
@@ -114,15 +186,16 @@ public sealed class BranchScopeTests
     var options = Options();
     var a = new BranchEntity();
     var b = new BranchEntity();
+    var currency = new CurrencyEntity { Code = "IQD" };
     await using (var seed = new AppDbContext(options))
     {
-      seed.AddRange(a, b, new MoneyAccountEntity { Branch = b, Code = "CASH-01" });
+      seed.AddRange(a, b, currency, new MoneyAccountEntity { Branch = b, Currency = currency, Code = "CASH-01" });
       await seed.SaveChangesAsync();
     }
 
     await using var db = new AppDbContext(options, new BranchContext { BranchId = a.Id });
     Assert.Empty(await db.MoneyAccounts.ToListAsync());
-    db.MoneyAccounts.Add(new MoneyAccountEntity { BranchId = a.Id, Code = "CASH-01" });
+    db.MoneyAccounts.Add(new MoneyAccountEntity { BranchId = a.Id, CurrencyId = currency.Id, Code = "CASH-01" });
     var error = await Assert.ThrowsAsync<ConflictException>(() => db.SaveChangesAsync());
     Assert.Equal(ErrorCodes.Finance.MoneyAccountCodeTaken, error.Code);
   }
@@ -254,8 +327,9 @@ public sealed class BranchScopeTests
     using var db = new AppDbContext(options, new BranchContext { BranchId = branchId, CatalogBranchId = branchId });
     Assert.Contains("BranchId", db.SalesInvoices.ToQueryString());
     Assert.Contains("BranchId", db.JournalLines.ToQueryString());
-    Assert.Contains("BranchId", db.CustomerReceiptAllocations.ToQueryString());
-    Assert.Contains("BranchId", db.PosTenders.ToQueryString());
+    Assert.Contains("BranchId", db.CustomerReceiptDraftAllocations.ToQueryString());
+    Assert.Contains("BranchId", db.PaymentAllocations.ToQueryString());
+    Assert.Contains("BranchId", db.PaymentMoneyLines.ToQueryString());
     Assert.Contains("CatalogBranchId", db.Products.ToQueryString());
   }
 

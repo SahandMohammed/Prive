@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
@@ -25,7 +27,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useAccountTree } from '@/features/accounting'
 import { useCurrentBusiness } from '@/features/business'
-import { formatMoney } from '@/lib/money'
+import { formatNumber } from '@/lib/i18n'
 import {
   useDeleteService,
   useDeleteServiceCategory,
@@ -44,20 +46,24 @@ import type {
 
 type ServiceDefinitionTab = 'services' | 'categories'
 
-const tabs: { id: ServiceDefinitionTab; label: string }[] = [
-  { id: 'services', label: 'Services' },
-  { id: 'categories', label: 'Categories' },
-]
-
 export function ServiceDefinitionsPage() {
+  const { t } = useTranslation(['sales', 'common'])
   const [activeTab, setActiveTab] = useState<ServiceDefinitionTab>('services')
+
+  const tabs: { id: ServiceDefinitionTab; label: string }[] = useMemo(
+    () => [
+      { id: 'services', label: t('sales:services.servicesTab') },
+      { id: 'categories', label: t('sales:services.categoriesTab') },
+    ],
+    [t]
+  )
 
   return (
     <div className="w-full space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Service definitions</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('sales:services.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage salon services, pricing, duration, and categories used to define them.
+          {t('sales:services.subtitle')}
         </p>
       </div>
 
@@ -82,6 +88,7 @@ export function ServiceDefinitionsPage() {
 }
 
 function ServicesTab() {
+  const { t } = useTranslation(['sales', 'common'])
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [status, setStatus] = useState('')
@@ -121,47 +128,43 @@ function ServicesTab() {
   }
 
   const handleDelete = (service: Service) => {
-    if (window.confirm(`Delete ${service.name}? Unused services only.`)) {
+    if (window.confirm(t('sales:services.deleteServicePrompt', { name: service.name }))) {
       remove.mutate(service.id)
     }
   }
 
   const money = (value: number) =>
-    formatMoney(
-      value,
-      business?.baseCurrencySymbol ?? business?.baseCurrencyCode ?? '',
-      business?.baseCurrencyDecimalPlaces ?? 2
-    )
+    `${formatNumber(value, { maximumFractionDigits: business?.baseCurrencyDecimalPlaces ?? 2 })} ${business?.baseCurrencySymbol ?? business?.baseCurrencyCode ?? ''}`
 
   return (
     <div className="flex h-full w-full flex-col space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-semibold">Services</h2>
+          <h2 className="text-xl font-semibold">{t('sales:services.servicesTab')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Define non-stock salon services, duration, pricing, and revenue account mappings.
+            {t('sales:services.servicesSectionSubtitle')}
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+          className="gap-1.5"
           onClick={openCreate}
         >
           <Plus className="size-4" />
-          Add service
+          {t('sales:services.addService')}
         </Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
               resetPage()
             }}
-            placeholder="Search name or description"
-            className="pl-9"
+            placeholder={t('sales:services.searchServicesPlaceholder')}
+            className="ps-9"
           />
         </div>
         <select
@@ -172,7 +175,7 @@ function ServicesTab() {
           }}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="">All categories</option>
+          <option value="">{t('sales:services.allCategories')}</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {category.name}
@@ -187,9 +190,9 @@ function ServicesTab() {
           }}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="">All statuses</option>
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="">{t('sales:services.allStatuses')}</option>
+          <option value="true">{t('sales:services.active')}</option>
+          <option value="false">{t('sales:services.inactive')}</option>
         </select>
       </div>
 
@@ -198,35 +201,35 @@ function ServicesTab() {
           <Table>
             <TableHeader>
               <TableRow className={tableHeadClass}>
-                <TableHead className="px-4">Service</TableHead>
-                <TableHead className="px-4">Category</TableHead>
-                <TableHead className="px-4 text-right">Base price</TableHead>
-                <TableHead className="px-4">Duration</TableHead>
-                <TableHead className="px-4">Revenue account</TableHead>
-                <TableHead className="px-4">Status</TableHead>
-                <TableHead className="w-24 px-4 text-right">Actions</TableHead>
+                <TableHead className="px-4">{t('sales:services.name')}</TableHead>
+                <TableHead className="px-4">{t('sales:services.category')}</TableHead>
+                <TableHead className="px-4 text-end">{t('sales:services.price')}</TableHead>
+                <TableHead className="px-4">{t('sales:services.duration')}</TableHead>
+                <TableHead className="px-4">{t('sales:services.revenueAccount')}</TableHead>
+                <TableHead className="px-4">{t('sales:services.active')}</TableHead>
+                <TableHead className="w-24 px-4 text-end">{t('sales:table.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {servicesQuery.isPending ? (
                 <LoadingRow colSpan={7} />
               ) : rows.length === 0 ? (
-                <EmptyRow colSpan={7} label="No services found." onClick={openCreate} />
+                <EmptyRow colSpan={7} label={t('sales:services.noServicesFound')} onClick={openCreate} />
               ) : (
                 rows.map((service) => (
                   <TableRow key={service.id}>
                     <TableCell className="px-4 py-3.5">
                       <p className="font-medium">{service.name}</p>
                       <p className="max-w-64 truncate text-xs text-muted-foreground">
-                        {service.description ?? 'No description'}
+                        {service.description ?? t('sales:services.noDescription')}
                       </p>
                     </TableCell>
                     <TableCell className="px-4 py-3.5">{service.categoryName}</TableCell>
-                    <TableCell className="px-4 py-3.5 text-right font-mono">
+                    <TableCell className="px-4 py-3.5 text-end font-mono">
                       {money(service.sellingPriceBase)}
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
-                      {formatDuration(service.durationMinutes)}
+                      {formatDuration(service.durationMinutes, t)}
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
                       <p className="font-mono text-xs text-muted-foreground">{service.revenueAccountCode}</p>
@@ -235,11 +238,11 @@ function ServicesTab() {
                     <TableCell className="px-4 py-3.5">
                       <StatusBadge active={service.isActive} />
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
+                    <TableCell className="px-4 py-3.5 text-end">
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={`Edit ${service.name}`}
+                        aria-label={t('sales:services.editService')}
                         onClick={() => openEdit(service)}
                       >
                         <Pencil className="size-4" />
@@ -247,7 +250,7 @@ function ServicesTab() {
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={`Delete ${service.name}`}
+                        aria-label={t('sales:services.deleteService')}
                         disabled={remove.isPending}
                         onClick={() => handleDelete(service)}
                       >
@@ -291,6 +294,7 @@ function ServicesTab() {
 }
 
 function ServiceCategoriesTab() {
+  const { t } = useTranslation(['sales', 'common'])
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -324,7 +328,7 @@ function ServiceCategoriesTab() {
   }
 
   const handleDelete = (category: ServiceCategory) => {
-    if (window.confirm(`Delete ${category.name}? Assigned categories cannot be deleted.`)) {
+    if (window.confirm(t('sales:services.deleteCategoryPrompt', { name: category.name }))) {
       remove.mutate(category.id)
     }
   }
@@ -333,31 +337,31 @@ function ServiceCategoriesTab() {
     <div className="flex h-full w-full flex-col space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-semibold">Service categories</h2>
+          <h2 className="text-xl font-semibold">{t('sales:services.categoryTitle')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Organize salon services into operational categories.
+            {t('sales:services.categorySubtitle')}
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+          className="gap-1.5"
           onClick={openCreate}
         >
           <Plus className="size-4" />
-          Add category
+          {t('sales:services.addCategory')}
         </Button>
       </div>
 
       <div className="flex flex-col justify-between gap-3 sm:flex-row">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
               resetPage()
             }}
-            placeholder="Search categories"
-            className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+            placeholder={t('sales:services.searchCategoriesPlaceholder')}
+            className="h-10 rounded-lg border-slate-200 bg-white ps-9 shadow-xs dark:border-slate-800 dark:bg-slate-900"
           />
         </div>
         <select
@@ -368,9 +372,9 @@ function ServiceCategoriesTab() {
           }}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="">All statuses</option>
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="">{t('sales:services.allStatuses')}</option>
+          <option value="true">{t('sales:services.active')}</option>
+          <option value="false">{t('sales:services.inactive')}</option>
         </select>
       </div>
 
@@ -379,16 +383,16 @@ function ServiceCategoriesTab() {
           <Table>
             <TableHeader>
               <TableRow className={tableHeadClass}>
-                <TableHead className="px-4">Category</TableHead>
-                <TableHead className="px-4">Status</TableHead>
-                <TableHead className="w-24 px-4 text-right">Actions</TableHead>
+                <TableHead className="px-4">{t('sales:services.category')}</TableHead>
+                <TableHead className="px-4">{t('sales:services.active')}</TableHead>
+                <TableHead className="w-24 px-4 text-end">{t('sales:table.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {categoriesQuery.isPending ? (
                 <LoadingRow colSpan={3} />
               ) : rows.length === 0 ? (
-                <EmptyRow colSpan={3} label="No categories found" onClick={openCreate} />
+                <EmptyRow colSpan={3} label={t('sales:services.noCategoriesFound')} onClick={openCreate} />
               ) : (
                 rows.map((category) => (
                   <TableRow key={category.id}>
@@ -396,11 +400,11 @@ function ServiceCategoriesTab() {
                     <TableCell className="px-4 py-3.5">
                       <StatusBadge active={category.isActive} />
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
+                    <TableCell className="px-4 py-3.5 text-end">
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={`Edit ${category.name}`}
+                        aria-label={t('sales:services.editCategoryTitle', { name: category.name })}
                         onClick={() => openEdit(category)}
                       >
                         <Pencil className="size-4" />
@@ -408,7 +412,7 @@ function ServiceCategoriesTab() {
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={`Delete ${category.name}`}
+                        aria-label={t('sales:services.deleteCategory')}
                         disabled={remove.isPending}
                         onClick={() => handleDelete(category)}
                       >
@@ -504,14 +508,15 @@ function ServiceDialog({
     onOpenChange(false)
   }
 
+  const { t } = useTranslation(['sales', 'common'])
+
   return (
     <Dialog open={open} onOpenChange={(value) => (value ? onOpenChange(true) : close())}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{service ? `Edit ${service.name}` : 'Add service'}</DialogTitle>
+          <DialogTitle>{service ? t('sales:services.editServiceTitle', { name: service.name }) : t('sales:services.addServiceTitle')}</DialogTitle>
           <DialogDescription>
-            Prices use the Business Base Currency. Multiple Services may share the same Revenue
-            account.
+            {t('sales:services.serviceDialogDesc')}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -524,27 +529,27 @@ function ServiceDialog({
           )}
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="Name" error={form.formState.errors.name?.message}>
+            <FormField label={t('sales:services.name')} error={form.formState.errors.name?.message}>
               <Input {...form.register('name')} autoFocus />
             </FormField>
-            <FormField label="Category" error={form.formState.errors.categoryId?.message}>
+            <FormField label={t('sales:services.category')} error={form.formState.errors.categoryId?.message}>
               <select
                 {...form.register('categoryId')}
                 className="h-9 w-full rounded-md border bg-background px-3 text-sm"
               >
-                <option value="">Select active category</option>
+                <option value="">{t('sales:services.selectActiveCategory')}</option>
                 {categories
                   .filter((item) => item.isActive || item.id === service?.categoryId)
                   .map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
-                      {!item.isActive ? ' (inactive)' : ''}
+                      {!item.isActive ? ` ${t('sales:createInvoicePage.inactive')}` : ''}
                     </option>
                   ))}
               </select>
             </FormField>
             <FormField
-              label={`Selling price (${currencyCode})`}
+              label={t('sales:services.sellingPrice', { currency: currencyCode })}
               error={form.formState.errors.sellingPriceBase?.message}
             >
               <Input
@@ -555,7 +560,7 @@ function ServiceDialog({
               />
             </FormField>
             <FormField
-              label="Duration (minutes)"
+              label={t('sales:services.durationMinutes')}
               error={form.formState.errors.durationMinutes?.message}
             >
               <Input
@@ -568,14 +573,14 @@ function ServiceDialog({
           </div>
 
           <FormField
-            label="Revenue account"
+            label={t('sales:services.revenueAccount')}
             error={form.formState.errors.revenueAccountId?.message}
           >
             <select
               {...form.register('revenueAccountId')}
               className="h-9 w-full rounded-md border bg-background px-3 text-sm"
             >
-              <option value="">Select active Revenue posting account</option>
+              <option value="">{t('sales:services.selectRevenueAccount')}</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.code} — {account.name}
@@ -584,13 +589,13 @@ function ServiceDialog({
             </select>
           </FormField>
 
-          <FormField label="Description" error={form.formState.errors.description?.message}>
+          <FormField label={t('sales:services.description')} error={form.formState.errors.description?.message}>
             <Textarea rows={3} {...form.register('description')} />
           </FormField>
 
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...form.register('isActive')} />
-            Active
+            {t('sales:services.active')}
           </label>
 
           {saveService.isError && (
@@ -599,11 +604,11 @@ function ServiceDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={saveService.isPending}>
               {saveService.isPending && <Loader2 className="size-4 animate-spin" />}
-              {service ? 'Save changes' : 'Add service'}
+              {service ? t('sales:services.saveChanges') : t('sales:services.addService')}
             </Button>
           </DialogFooter>
         </form>
@@ -623,6 +628,7 @@ function ServiceCategoryDialog({
   onOpenChange: (open: boolean) => void
   category: ServiceCategory | null
 }) {
+  const { t } = useTranslation(['sales', 'common'])
   const saveCategory = useSaveServiceCategory(category?.id ?? null)
   const form = useForm<ServiceCategoryInput>({
     resolver: zodResolver(serviceCategorySchema),
@@ -643,32 +649,32 @@ function ServiceCategoryDialog({
     <Dialog open={open} onOpenChange={(value) => (value ? onOpenChange(true) : close())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{category ? `Edit ${category.name}` : 'Add service category'}</DialogTitle>
+          <DialogTitle>{category ? t('sales:services.editCategoryTitle', { name: category.name }) : t('sales:services.addCategoryTitle')}</DialogTitle>
           <DialogDescription>
-            Categories are flat operational groupings for organizing salon services.
+            {t('sales:services.categoryDialogDesc')}
           </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
           onSubmit={form.handleSubmit((values) => saveCategory.mutate(values, { onSuccess: close }))}
         >
-          <FormField label="Name" error={form.formState.errors.name?.message}>
+          <FormField label={t('sales:services.category')} error={form.formState.errors.name?.message}>
             <Input {...form.register('name')} autoFocus />
           </FormField>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...form.register('isActive')} />
-            Active
+            {t('sales:services.active')}
           </label>
           {saveCategory.isError && (
             <p className="text-sm text-destructive">{saveCategory.error.message}</p>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={saveCategory.isPending}>
               {saveCategory.isPending && <Loader2 className="size-4 animate-spin" />}
-              {category ? 'Save changes' : 'Add category'}
+              {category ? t('sales:services.saveChanges') : t('sales:services.addCategory')}
             </Button>
           </DialogFooter>
         </form>
@@ -696,6 +702,7 @@ function FormField({
 }
 
 function StatusBadge({ active }: { active: boolean }) {
+  const { t } = useTranslation(['sales', 'common'])
   return (
     <span
       className={
@@ -704,17 +711,18 @@ function StatusBadge({ active }: { active: boolean }) {
           : 'inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400'
       }
     >
-      {active ? 'Active' : 'Inactive'}
+      {active ? t('sales:services.active') : t('sales:services.inactive')}
     </span>
   )
 }
 
 function LoadingRow({ colSpan }: { colSpan: number }) {
+  const { t } = useTranslation(['common'])
   return (
     <TableRow>
       <TableCell colSpan={colSpan} className="h-48 text-center text-sm text-slate-500">
         <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
-        Loading…
+        {t('common:status.loading', 'Loading…')}
       </TableCell>
     </TableRow>
   )
@@ -729,6 +737,7 @@ function EmptyRow({
   label: string
   onClick?: () => void
 }) {
+  const { t } = useTranslation(['sales', 'common'])
   return (
     <TableRow>
       <TableCell colSpan={colSpan} className="h-48 text-center">
@@ -736,7 +745,7 @@ function EmptyRow({
         {onClick && (
           <Button size="sm" onClick={onClick}>
             <Plus className="size-4" />
-            Add record
+            {t('sales:services.addRecord')}
           </Button>
         )}
       </TableCell>
@@ -744,12 +753,12 @@ function EmptyRow({
   )
 }
 
-function formatDuration(minutes: number) {
-  if (minutes < 60) return `${minutes} min`
+function formatDuration(minutes: number, t: TFunction) {
+  if (minutes < 60) return t('sales:services.minutes', { count: minutes })
   const hours = Math.floor(minutes / 60)
   const remaining = minutes % 60
-  if (remaining === 0) return `${hours} hr`
-  return `${hours} hr ${remaining} min`
+  if (remaining === 0) return t('sales:services.hours', { count: hours })
+  return t('sales:services.hoursAndMinutes', { hours, minutes: remaining })
 }
 
 const tableHeadClass =

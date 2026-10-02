@@ -1,7 +1,9 @@
 import { Banknote, Minus, Package, Plus, ShoppingCart, Trash2, UserRound } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { convertBasePriceToUnitPrice, convertToBaseQuantity, productUnitOptions } from '@/features/inventory'
 import type { UnitConvertibleProduct } from '@/features/inventory'
+import { formatNumber } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { CustomerPicker } from './CustomerPicker'
 import { posCartLineTotal, posCartTotal } from '../lib/posCart'
@@ -28,13 +30,12 @@ export function PosCart({
   onCustomerChange: (customer: PosCustomer | null) => void
   onCheckout: () => void
 }) {
+  const { t } = useTranslation(['pos', 'common'])
   const total = posCartTotal(cart)
   const hasProduct = cart.some((line) => line.item.itemType === PosCatalogItemType.Product)
-  const hasUsableMoneyAccount = setup.moneyAccounts.some((account) => account.currentExchangeRate !== null)
   const canCheckout =
     cart.length > 0 &&
-    (!hasProduct || warehouseSelected) &&
-    hasUsableMoneyAccount
+    (!hasProduct || warehouseSelected)
 
   const updateQuantity = (index: number, quantity: number) => {
     if (quantity <= 0) {
@@ -53,8 +54,8 @@ export function PosCart({
     <aside className={cn('flex min-h-0 flex-col bg-card', className)}>
       <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <ShoppingCart className="size-4" />
-        <h2 className="font-semibold">Current sale</h2>
-        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{cart.length}</span>
+        <h2 className="font-semibold">{t('pos:cart.title', { defaultValue: 'Current sale' })}</h2>
+        <span className="ms-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{cart.length}</span>
       </div>
 
       <div className="shrink-0 p-3">
@@ -68,8 +69,10 @@ export function PosCart({
               <div className="mx-auto grid size-11 place-items-center rounded-full bg-muted">
                 <ShoppingCart className="size-5 text-muted-foreground" />
               </div>
-              <p className="mt-3 text-sm font-semibold">No items yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">Choose a service or product to start a sale.</p>
+              <p className="mt-3 text-sm font-semibold">{t('pos:cart.empty', { defaultValue: 'No items yet' })}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('pos:cart.emptyDesc', { defaultValue: 'Choose a service or product to start a sale.' })}
+              </p>
             </div>
           </div>
         ) : (
@@ -93,7 +96,10 @@ export function PosCart({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{line.item.name}</p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {isProduct ? 'Product' : 'Service'} · {amount(line.unitPriceBase)} {setup.baseCurrencyCode}
+                        {isProduct
+                          ? t('pos:product', { defaultValue: 'Product' })
+                          : t('pos:service', { defaultValue: 'Service' })}{' '}
+                        · {amount(line.unitPriceBase)} {setup.baseCurrencyCode}
                       </p>
                     </div>
                     <Button
@@ -106,20 +112,6 @@ export function PosCart({
                       <Trash2 className="size-3.5" />
                     </Button>
                   </div>
-
-                  {!isProduct && (
-                    <select
-                      aria-label={`Professional for ${line.item.name}`}
-                      value={line.professionalUserId}
-                      onChange={(event) => onCartChange(cart.map((item, currentIndex) => currentIndex === index ? { ...item, professionalUserId: event.target.value } : item))}
-                      className="mt-2 h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">No Professional assigned</option>
-                      {setup.professionals.map((professional) => (
-                        <option key={professional.id} value={professional.id}>{professional.username}</option>
-                      ))}
-                    </select>
-                  )}
 
                   {isProduct && (
                     <select
@@ -153,7 +145,7 @@ export function PosCart({
                   </div>
 
                   {isProduct && (
-                    <p className="mt-1.5 text-right text-[10px] text-muted-foreground">
+                    <p className="mt-1.5 text-end text-[10px] text-muted-foreground">
                       Base quantity {amount(convertToBaseQuantity(product, line.unitOfMeasureId, line.quantity) ?? 0)} {line.item.unitCode}
                     </p>
                   )}
@@ -167,24 +159,26 @@ export function PosCart({
       <div className="shrink-0 border-t bg-card p-4">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Subtotal</span>
+            <span>{t('pos:cart.subtotal', { defaultValue: 'Subtotal' })}</span>
             <span className="font-mono text-foreground">{amount(total)} {setup.baseCurrencyCode}</span>
           </div>
           <div className="flex items-end justify-between gap-3">
-            <span className="text-sm font-semibold">Total</span>
+            <span className="text-sm font-semibold">{t('pos:cart.total', { defaultValue: 'Total' })}</span>
             <span className="font-mono text-xl font-bold">{amount(total)} {setup.baseCurrencyCode}</span>
           </div>
         </div>
         <Button type="button" className="mt-4 h-12 w-full text-sm font-semibold" disabled={!canCheckout} onClick={onCheckout}>
           <Banknote className="size-4" />
-          Checkout · {amount(total)} {setup.baseCurrencyCode}
+          {t('pos:checkout.title', { defaultValue: 'Checkout' })} · {amount(total)} {setup.baseCurrencyCode}
         </Button>
-        {!hasUsableMoneyAccount ? (
-          <p className="mt-2 text-center text-[11px] text-destructive">No operable Money Account with a valid exchange rate is available for this branch.</p>
-        ) : hasProduct && !warehouseSelected ? (
-          <p className="mt-2 text-center text-[11px] text-destructive">Select a warehouse before selling products.</p>
+        {hasProduct && !warehouseSelected ? (
+          <p className="mt-2 text-center text-[11px] text-destructive">
+            {t('pos:warehouseRequired', { defaultValue: 'Select a warehouse before selling products.' })}
+          </p>
         ) : (
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">Stock, rates, permissions and balances are revalidated on completion.</p>
+          <p className="mt-2 text-center text-[10px] text-muted-foreground">
+            {t('pos:checkoutRequirement', { defaultValue: 'Unpaid sales require a selected customer. Paid sales require a Cashbox.' })}
+          </p>
         )}
       </div>
     </aside>
@@ -200,4 +194,4 @@ function asUnitProduct(item: PosCartLine['item']): UnitConvertibleProduct {
   }
 }
 
-const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+const amount = (value: number) => formatNumber(value, { maximumFractionDigits: 4 })

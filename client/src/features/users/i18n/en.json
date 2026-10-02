@@ -1,0 +1,39 @@
+{
+  "title": "Users",
+  "description": "Manage access to branch workspaces. SuperAdmins and Owners have access to every active branch.",
+  "searchPlaceholder": "Search users",
+  "loading": "Loading users…",
+  "failedToLoad": "Failed to load users.",
+  "noUsers": "No users found.",
+  "th": {
+    "username": "Username",
+    "role": "Role",
+    "status": "Status",
+    "branchAccess": "Branch access"
+  },
+  "roles": {
+    "Manager": "Manager",
+    "Owner": "Owner",
+    "Professional": "Professional",
+    "Cashier": "Cashier",
+    "SuperAdmin": "SuperAdmin",
+    "Unassigned": "Unassigned"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "branchAccess": {
+    "allActiveBranches": "All active branches",
+    "manageBranches": "Manage branches",
+    "managedByOwner": "Managed by an Owner or SuperAdmin"
+  },
+  "createDialog": {
+    "title": "Create User",
+    "usernamePlaceholder": "Username",
+    "tempPasswordPlaceholder": "Temporary Password",
+    "selectRole": "Select role…",
+    "creating": "Creating…",
+    "submit": "Create user"
+  }
+}

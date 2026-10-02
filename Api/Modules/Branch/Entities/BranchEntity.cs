@@ -12,6 +12,8 @@ public sealed class BranchEntity
   public string Region { get; set; } = string.Empty;
   public string Country { get; set; } = string.Empty;
   public BranchCatalogMode CatalogMode { get; set; } = BranchCatalogMode.Shared;
+  public Guid WalkInCustomerId { get; set; }
+  public Api.Modules.Contact.ContactEntity WalkInCustomer { get; set; } = null!;
   public bool IsMainBranch { get; set; }
   public bool IsActive { get; set; } = true;
 }

@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { financeApi } from '../api/finance.api'
 import type {
   CustomerReceiptInput,
+  CustomerStatementFilters,
+  SetDollarRateInput,
   ExchangeRateInput,
   MoneyAccountAccessInput,
   MoneyAccountInput,
@@ -14,10 +16,11 @@ import type {
 export const FINANCE_KEY = ['finance'] as const
 const refresh = (client: ReturnType<typeof useQueryClient>) =>
   client.invalidateQueries({ queryKey: FINANCE_KEY })
-export function useMoneyAccounts(filters: PageFilters, management = true) {
+export function useMoneyAccounts(filters: PageFilters, management = true, enabled = true) {
   return useQuery({
     queryKey: [...FINANCE_KEY, 'money-accounts', management, filters],
     queryFn: () => financeApi.moneyAccounts(filters, management),
+    enabled,
   })
 }
 export function useMoneyAccount(id?: string) {
@@ -87,6 +90,22 @@ export function useEffectiveExchangeRate(currencyId?: string, date?: string, ena
     queryKey: [...FINANCE_KEY, 'exchange-rate', currencyId, date],
     queryFn: () => financeApi.effectiveExchangeRate(currencyId!, date!),
     enabled: enabled && Boolean(currencyId && date),
+  })
+}
+export function useCurrentDollarRate() {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'dollar-rate'],
+    queryFn: financeApi.currentDollarRate,
+  })
+}
+export function useSetDollarRate() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: SetDollarRateInput) => financeApi.setDollarRate(body),
+    onSuccess: () => {
+      refresh(client)
+      client.invalidateQueries({ queryKey: ['pos', 'setup'] })
+    },
   })
 }
 export function useExchangeRateActions() {
@@ -196,6 +215,27 @@ export function useCustomerReceipt(id?: string) {
     queryKey: [...FINANCE_KEY, 'customer-receipt', id],
     queryFn: () => financeApi.customerReceipt(id!),
     enabled: Boolean(id),
+  })
+}
+export function usePayment(id?: string) {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'payment', id],
+    queryFn: () => financeApi.payment(id!),
+    enabled: Boolean(id),
+  })
+}
+export function useCustomerAccountSummary(customerId?: string) {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'customer-account', 'summary', customerId],
+    queryFn: () => financeApi.customerAccountSummary(customerId!),
+    enabled: Boolean(customerId),
+  })
+}
+export function useCustomerStatement(customerId: string | undefined, filters: CustomerStatementFilters) {
+  return useQuery({
+    queryKey: [...FINANCE_KEY, 'customer-account', 'statement', customerId, filters],
+    queryFn: () => financeApi.customerStatement(customerId!, filters),
+    enabled: Boolean(customerId && filters.fromDate && filters.toDate),
   })
 }
 export function useOutstandingSalesInvoices(customerId?: string, currencyId?: string) {

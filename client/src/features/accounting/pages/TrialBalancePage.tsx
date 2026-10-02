@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -24,6 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useBranches, useCurrentBusiness } from '@/features/business'
+import { formatNumber } from '@/lib/i18n'
 import { useTrialBalance } from '../hooks/useAccounting'
 import {
   accountClassificationLabels,
@@ -31,6 +33,7 @@ import {
 } from '../types/accounting.types'
 
 export function TrialBalancePage() {
+  const { t } = useTranslation(['accounting', 'common'])
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -84,7 +87,7 @@ export function TrialBalancePage() {
       }
       return true
     })
-  }, [data?.lines, search, classificationFilter, hideZeroBalances])
+  }, [data, search, classificationFilter, hideZeroBalances])
 
   const totalClosingDr = data?.totalClosingDebit ?? 0
   const totalClosingCr = data?.totalClosingCredit ?? 0
@@ -139,20 +142,22 @@ export function TrialBalancePage() {
   const handleExportCsv = () => {
     if (!data?.lines) return
     const headers = [
-      'Account Code',
-      'Account Name',
-      'Classification',
-      'Opening Debit',
-      'Opening Credit',
-      'Movement Debit',
-      'Movement Credit',
-      'Closing Debit',
-      'Closing Credit',
+      t('accounting:trialBalance.th.code'),
+      t('accounting:trialBalance.th.account'),
+      t('accounting:trialBalance.th.class'),
+      t('accounting:trialBalance.th.openingDebit'),
+      t('accounting:trialBalance.th.openingCredit'),
+      t('accounting:trialBalance.th.movementDebit'),
+      t('accounting:trialBalance.th.movementCredit'),
+      t('accounting:trialBalance.th.closingDebit'),
+      t('accounting:trialBalance.th.closingCredit'),
     ]
     const rows = lines.map((l) => [
       l.accountCode,
       l.accountName,
-      accountClassificationLabels[l.classification] ?? '',
+      t(`accounting:classifications.${l.classification}`, {
+        defaultValue: accountClassificationLabels[l.classification] ?? '',
+      }),
       l.openingDebit.toFixed(4),
       l.openingCredit.toFixed(4),
       l.debitMovement.toFixed(4),
@@ -198,15 +203,15 @@ export function TrialBalancePage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Trial Balance
+              {t('accounting:trialBalance.title')}
             </h1>
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               <Scale className="h-3.5 w-3.5 text-primary" />
-              General Ledger Verification
+              {t('accounting:trialBalance.verificationBadge')}
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Real-time balance verification across all asset, liability, equity, revenue, and expense accounts.
+            {t('accounting:trialBalance.description')}
           </p>
         </div>
 
@@ -218,7 +223,7 @@ export function TrialBalancePage() {
             onClick={() => window.print()}
           >
             <Printer className="h-3.5 w-3.5" />
-            Print Report
+            {t('accounting:trialBalance.printReport')}
           </Button>
           <Button
             variant="outline"
@@ -228,7 +233,7 @@ export function TrialBalancePage() {
             disabled={!data || lines.length === 0}
           >
             <Download className="h-3.5 w-3.5" />
-            Export CSV
+            {t('accounting:trialBalance.exportCsv')}
           </Button>
         </div>
       </div>
@@ -238,13 +243,13 @@ export function TrialBalancePage() {
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-card px-4 py-3 text-xs shadow-xs dark:border-slate-800">
           <div className="flex flex-wrap items-center gap-5">
             <div>
-              <span className="text-slate-500">Closing Dr: </span>
+              <span className="text-slate-500">{t('accounting:trialBalance.closingDr')} </span>
               <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                 {formatNumber(totalClosingDr)} {currencyCode}
               </span>
             </div>
             <div>
-              <span className="text-slate-500">Closing Cr: </span>
+              <span className="text-slate-500">{t('accounting:trialBalance.closingCr')} </span>
               <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                 {formatNumber(totalClosingCr)} {currencyCode}
               </span>
@@ -252,10 +257,10 @@ export function TrialBalancePage() {
             <div className="hidden h-4 w-px bg-slate-200 dark:bg-slate-800 md:block" />
             <div className="hidden items-center gap-3 text-slate-500 md:flex">
               <span>
-                Period Dr: <strong className="font-mono font-semibold text-emerald-600">+{formatNumber(data.totalDebitMovement)}</strong>
+                {t('accounting:trialBalance.periodDr')} <strong className="font-mono font-semibold text-emerald-600">+{formatNumber(data.totalDebitMovement)}</strong>
               </span>
               <span>
-                Period Cr: <strong className="font-mono font-semibold text-blue-600">+{formatNumber(data.totalCreditMovement)}</strong>
+                {t('accounting:trialBalance.periodCr')} <strong className="font-mono font-semibold text-blue-600">+{formatNumber(data.totalCreditMovement)}</strong>
               </span>
             </div>
           </div>
@@ -264,16 +269,16 @@ export function TrialBalancePage() {
             {isBalanced ? (
               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                 <CheckCircle2 className="size-3.5" />
-                Balanced
+                {t('accounting:trialBalance.balanced')}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
                 <AlertTriangle className="size-3.5" />
-                Variance: Δ {formatNumber(variance)}
+                {t('accounting:trialBalance.varianceLabel', { variance: formatNumber(variance) })}
               </span>
             )}
             <span className="text-xs text-slate-400">
-              {lines.length} of {activeAccountsCount} accounts
+              {t('accounting:trialBalance.accountsCount', { count: lines.length, total: activeAccountsCount })}
             </span>
           </div>
         </div>
@@ -283,14 +288,14 @@ export function TrialBalancePage() {
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-xs dark:border-slate-800 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="font-medium text-slate-500">Period:</span>
+            <span className="font-medium text-slate-500">{t('accounting:trialBalance.period')}</span>
             <Button
               variant="ghost"
               size="xs"
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('thisMonth')}
             >
-              This Month
+              {t('accounting:trialBalance.thisMonth')}
             </Button>
             <Button
               variant="ghost"
@@ -298,7 +303,7 @@ export function TrialBalancePage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('lastMonth')}
             >
-              Last Month
+              {t('accounting:trialBalance.lastMonth')}
             </Button>
             <Button
               variant="ghost"
@@ -306,7 +311,7 @@ export function TrialBalancePage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('thisQuarter')}
             >
-              This Quarter
+              {t('accounting:trialBalance.thisQuarter')}
             </Button>
             <Button
               variant="ghost"
@@ -314,7 +319,7 @@ export function TrialBalancePage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('thisYear')}
             >
-              This Year
+              {t('accounting:trialBalance.thisYear')}
             </Button>
             <Button
               variant="ghost"
@@ -322,7 +327,7 @@ export function TrialBalancePage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('allTime')}
             >
-              All Time
+              {t('accounting:trialBalance.allTime')}
             </Button>
           </div>
 
@@ -337,12 +342,12 @@ export function TrialBalancePage() {
               {hideZeroBalances ? (
                 <>
                   <Eye className="h-3.5 w-3.5" />
-                  Show Zero Balances
+                  {t('accounting:trialBalance.showZeroBalances')}
                 </>
               ) : (
                 <>
                   <EyeOff className="h-3.5 w-3.5" />
-                  Hide Zero Balances
+                  {t('accounting:trialBalance.hideZeroBalances')}
                 </>
               )}
             </Button>
@@ -351,12 +356,12 @@ export function TrialBalancePage() {
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search code, name..."
-              className="h-9 pl-9 text-xs"
+              placeholder={t('accounting:trialBalance.searchPlaceholder')}
+              className="h-9 ps-9 text-xs"
             />
           </div>
 
@@ -365,13 +370,13 @@ export function TrialBalancePage() {
             onChange={(e) => setClassificationFilter(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="all">All Classifications</option>
-            <option value="0">Assets</option>
-            <option value="1">Liabilities</option>
-            <option value="2">Equity</option>
-            <option value="3">Revenue</option>
-            <option value="4">Expenses</option>
-            <option value="5">Contra Assets</option>
+            <option value="all">{t('accounting:trialBalance.allClassifications')}</option>
+            <option value="0">{t('accounting:classifications.0')}</option>
+            <option value="1">{t('accounting:classifications.1')}</option>
+            <option value="2">{t('accounting:classifications.2')}</option>
+            <option value="3">{t('accounting:classifications.3')}</option>
+            <option value="4">{t('accounting:classifications.4')}</option>
+            <option value="5">{t('accounting:classifications.5')}</option>
           </select>
 
           <select
@@ -379,7 +384,7 @@ export function TrialBalancePage() {
             onChange={(e) => setBranchId(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="">Current branch</option>
+            <option value="">{t('accounting:trialBalance.currentBranch')}</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.code} — {b.name}
@@ -388,7 +393,7 @@ export function TrialBalancePage() {
           </select>
 
           <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-400">From:</span>
+            <span className="text-xs text-slate-400">{t('accounting:trialBalance.from')}</span>
             <Input
               type="date"
               value={fromDate}
@@ -399,7 +404,7 @@ export function TrialBalancePage() {
 
           <div className="flex items-center gap-2">
             <div className="flex flex-1 items-center gap-1">
-              <span className="text-xs text-slate-400">To:</span>
+              <span className="text-xs text-slate-400">{t('accounting:trialBalance.to')}</span>
               <Input
                 type="date"
                 value={toDate}
@@ -411,7 +416,7 @@ export function TrialBalancePage() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                title="Reset all filters"
+                title={t('accounting:trialBalance.resetFilters')}
                 onClick={handleClearFilters}
                 className="h-9 w-9 shrink-0 text-slate-500"
               >
@@ -430,39 +435,39 @@ export function TrialBalancePage() {
               {/* Grouped Header */}
               <TableRow className="border-b border-slate-200 bg-slate-100 text-xs font-bold uppercase tracking-wider text-slate-700 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-300">
                 <TableHead className="px-4 py-2.5" rowSpan={2}>
-                  Account Name & Code
+                  {t('accounting:trialBalance.th.accountNameCode')}
                 </TableHead>
                 <TableHead className="px-4 py-2.5" rowSpan={2}>
-                  Class
+                  {t('accounting:trialBalance.th.class')}
                 </TableHead>
-                <TableHead className="border-l border-slate-200 px-4 py-1.5 text-center dark:border-slate-700" colSpan={2}>
-                  Opening Balance
+                <TableHead className="border-s border-slate-200 px-4 py-1.5 text-center dark:border-slate-700" colSpan={2}>
+                  {t('accounting:trialBalance.th.openingBalance')}
                 </TableHead>
-                <TableHead className="border-l border-slate-200 px-4 py-1.5 text-center dark:border-slate-700" colSpan={2}>
-                  Period Movement
+                <TableHead className="border-s border-slate-200 px-4 py-1.5 text-center dark:border-slate-700" colSpan={2}>
+                  {t('accounting:trialBalance.th.periodMovement')}
                 </TableHead>
-                <TableHead className="border-l border-slate-200 px-4 py-1.5 text-center dark:border-slate-700" colSpan={2}>
-                  Closing Balance
+                <TableHead className="border-s border-slate-200 px-4 py-1.5 text-center dark:border-slate-700" colSpan={2}>
+                  {t('accounting:trialBalance.th.closingBalance')}
                 </TableHead>
-                <TableHead className="w-20 px-3 py-2.5 text-right print:hidden" rowSpan={2}>
-                  Ledger
+                <TableHead className="w-20 px-3 py-2.5 text-end print:hidden" rowSpan={2}>
+                  {t('accounting:trialBalance.th.ledger')}
                 </TableHead>
               </TableRow>
               {/* Sub Columns */}
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold uppercase text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
-                <TableHead className="border-l border-slate-200 px-3 text-right dark:border-slate-700">
-                  Debit
+                <TableHead className="border-s border-slate-200 px-3 text-end dark:border-slate-700">
+                  {t('accounting:trialBalance.th.debit')}
                 </TableHead>
-                <TableHead className="px-3 text-right">Credit</TableHead>
-                <TableHead className="border-l border-slate-200 px-3 text-right dark:border-slate-700">
-                  Debit
+                <TableHead className="px-3 text-end">{t('accounting:trialBalance.th.credit')}</TableHead>
+                <TableHead className="border-s border-slate-200 px-3 text-end dark:border-slate-700">
+                  {t('accounting:trialBalance.th.debit')}
                 </TableHead>
-                <TableHead className="px-3 text-right">Credit</TableHead>
-                <TableHead className="border-l border-slate-200 px-3 text-right text-emerald-700 dark:border-slate-700 dark:text-emerald-400">
-                  Debit
+                <TableHead className="px-3 text-end">{t('accounting:trialBalance.th.credit')}</TableHead>
+                <TableHead className="border-s border-slate-200 px-3 text-end text-emerald-700 dark:border-slate-700 dark:text-emerald-400">
+                  {t('accounting:trialBalance.th.debit')}
                 </TableHead>
-                <TableHead className="px-3 text-right text-blue-700 dark:text-blue-400">
-                  Credit
+                <TableHead className="px-3 text-end text-blue-700 dark:text-blue-400">
+                  {t('accounting:trialBalance.th.credit')}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -470,7 +475,7 @@ export function TrialBalancePage() {
               {trialQuery.isPending ? (
                 <TableRow>
                   <TableCell colSpan={9} className="h-48 text-center text-sm text-slate-500">
-                    Calculating trial balance figures...
+                    {t('accounting:trialBalance.loading')}
                   </TableCell>
                 </TableRow>
               ) : trialQuery.isError ? (
@@ -485,10 +490,10 @@ export function TrialBalancePage() {
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Scale className="h-8 w-8 text-slate-300 dark:text-slate-600" />
                       <p className="font-medium text-slate-700 dark:text-slate-300">
-                        No accounts match the selected filters
+                        {t('accounting:trialBalance.noAccountsFound')}
                       </p>
                       <p className="text-xs text-slate-400">
-                        Try clearing search terms or toggle "Show Zero Balances".
+                        {t('accounting:trialBalance.emptySub')}
                       </p>
                     </div>
                   </TableCell>
@@ -515,39 +520,39 @@ export function TrialBalancePage() {
                     </TableCell>
 
                     {/* Opening */}
-                    <TableCell className="border-l border-slate-100 px-3 py-3 text-right font-mono text-xs dark:border-slate-800">
+                    <TableCell className="border-s border-slate-100 px-3 py-3 text-end font-mono text-xs dark:border-slate-800">
                       {line.openingDebit > 0 ? formatNumber(line.openingDebit) : '—'}
                     </TableCell>
-                    <TableCell className="px-3 py-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
+                    <TableCell className="px-3 py-3 text-end font-mono text-xs text-slate-600 dark:text-slate-400">
                       {line.openingCredit > 0 ? formatNumber(line.openingCredit) : '—'}
                     </TableCell>
 
                     {/* Movements */}
-                    <TableCell className="border-l border-slate-100 px-3 py-3 text-right font-mono text-xs font-semibold text-emerald-600 dark:border-slate-800 dark:text-emerald-400">
+                    <TableCell className="border-s border-slate-100 px-3 py-3 text-end font-mono text-xs font-semibold text-emerald-600 dark:border-slate-800 dark:text-emerald-400">
                       {line.debitMovement > 0 ? formatNumber(line.debitMovement) : '—'}
                     </TableCell>
-                    <TableCell className="px-3 py-3 text-right font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
+                    <TableCell className="px-3 py-3 text-end font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                       {line.creditMovement > 0 ? formatNumber(line.creditMovement) : '—'}
                     </TableCell>
 
                     {/* Closing */}
-                    <TableCell className="border-l border-slate-100 px-3 py-3 text-right font-mono text-xs font-bold text-emerald-700 dark:border-slate-800 dark:text-emerald-300">
+                    <TableCell className="border-s border-slate-100 px-3 py-3 text-end font-mono text-xs font-bold text-emerald-700 dark:border-slate-800 dark:text-emerald-300">
                       {line.closingDebit > 0 ? formatNumber(line.closingDebit) : '—'}
                     </TableCell>
-                    <TableCell className="px-3 py-3 text-right font-mono text-xs font-bold text-blue-700 dark:text-blue-300">
+                    <TableCell className="px-3 py-3 text-end font-mono text-xs font-bold text-blue-700 dark:text-blue-300">
                       {line.closingCredit > 0 ? formatNumber(line.closingCredit) : '—'}
                     </TableCell>
 
                     {/* Drill down */}
-                    <TableCell className="px-3 py-3 text-right print:hidden">
+                    <TableCell className="px-3 py-3 text-end print:hidden">
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        title={`View General Ledger for ${line.accountCode}`}
+                        title={t('accounting:trialBalance.viewLedgerTooltip', { code: line.accountCode })}
                         onClick={() => handleDrillDown(line.accountId)}
                         className="text-slate-500 hover:text-primary"
                       >
-                        <ArrowUpRight className="h-4 w-4" />
+                        <ArrowUpRight className="h-4 w-4 rtl:-scale-x-100" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -560,27 +565,27 @@ export function TrialBalancePage() {
               <tfoot>
                 <TableRow className="border-t-2 border-slate-300 bg-slate-100/90 font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
                   <TableCell className="px-4 py-3 text-xs uppercase" colSpan={2}>
-                    Total Report Balance
+                    {t('accounting:trialBalance.th.totalReportBalance')}
                   </TableCell>
 
-                  <TableCell className="border-l border-slate-200 px-3 py-3 text-right font-mono text-xs dark:border-slate-700">
+                  <TableCell className="border-s border-slate-200 px-3 py-3 text-end font-mono text-xs dark:border-slate-700">
                     {formatNumber(data.totalOpeningDebit)}
                   </TableCell>
-                  <TableCell className="px-3 py-3 text-right font-mono text-xs">
+                  <TableCell className="px-3 py-3 text-end font-mono text-xs">
                     {formatNumber(data.totalOpeningCredit)}
                   </TableCell>
 
-                  <TableCell className="border-l border-slate-200 px-3 py-3 text-right font-mono text-xs text-emerald-700 dark:border-slate-700 dark:text-emerald-400">
+                  <TableCell className="border-s border-slate-200 px-3 py-3 text-end font-mono text-xs text-emerald-700 dark:border-slate-700 dark:text-emerald-400">
                     {formatNumber(data.totalDebitMovement)}
                   </TableCell>
-                  <TableCell className="px-3 py-3 text-right font-mono text-xs text-blue-700 dark:text-blue-400">
+                  <TableCell className="px-3 py-3 text-end font-mono text-xs text-blue-700 dark:text-blue-400">
                     {formatNumber(data.totalCreditMovement)}
                   </TableCell>
 
-                  <TableCell className="border-l border-slate-200 px-3 py-3 text-right font-mono text-xs text-emerald-700 dark:border-slate-700 dark:text-emerald-400">
+                  <TableCell className="border-s border-slate-200 px-3 py-3 text-end font-mono text-xs text-emerald-700 dark:border-slate-700 dark:text-emerald-400">
                     {formatNumber(data.totalClosingDebit)}
                   </TableCell>
-                  <TableCell className="px-3 py-3 text-right font-mono text-xs text-blue-700 dark:text-blue-400">
+                  <TableCell className="px-3 py-3 text-end font-mono text-xs text-blue-700 dark:text-blue-400">
                     {formatNumber(data.totalClosingCredit)}
                   </TableCell>
 
@@ -596,55 +601,53 @@ export function TrialBalancePage() {
 }
 
 function ClassificationBadge({ classification }: { classification: AccountClassification }) {
+  const { t } = useTranslation('accounting')
+  const label = t(`classifications.${classification}`, {
+    defaultValue: accountClassificationLabels[classification] ?? 'Other',
+  })
+
   switch (classification) {
     case 0:
       return (
         <span className="inline-flex rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-          Asset
+          {label}
         </span>
       )
     case 1:
       return (
         <span className="inline-flex rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-          Liability
+          {label}
         </span>
       )
     case 2:
       return (
         <span className="inline-flex rounded bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-950/40 dark:text-purple-400">
-          Equity
+          {label}
         </span>
       )
     case 3:
       return (
         <span className="inline-flex rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
-          Revenue
+          {label}
         </span>
       )
     case 4:
       return (
         <span className="inline-flex rounded bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
-          Expense
+          {label}
         </span>
       )
     case 5:
       return (
         <span className="inline-flex rounded bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400">
-          Contra Asset
+          {label}
         </span>
       )
     default:
       return (
         <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-          {accountClassificationLabels[classification] ?? 'Other'}
+          {label}
         </span>
       )
   }
-}
-
-function formatNumber(value: number) {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  })
 }

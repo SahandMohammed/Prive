@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
@@ -35,6 +36,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { useCurrencies, useCurrentBusiness } from '@/features/business'
 import {
@@ -63,6 +65,7 @@ const emptyForm: FormValue = {
 }
 
 export function MoneyTransfersPage() {
+  const { t } = useTranslation(['finance', 'common'])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [search, setSearch] = useState('')
@@ -107,31 +110,28 @@ export function MoneyTransfersPage() {
 
   return (
     <div className="flex h-full flex-col space-y-6">
-      {/* Header */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Money Transfers
+            {t('finance:transfersPage.title')}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Same-currency, same-branch movements. Posting creates dual Money Ledger entries and a
-            balanced Accounting journal.
+            {t('finance:transfersPage.description')}
           </p>
         </div>
         <Button
-          className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+          className="gap-1.5"
           onClick={openCreate}
         >
           <FilePlus2 className="size-4" />
-          New Money Transfer
+          {t('finance:transfersPage.newTransfer')}
         </Button>
       </div>
 
-      {/* Filter Card */}
       <div className="grid gap-3 rounded-lg border border-slate-200 bg-card p-4 shadow-xs dark:border-slate-800 md:grid-cols-3 lg:grid-cols-6">
         <Input
-          aria-label="Search Money Transfers"
-          placeholder="Search document or notes"
+          aria-label={t('finance:transfersPage.searchPlaceholder')}
+          placeholder={t('finance:transfersPage.searchPlaceholder')}
           value={search}
           onChange={(event) => {
             setSearch(event.target.value)
@@ -139,14 +139,14 @@ export function MoneyTransfersPage() {
           }}
         />
         <Select
-          aria-label="Money Account filter"
+          aria-label={t('finance:transfersPage.allAccounts')}
           value={moneyAccountId}
           onChange={(event) => {
             setMoneyAccountId(event.target.value)
             resetPage()
           }}
         >
-          <option value="">All Money Accounts</option>
+          <option value="">{t('finance:transfersPage.allAccounts')}</option>
           {accounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.code} — {account.name}
@@ -154,14 +154,14 @@ export function MoneyTransfersPage() {
           ))}
         </Select>
         <Select
-          aria-label="Currency filter"
+          aria-label={t('finance:transfersPage.allCurrencies')}
           value={currencyId}
           onChange={(event) => {
             setCurrencyId(event.target.value)
             resetPage()
           }}
         >
-          <option value="">All currencies</option>
+          <option value="">{t('finance:transfersPage.allCurrencies')}</option>
           {currencies.map((currency) => (
             <option key={currency.id} value={currency.id}>
               {currency.code}
@@ -169,19 +169,19 @@ export function MoneyTransfersPage() {
           ))}
         </Select>
         <Select
-          aria-label="Status filter"
+          aria-label={t('finance:transfersPage.allStatuses')}
           value={status}
           onChange={(event) => {
             setStatus(event.target.value)
             resetPage()
           }}
         >
-          <option value="">All statuses</option>
-          <option value="0">Draft</option>
-          <option value="1">Posted</option>
+          <option value="">{t('finance:transfersPage.allStatuses')}</option>
+          <option value="0">{t('finance:transfersPage.draft')}</option>
+          <option value="1">{t('finance:transfersPage.posted')}</option>
         </Select>
         <Input
-          aria-label="From date"
+          aria-label={t('finance:transfersPage.fromDate')}
           type="date"
           value={fromDate}
           onChange={(event) => {
@@ -190,7 +190,7 @@ export function MoneyTransfersPage() {
           }}
         />
         <Input
-          aria-label="To date"
+          aria-label={t('finance:transfersPage.toDate')}
           type="date"
           value={toDate}
           onChange={(event) => {
@@ -200,39 +200,38 @@ export function MoneyTransfersPage() {
         />
       </div>
 
-      {/* Table Shell */}
       <DataTableShell>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className={head}>
-                <TableHead className="px-4">Document</TableHead>
-                <TableHead className="px-4">Date</TableHead>
-                <TableHead className="px-4">From Account</TableHead>
-                <TableHead className="px-4">To Account</TableHead>
-                <TableHead className="px-4">Currency</TableHead>
-                <TableHead className="px-4 text-right">Amount</TableHead>
-                <TableHead className="px-4">Status</TableHead>
-                <TableHead className="px-4">Created by</TableHead>
-                <TableHead className="w-32 px-4 text-right">Actions</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:transfersPage.th.document')}</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:transfersPage.th.date')}</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:transfersPage.th.sourceAccount')}</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:transfersPage.th.destinationAccount')}</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:moneyAccountsPage.th.currency')}</TableHead>
+                <TableHead className="px-4 text-end">{t('finance:transfersPage.th.amount')}</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:transfersPage.th.status')}</TableHead>
+                <TableHead className="px-4 text-start">{t('finance:exchangeRatesPage.th.createdBy')}</TableHead>
+                <TableHead className="w-32 px-4 text-end">{t('finance:transfersPage.th.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {query.isPending ? (
-                <MessageRow label="Loading Money Transfers…" />
+                <MessageRow label={t('finance:transfersPage.loading')} />
               ) : query.isError ? (
                 <MessageRow label={query.error.message} error />
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="h-48 text-center text-sm text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-3">
-                      <p>No Money Transfers found.</p>
+                      <p>{t('finance:transfersPage.empty')}</p>
                       <Button
                         size="sm"
-                        className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                        className="gap-1.5"
                         onClick={openCreate}
                       >
-                        <FilePlus2 className="size-4" /> Create Money Transfer
+                        <FilePlus2 className="size-4" /> {t('finance:transfersPage.newTransfer')}
                       </Button>
                     </div>
                   </TableCell>
@@ -243,11 +242,11 @@ export function MoneyTransfersPage() {
                     key={transfer.id}
                     className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30"
                   >
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <button
                         type="button"
                         onClick={() => setDetailTransfer(transfer)}
-                        className="text-left font-mono font-semibold text-primary hover:underline"
+                        className="text-start font-mono font-semibold text-primary hover:underline"
                       >
                         {transfer.documentNumber}
                       </button>
@@ -257,8 +256,8 @@ export function MoneyTransfersPage() {
                         </p>
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-sm">{transfer.transferDate}</TableCell>
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start text-sm">{formatDate(transfer.transferDate)}</TableCell>
+                    <TableCell className="px-4 py-3.5 text-start">
                       <p className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
                         {transfer.sourceMoneyAccountCode}
                       </p>
@@ -266,7 +265,7 @@ export function MoneyTransfersPage() {
                         {transfer.sourceMoneyAccountName}
                       </p>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <p className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
                         {transfer.destinationMoneyAccountCode}
                       </p>
@@ -274,28 +273,28 @@ export function MoneyTransfersPage() {
                         {transfer.destinationMoneyAccountName}
                       </p>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 font-mono text-sm">
+                    <TableCell className="px-4 py-3.5 text-start font-mono text-sm">
                       {transfer.currencyCode}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right font-mono text-sm font-semibold">
-                      <span>{formatAmount(transfer.amount)}</span>{' '}
+                    <TableCell className="px-4 py-3.5 text-end font-mono text-sm font-semibold">
+                      <span>{formatNumber(transfer.amount, { maximumFractionDigits: 4 })}</span>{' '}
                       <span className="text-xs font-normal text-muted-foreground">
                         {transfer.currencyCode}
                       </span>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <TransferStatusBadge status={transfer.status} />
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-sm">
+                    <TableCell className="px-4 py-3.5 text-start text-sm">
                       {transfer.createdByUsername}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
+                    <TableCell className="px-4 py-3.5 text-end">
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="View transfer details"
-                          aria-label={`View transfer ${transfer.documentNumber}`}
+                          title={t('common:actions.view')}
+                          aria-label={`${t('common:actions.view')} ${transfer.documentNumber}`}
                           onClick={() => setDetailTransfer(transfer)}
                         >
                           <Eye className="size-4" />
@@ -306,8 +305,8 @@ export function MoneyTransfersPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Edit draft"
-                              aria-label={`Edit draft ${transfer.documentNumber}`}
+                              title={t('common:actions.edit')}
+                              aria-label={`${t('common:actions.edit')} ${transfer.documentNumber}`}
                               onClick={() => openEdit(transfer)}
                             >
                               <Pencil className="size-4" />
@@ -315,8 +314,8 @@ export function MoneyTransfersPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Post transfer"
-                              aria-label={`Post transfer ${transfer.documentNumber}`}
+                              title={t('finance:transfersPage.form.postTransfer')}
+                              aria-label={`${t('finance:transfersPage.form.postTransfer')} ${transfer.documentNumber}`}
                               className="text-primary hover:bg-primary/10 hover:text-primary"
                               disabled={actions.post.isPending}
                               onClick={() => {
@@ -329,19 +328,19 @@ export function MoneyTransfersPage() {
                                 }
                               }}
                             >
-                              <Send className="size-4" />
+                              <Send className="size-4 rtl:rotate-180" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Delete draft"
-                              aria-label={`Delete draft ${transfer.documentNumber}`}
+                              title={t('common:actions.delete')}
+                              aria-label={`${t('common:actions.delete')} ${transfer.documentNumber}`}
                               className="text-destructive hover:bg-destructive/10"
                               disabled={actions.remove.isPending}
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    `Delete Draft Money Transfer ${transfer.documentNumber}?`
+                                    t('finance:transfersPage.deleteConfirm')
                                   )
                                 ) {
                                   actions.remove.mutate(transfer.id)
@@ -362,7 +361,6 @@ export function MoneyTransfersPage() {
         </div>
       </DataTableShell>
 
-      {/* Pagination */}
       <DataTablePagination
         page={page}
         pageSize={pageSize}
@@ -374,7 +372,6 @@ export function MoneyTransfersPage() {
         }}
       />
 
-      {/* Create / Edit Form Modal */}
       <MoneyTransferFormDialog
         key={editingTransfer?.id ?? (isFormOpen ? 'open-new' : 'closed')}
         open={isFormOpen}
@@ -385,7 +382,6 @@ export function MoneyTransfersPage() {
         }}
       />
 
-      {/* Detail View Modal */}
       <MoneyTransferDetailDialog
         key={detailTransfer?.id}
         transfer={detailTransfer}
@@ -409,6 +405,7 @@ function MoneyTransferFormDialog({
   transfer: MoneyTransfer | null
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation(['finance', 'common'])
   const actions = useTransferActions()
   const accountsQuery = useMoneyAccounts({ page: 1, pageSize: 100, isActive: true })
 
@@ -483,21 +480,21 @@ function MoneyTransferFormDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {transfer ? `Edit Draft ${transfer.documentNumber}` : 'New Money Transfer'}
+            {transfer ? t('finance:transfersPage.form.editTitle') : t('finance:transfersPage.form.newTitle')}
           </DialogTitle>
           <DialogDescription>
-            Transfer funds between two Money Accounts in the same branch and currency.
+            {t('finance:transfersPage.form.description')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Transfer date" error={form.formState.errors.transferDate?.message}>
+            <Field label={t('finance:transfersPage.form.date')} error={form.formState.errors.transferDate?.message}>
               <Input type="date" {...form.register('transferDate')} autoFocus />
             </Field>
 
             <Field
-              label="Source Money Account"
+              label={t('finance:transfersPage.form.sourceAccount')}
               error={form.formState.errors.sourceMoneyAccountId?.message}
             >
               <Select
@@ -506,10 +503,10 @@ function MoneyTransferFormDialog({
                     form.setValue('destinationMoneyAccountId', '', { shouldDirty: true }),
                 })}
               >
-                <option value="">Select source account</option>
+                <option value="">{t('finance:transfersPage.form.selectSource')}</option>
                 {accounts.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.code} — {item.name} ({formatAmount(item.balance)} {item.currencyCode})
+                    {item.code} — {item.name} ({formatNumber(item.balance, { maximumFractionDigits: 4 })} {item.currencyCode})
                   </option>
                 ))}
               </Select>
@@ -518,7 +515,7 @@ function MoneyTransferFormDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
-              label="Destination Money Account"
+              label={t('finance:transfersPage.form.destinationAccount')}
               error={form.formState.errors.destinationMoneyAccountId?.message}
             >
               <Select
@@ -529,19 +526,19 @@ function MoneyTransferFormDialog({
                   {sourceAccount
                     ? matchingDestinations.length === 0
                       ? 'No other matching account in this branch/currency'
-                      : 'Select destination account'
+                      : t('finance:transfersPage.form.selectDestination')
                     : 'Select source account first'}
                 </option>
                 {matchingDestinations.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.code} — {item.name} ({formatAmount(item.balance)} {item.currencyCode})
+                    {item.code} — {item.name} ({formatNumber(item.balance, { maximumFractionDigits: 4 })} {item.currencyCode})
                   </option>
                 ))}
               </Select>
             </Field>
 
             <Field
-              label={`Transfer amount ${currencyCode ? `(${currencyCode})` : ''}`}
+              label={`${t('finance:transfersPage.form.amount')} ${currencyCode ? `(${currencyCode})` : ''}`}
               error={form.formState.errors.amount?.message}
             >
               <Input
@@ -554,15 +551,13 @@ function MoneyTransferFormDialog({
             </Field>
           </div>
 
-          {/* Real-time Balance Flow Preview Card */}
           {(sourceAccount || destinationAccount) && (
             <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/40">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="mb-2 text-start text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Balance Impact Preview
               </p>
               <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                {/* Source Account box */}
-                <div className="rounded-md border bg-card p-2.5 text-xs">
+                <div className="rounded-md border bg-card p-2.5 text-xs text-start">
                   <p className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                     {sourceAccount?.code ?? 'Source'}
                   </p>
@@ -570,7 +565,7 @@ function MoneyTransferFormDialog({
                   <div className="mt-1.5 flex justify-between border-t pt-1">
                     <span className="text-muted-foreground">Available:</span>
                     <span className="font-mono font-medium">
-                      {formatAmount(sourceAccount?.balance ?? 0)} {currencyCode}
+                      {formatNumber(sourceAccount?.balance ?? 0, { maximumFractionDigits: 4 })} {currencyCode}
                     </span>
                   </div>
                   {transferAmount > 0 && sourceAccount && (
@@ -583,24 +578,22 @@ function MoneyTransferFormDialog({
                             : 'text-slate-800 dark:text-slate-200'
                         }`}
                       >
-                        {formatAmount(sourceAccount.balance - transferAmount)} {currencyCode}
+                        {formatNumber(sourceAccount.balance - transferAmount, { maximumFractionDigits: 4 })} {currencyCode}
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Arrow */}
                 <div className="flex flex-col items-center justify-center text-center">
                   <div className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <ArrowRight className="size-4" />
+                    <ArrowRight className="size-4 rtl:rotate-180" />
                   </div>
                   <p className="mt-0.5 font-mono text-xs font-bold text-primary">
-                    {transferAmount > 0 ? formatAmount(transferAmount) : '—'}
+                    {transferAmount > 0 ? formatNumber(transferAmount, { maximumFractionDigits: 4 }) : '—'}
                   </p>
                 </div>
 
-                {/* Destination Account box */}
-                <div className="rounded-md border bg-card p-2.5 text-xs">
+                <div className="rounded-md border bg-card p-2.5 text-xs text-start">
                   <p className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                     {destinationAccount?.code ?? 'Destination'}
                   </p>
@@ -608,14 +601,14 @@ function MoneyTransferFormDialog({
                   <div className="mt-1.5 flex justify-between border-t pt-1">
                     <span className="text-muted-foreground">Current:</span>
                     <span className="font-mono font-medium">
-                      {formatAmount(destinationAccount?.balance ?? 0)} {currencyCode}
+                      {formatNumber(destinationAccount?.balance ?? 0, { maximumFractionDigits: 4 })} {currencyCode}
                     </span>
                   </div>
                   {transferAmount > 0 && destinationAccount && (
                     <div className="flex justify-between text-[11px]">
                       <span className="text-muted-foreground">After:</span>
                       <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        {formatAmount(destinationAccount.balance + transferAmount)} {currencyCode}
+                        {formatNumber(destinationAccount.balance + transferAmount, { maximumFractionDigits: 4 })} {currencyCode}
                       </span>
                     </div>
                   )}
@@ -624,7 +617,7 @@ function MoneyTransferFormDialog({
             </div>
           )}
 
-          <Field label="Notes (optional)" error={form.formState.errors.notes?.message}>
+          <Field label={t('finance:transfersPage.form.notes')} error={form.formState.errors.notes?.message}>
             <Textarea
               rows={2}
               placeholder="Reason or operational note"
@@ -641,15 +634,14 @@ function MoneyTransferFormDialog({
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={closeDialog} disabled={isPending}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button
               type="submit"
-              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={isPending}
             >
-              {isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
-              {transfer ? 'Save changes' : 'Save draft'}
+              {isPending && <Loader2 className="me-1.5 size-4 animate-spin" />}
+              {transfer ? t('common:actions.save') : t('finance:transfersPage.form.saveDraft')}
             </Button>
           </DialogFooter>
         </form>
@@ -667,6 +659,7 @@ function MoneyTransferDetailDialog({
   onOpenChange: (open: boolean) => void
   onEdit: (transfer: MoneyTransfer) => void
 }) {
+  const { t } = useTranslation(['finance', 'common'])
   const actions = useTransferActions()
   const business = useCurrentBusiness().data
 
@@ -692,7 +685,7 @@ function MoneyTransferDetailDialog({
   }
 
   const handleDelete = () => {
-    if (window.confirm(`Delete Draft Money Transfer ${transfer.documentNumber}?`)) {
+    if (window.confirm(t('finance:transfersPage.deleteConfirm'))) {
       actions.remove.mutate(transfer.id, {
         onSuccess: () => onOpenChange(false),
       })
@@ -703,7 +696,7 @@ function MoneyTransferDetailDialog({
     <Dialog open={transfer !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-2 pr-6">
+          <div className="flex items-center justify-between gap-2 pe-6">
             <DialogTitle className="flex items-center gap-2 font-mono text-lg text-slate-900 dark:text-slate-100">
               {transfer.documentNumber}
             </DialogTitle>
@@ -711,18 +704,16 @@ function MoneyTransferDetailDialog({
           </div>
           <DialogDescription>
             {posted
-              ? `Posted on ${transfer.transferDate} · immutable financial movement`
-              : `Draft created on ${transfer.transferDate} · no ledger or accounting effect`}
+              ? `Posted on ${formatDate(transfer.transferDate)} · immutable financial movement`
+              : `Draft created on ${formatDate(transfer.transferDate)} · no ledger or accounting effect`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 text-sm">
-          {/* Transfer Visual Box */}
           <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/40">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              {/* From */}
-              <div className="space-y-0.5">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">From Account</p>
+              <div className="space-y-0.5 text-start">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('finance:transfersPage.th.sourceAccount')}</p>
                 <p className="font-mono font-bold text-slate-900 dark:text-slate-100">
                   {transfer.sourceMoneyAccountCode}
                 </p>
@@ -731,19 +722,17 @@ function MoneyTransferDetailDialog({
                 </p>
               </div>
 
-              {/* Arrow + Amount */}
               <div className="flex flex-col items-center justify-center text-center">
                 <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <ArrowRight className="size-4" />
+                  <ArrowRight className="size-4 rtl:rotate-180" />
                 </div>
                 <p className="mt-1 font-mono text-sm font-bold text-primary">
-                  {formatAmount(transfer.amount)} {transfer.currencyCode}
+                  {formatNumber(transfer.amount, { maximumFractionDigits: 4 })} {transfer.currencyCode}
                 </p>
               </div>
 
-              {/* To */}
-              <div className="space-y-0.5 text-right">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">To Account</p>
+              <div className="space-y-0.5 text-end">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('finance:transfersPage.th.destinationAccount')}</p>
                 <p className="font-mono font-bold text-slate-900 dark:text-slate-100">
                   {transfer.destinationMoneyAccountCode}
                 </p>
@@ -759,21 +748,19 @@ function MoneyTransferDetailDialog({
                   Rate: 1 {transfer.currencyCode} = {transfer.exchangeRate} {transfer.baseCurrencyCode}
                 </span>
                 <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
-                  Base amount: {formatAmount(transfer.baseAmount)} {transfer.baseCurrencyCode}
+                  Base amount: {formatNumber(transfer.baseAmount, { maximumFractionDigits: 4 })} {transfer.baseCurrencyCode}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Notes if present */}
           {transfer.notes && (
-            <div className="rounded-md border border-slate-100 bg-card p-3 dark:border-slate-800">
-              <p className="text-xs font-semibold text-muted-foreground">Notes</p>
+            <div className="rounded-md border border-slate-100 bg-card p-3 text-start dark:border-slate-800">
+              <p className="text-xs font-semibold text-muted-foreground">{t('finance:transfersPage.form.notes')}</p>
               <p className="mt-0.5 text-sm text-slate-700 dark:text-slate-300">{transfer.notes}</p>
             </div>
           )}
 
-          {/* Quick links for Posted transfer */}
           {posted && (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               <Link
@@ -797,29 +784,27 @@ function MoneyTransferDetailDialog({
             </div>
           )}
 
-          {/* Audit stamps */}
-          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs text-muted-foreground dark:border-slate-800">
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs text-muted-foreground dark:border-slate-800 text-start">
             <div>
-              <span className="font-medium text-slate-700 dark:text-slate-300">Created by:</span>{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">{t('finance:exchangeRatesPage.th.createdBy')}:</span>{' '}
               {transfer.createdByUsername}
             </div>
             <div>
               <span className="font-medium text-slate-700 dark:text-slate-300">Created on:</span>{' '}
-              {formatTimestamp(transfer.createdAtUtc)}
+              {formatDateTime(transfer.createdAtUtc)}
             </div>
             {transfer.postedAtUtc && (
               <div className="col-span-2">
                 <span className="font-medium text-slate-700 dark:text-slate-300">Posted on:</span>{' '}
-                {formatTimestamp(transfer.postedAtUtc)}
+                {formatDateTime(transfer.postedAtUtc)}
               </div>
             )}
           </div>
         </div>
 
-        {/* Footer with actions */}
         <DialogFooter className="gap-2 sm:justify-between">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t('common:actions.close')}
           </Button>
 
           {!posted && (
@@ -831,8 +816,8 @@ function MoneyTransferDetailDialog({
                 disabled={actions.remove.isPending}
                 onClick={handleDelete}
               >
-                <Trash2 className="mr-1.5 size-3.5" />
-                Delete
+                <Trash2 className="me-1.5 size-3.5" />
+                {t('common:actions.delete')}
               </Button>
               <Button
                 type="button"
@@ -840,22 +825,21 @@ function MoneyTransferDetailDialog({
                 size="sm"
                 onClick={() => onEdit(transfer)}
               >
-                <Pencil className="mr-1.5 size-3.5" />
-                Edit
+                <Pencil className="me-1.5 size-3.5" />
+                {t('common:actions.edit')}
               </Button>
               <Button
                 type="button"
                 size="sm"
-                className="bg-primarytext-primary-foregroundhover:bg-primary/90"
                 disabled={actions.post.isPending}
                 onClick={handlePost}
               >
                 {actions.post.isPending ? (
-                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                  <Loader2 className="me-1.5 size-3.5 animate-spin" />
                 ) : (
-                  <Send className="mr-1.5 size-3.5" />
+                  <Send className="me-1.5 size-3.5 rtl:rotate-180" />
                 )}
-                Post Transfer
+                {t('finance:transfersPage.form.postTransfer')}
               </Button>
             </div>
           )}
@@ -866,6 +850,7 @@ function MoneyTransferDetailDialog({
 }
 
 export function TransferStatusBadge({ status }: { status: FinanceDocumentStatus }) {
+  const { t } = useTranslation('finance')
   const posted = status === FinanceDocumentStatus.Posted
   return (
     <span
@@ -875,7 +860,7 @@ export function TransferStatusBadge({ status }: { status: FinanceDocumentStatus 
           : 'inline-flex rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
       }
     >
-      {posted ? 'Posted' : 'Draft'}
+      {posted ? t('finance:transfersPage.posted') : t('finance:transfersPage.draft')}
     </span>
   )
 }
@@ -890,8 +875,8 @@ function Field({
   children: React.ReactNode
 }) {
   return (
-    <div className="grid gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
-      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+    <div className="grid gap-1.5 text-start text-sm font-medium text-slate-700 dark:text-slate-300">
+      <label className="text-start text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
       {children}
       {error && <span className="text-xs font-normal text-destructive">{error}</span>}
     </div>
@@ -923,8 +908,5 @@ function MessageRow({ label, error = false }: { label: string; error?: boolean }
   )
 }
 
-const formatAmount = (value: number) =>
-  value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-const formatTimestamp = (value: string) => new Date(value).toLocaleString()
 const head =
   'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'

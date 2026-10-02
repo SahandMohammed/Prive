@@ -7,6 +7,7 @@ import {
   Receipt,
   FileText,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface KpiCardsProps {
   summary?: DashboardSummary
@@ -58,6 +59,8 @@ function buildSparkline(values: number[], color: string, gradientId: string, wid
 }
 
 export function KpiCards({ summary, trendData, isLoading }: KpiCardsProps) {
+  const { t } = useTranslation(['dashboard', 'common'])
+
   if (isLoading || !summary) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -103,14 +106,14 @@ export function KpiCards({ summary, trendData, isLoading }: KpiCardsProps) {
 
   const cards = [
     {
-      title: "Today's Sales",
+      title: t('dashboard:todaySales'),
       value: formatDashboardAmount(todaySalesBase, baseCurrencyCode),
-      subtext: `${todaySalesCount} completed ${todaySalesCount === 1 ? 'sale' : 'sales'}`,
+      subtext: `${todaySalesCount} ${todaySalesCount === 1 ? t('dashboard:completedSale') : t('dashboard:completedSales')}`,
       change:
         todaySalesChangePercent !== null
           ? `${todaySalesChangePercent >= 0 ? '+' : ''}${todaySalesChangePercent}%`
           : null,
-      changeLabel: 'vs yesterday',
+      changeLabel: t('dashboard:vsYesterday'),
       isPositive: (todaySalesChangePercent ?? 0) >= 0,
       icon: <TrendingUp className="size-5 text-orange-600 dark:text-orange-400" />,
       iconBg: 'bg-orange-50 dark:bg-orange-950/40 border border-orange-200/60 dark:border-orange-900/40',
@@ -118,14 +121,14 @@ export function KpiCards({ summary, trendData, isLoading }: KpiCardsProps) {
       sparkline: buildSparkline(salesHistory, '#EA580C', 'kpi-spark-orange'),
     },
     {
-      title: 'Net Cash Flow',
+      title: t('dashboard:netCashFlow'),
       value: `${isNetCashPositive ? '+' : '-'}${formatDashboardAmount(todayNetCashMovementBase, baseCurrencyCode)}`,
       subtext:
         todayCashReceivedBase > 0 || todayCashPaidBase > 0
-          ? `In: +${formatCompactNumber(todayCashReceivedBase)} • Out: -${formatCompactNumber(todayCashPaidBase)}`
-          : 'Operational movement',
-      change: isNetCashPositive ? '+Inflow' : '-Outflow',
-      changeLabel: 'Today',
+          ? `+${formatCompactNumber(todayCashReceivedBase)} • -${formatCompactNumber(todayCashPaidBase)}`
+          : t('dashboard:operationalMovement'),
+      change: isNetCashPositive ? t('dashboard:inflow') : t('dashboard:outflow'),
+      changeLabel: t('dashboard:today'),
       isPositive: isNetCashPositive,
       icon: <Wallet className="size-5 text-teal-600 dark:text-teal-400" />,
       iconBg: 'bg-teal-50 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-900/40',
@@ -133,11 +136,11 @@ export function KpiCards({ summary, trendData, isLoading }: KpiCardsProps) {
       sparkline: buildSparkline(netHistory, '#0D9488', 'kpi-spark-teal'),
     },
     {
-      title: "Today's Expenses",
+      title: t('dashboard:todayExpenses'),
       value: formatDashboardAmount(todayExpensesBase, baseCurrencyCode),
-      subtext: `${todayExpenseCount} posted ${todayExpenseCount === 1 ? 'voucher' : 'vouchers'}`,
-      change: todayExpensesBase > 0 ? 'Recorded' : null,
-      changeLabel: 'Posted vouchers',
+      subtext: `${todayExpenseCount} ${t('dashboard:postedVouchers')}`,
+      change: todayExpensesBase > 0 ? t('dashboard:recorded') : null,
+      changeLabel: t('dashboard:postedVouchers'),
       isPositive: false,
       icon: <Receipt className="size-5 text-sky-600 dark:text-sky-400" />,
       iconBg: 'bg-sky-50 dark:bg-sky-950/40 border border-sky-200/60 dark:border-sky-900/40',
@@ -145,16 +148,17 @@ export function KpiCards({ summary, trendData, isLoading }: KpiCardsProps) {
       sparkline: buildSparkline(expenseHistory, '#0284C7', 'kpi-spark-sky'),
     },
     {
-      title: 'Customer Receivables',
+      title: t('dashboard:customerReceivables'),
       value: formatDashboardAmount(customerReceivablesBase, baseCurrencyCode),
       subtext:
         customerOutstandingCustomerCount > 0
-          ? `${customerOutstandingInvoiceCount} unpaid • ${customerOutstandingCustomerCount} ${customerOutstandingCustomerCount === 1 ? 'client' : 'clients'}`
-          : `${customerOutstandingInvoiceCount} unpaid ${customerOutstandingInvoiceCount === 1 ? 'invoice' : 'invoices'}`,
-      change: customerOutstandingInvoiceCount > 0 ? `${customerOutstandingInvoiceCount} pending` : null,
-      changeLabel: 'Pending collection',
+          ? `${customerOutstandingInvoiceCount} ${t('dashboard:unpaid')} • ${customerOutstandingCustomerCount} ${customerOutstandingCustomerCount === 1 ? t('dashboard:client') : t('dashboard:clients')}`
+          : `${customerOutstandingInvoiceCount} ${t('dashboard:unpaid')} ${customerOutstandingInvoiceCount === 1 ? t('dashboard:invoice') : t('dashboard:invoices')}`,
+      change: customerOutstandingInvoiceCount > 0 ? `${customerOutstandingInvoiceCount} ${t('dashboard:pending')}` : null,
+      changeLabel: t('dashboard:pendingCollection'),
       isPositive: true,
       icon: <FileText className="size-5 text-amber-600 dark:text-amber-400" />,
+
       iconBg: 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/40',
       color: '#F59E0B',
       sparkline: buildSparkline(

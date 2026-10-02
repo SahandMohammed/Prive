@@ -1,5 +1,6 @@
 import type { DashboardSalesMix } from '../types/dashboard.types'
 import { formatDashboardAmount } from '../utils/dashboard.utils'
+import { useTranslation } from 'react-i18next'
 
 interface SalesMixChartProps {
   data?: DashboardSalesMix
@@ -14,27 +15,28 @@ interface SourceItem {
 }
 
 export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
+  const { t } = useTranslation(['dashboard', 'common'])
   const hasEmptyData = !data || data.totalRevenueBase === 0
   const currency = data?.baseCurrencyCode ?? 'IQD'
 
   const sources: SourceItem[] = data && data.totalRevenueBase > 0
     ? [
         {
-          name: 'Services',
+          name: t('dashboard:services'),
           percent: data.serviceRevenuePercent,
           color: '#EA580C',
           amount: formatDashboardAmount(data.serviceRevenueBase, currency),
         },
         {
-          name: 'Products',
+          name: t('dashboard:products'),
           percent: data.productRevenuePercent,
           color: '#0D9488',
           amount: formatDashboardAmount(data.productRevenueBase, currency),
         },
       ]
     : [
-        { name: 'Services', percent: 0, color: '#EA580C', amount: formatDashboardAmount(0, currency) },
-        { name: 'Products', percent: 0, color: '#0D9488', amount: formatDashboardAmount(0, currency) },
+        { name: t('dashboard:services'), percent: 0, color: '#EA580C', amount: formatDashboardAmount(0, currency) },
+        { name: t('dashboard:products'), percent: 0, color: '#0D9488', amount: formatDashboardAmount(0, currency) },
       ]
 
   // Donut SVG parameters
@@ -48,17 +50,17 @@ export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
   return (
     <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
       <div>
-        <h2 className="text-base font-bold font-heading text-foreground">Sales Mix</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">Where your revenue comes from</p>
+        <h2 className="text-base font-bold font-heading text-foreground">{t('dashboard:salesMix')}</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard:whereRevenueComesFrom')}</p>
       </div>
 
       {isLoading ? (
         <div className="h-[140px] flex items-center justify-center animate-pulse">
-          <span className="text-xs text-muted-foreground">Loading sales mix...</span>
+          <span className="text-xs text-muted-foreground">{t('dashboard:loadingSalesMix')}</span>
         </div>
       ) : hasEmptyData ? (
         <div className="w-full h-[140px] my-3 rounded-xl border border-dashed border-border flex items-center justify-center text-center p-4">
-          <p className="text-xs text-muted-foreground">No posted sales recorded</p>
+          <p className="text-xs text-muted-foreground">{t('dashboard:noPostedSales')}</p>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-4 my-3">
@@ -100,7 +102,7 @@ export function SalesMixChart({ data, isLoading }: SalesMixChartProps = {}) {
           </div>
 
           {/* Legend List */}
-          <div className="flex-1 space-y-2.5 pl-2">
+          <div className="flex-1 space-y-2.5 ps-2">
             {sources.map((src, i) => (
               <div key={i} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5 min-w-0">

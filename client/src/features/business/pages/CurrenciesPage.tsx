@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertCircle, Coins, Loader2, Pencil, Plus, Search } from 'lucide-react'
@@ -8,6 +9,7 @@ import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatNumber } from '@/lib/i18n'
 import { currencySchema, type CurrencyFormValues } from '../schemas/business.schemas'
 import { useCurrencies, useSaveCurrency } from '../hooks/useBusiness'
 import type { Currency, CurrencyInput } from '../types/business.types'
@@ -15,6 +17,7 @@ import type { Currency, CurrencyInput } from '../types/business.types'
 const defaults: CurrencyFormValues = { code: '', name: '', symbol: '', decimalPlaces: 2, isActive: true }
 
 export function CurrenciesPage() {
+  const { t } = useTranslation(['business', 'common'])
   const currenciesQuery = useCurrencies()
   const [editing, setEditing] = useState<Currency | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -42,9 +45,8 @@ export function CurrenciesPage() {
     setIsDialogOpen(true)
   }
 
-  const currencies = currenciesQuery.data?.data ?? []
-
   const filteredCurrencies = useMemo(() => {
+    const currencies = currenciesQuery.data?.data ?? []
     const term = search.trim().toLowerCase()
     if (!term) return currencies
     return currencies.filter((c) =>
@@ -52,7 +54,7 @@ export function CurrenciesPage() {
       c.code.toLowerCase().includes(term) ||
       c.symbol.toLowerCase().includes(term)
     )
-  }, [currencies, search])
+  }, [currenciesQuery.data, search])
 
   const totalCurrencies = filteredCurrencies.length
   const paginatedCurrencies = useMemo(() => {
@@ -64,26 +66,26 @@ export function CurrenciesPage() {
     <div className="flex h-full w-full flex-col space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Currencies</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage currencies available to the business. Exchange rates are configured separately.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{t('business:currencies.title')}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t('business:currencies.description')}</p>
         </div>
-        <Button className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90" onClick={openCreateDialog}>
+        <Button className="gap-1.5" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 stroke-[2.5]" />
-          Add currency
+          {t('business:currencies.addCurrency')}
         </Button>
       </div>
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
             onChange={(event) => { setSearch(event.target.value); setPage(1) }}
-            placeholder="Search currencies"
-            className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+            placeholder={t('business:currencies.searchPlaceholder')}
+            className="h-10 rounded-lg border-slate-200 bg-white ps-9 shadow-xs dark:border-slate-800 dark:bg-slate-900 text-start"
           />
         </div>
-        <p className="text-sm text-slate-500">{totalCurrencies} {totalCurrencies === 1 ? 'currency' : 'currencies'}</p>
+        <p className="text-sm text-slate-500">{t('business:currencies.count', { count: totalCurrencies })}</p>
       </div>
 
       <DataTableShell>
@@ -91,12 +93,12 @@ export function CurrenciesPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Code</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Name</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Symbol</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Decimals</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Status</TableHead>
-                <TableHead className="w-24 px-4 text-right font-semibold text-slate-600 dark:text-slate-300">Actions</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:currencies.th.code')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:currencies.th.name')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:currencies.th.symbol')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:currencies.th.decimals')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:currencies.th.status')}</TableHead>
+                <TableHead className="w-24 px-4 text-end font-semibold text-slate-600 dark:text-slate-300">{t('business:currencies.th.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -108,14 +110,14 @@ export function CurrenciesPage() {
                   <TableCell className="px-4 py-3.5 font-mono text-sm font-bold text-slate-800 dark:text-slate-200">{currency.code}</TableCell>
                   <TableCell className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200">{currency.name}</TableCell>
                   <TableCell className="px-4 py-3.5 font-medium text-slate-600 dark:text-slate-300">{currency.symbol}</TableCell>
-                  <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">{currency.decimalPlaces}</TableCell>
+                  <TableCell className="px-4 py-3.5 text-slate-600 dark:text-slate-300">{formatNumber(currency.decimalPlaces)}</TableCell>
                   <TableCell className="px-4 py-3.5">
                     <span className={currency.isActive ? 'inline-flex rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600' : 'inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500'}>
-                      {currency.isActive ? 'Active' : 'Inactive'}
+                      {currency.isActive ? t('business:currencies.badges.active') : t('business:currencies.badges.inactive')}
                     </span>
                   </TableCell>
-                  <TableCell className="px-4 py-3.5 text-right">
-                    <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(currency)} aria-label={`Edit ${currency.code}`}>
+                  <TableCell className="px-4 py-3.5 text-end">
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(currency)} aria-label={t('business:currencies.actions.edit', { code: currency.code })}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -137,19 +139,19 @@ export function CurrenciesPage() {
       <Dialog open={isDialogOpen} onOpenChange={(open) => open ? setIsDialogOpen(true) : closeDialog()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? `Edit ${editing.code}` : 'Add currency'}</DialogTitle>
-            <DialogDescription>Set the code, display details, precision, and availability for this currency.</DialogDescription>
+            <DialogTitle>{editing ? t('business:currencies.dialog.titleEdit', { code: editing.code }) : t('business:currencies.dialog.titleAdd')}</DialogTitle>
+            <DialogDescription>{t('business:currencies.dialog.description')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={form.handleSubmit((values) => saveCurrency.mutate(values, { onSuccess: closeDialog }))} className="space-y-4">
-            <Field label="Code" error={form.formState.errors.code?.message}><Input maxLength={3} className="uppercase" {...form.register('code')} /></Field>
-            <Field label="Name" error={form.formState.errors.name?.message}><Input {...form.register('name')} /></Field>
-            <Field label="Symbol" error={form.formState.errors.symbol?.message}><Input {...form.register('symbol')} /></Field>
-            <Field label="Decimal places" error={form.formState.errors.decimalPlaces?.message}><Input type="number" min={0} max={6} {...form.register('decimalPlaces', { valueAsNumber: true })} /></Field>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} /> Active</label>
+            <Field label={t('business:currencies.dialog.fields.code')} error={form.formState.errors.code?.message}><Input maxLength={3} className="uppercase text-start" {...form.register('code')} /></Field>
+            <Field label={t('business:currencies.dialog.fields.name')} error={form.formState.errors.name?.message}><Input className="text-start" {...form.register('name')} /></Field>
+            <Field label={t('business:currencies.dialog.fields.symbol')} error={form.formState.errors.symbol?.message}><Input className="text-start" {...form.register('symbol')} /></Field>
+            <Field label={t('business:currencies.dialog.fields.decimalPlaces')} error={form.formState.errors.decimalPlaces?.message}><Input type="number" min={0} max={6} className="text-start" {...form.register('decimalPlaces', { valueAsNumber: true })} /></Field>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} /> {t('business:currencies.dialog.fields.isActive')}</label>
             {saveCurrency.isError && <p className="text-sm text-destructive">{saveCurrency.error.message}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeDialog} disabled={saveCurrency.isPending}>Cancel</Button>
-              <Button type="submit" className="bg-primarytext-primary-foregroundhover:bg-primary/90" disabled={saveCurrency.isPending}>{saveCurrency.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add currency'}</Button>
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={saveCurrency.isPending}>{t('business:currencies.dialog.cancel')}</Button>
+              <Button type="submit" disabled={saveCurrency.isPending}>{saveCurrency.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? t('business:currencies.dialog.save') : t('business:currencies.dialog.create')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -163,12 +165,13 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 function LoadingRow() {
+  const { t } = useTranslation(['business'])
   return (
     <TableRow>
       <TableCell colSpan={6} className="h-48 text-center text-sm text-slate-500">
         <div className="flex flex-col items-center justify-center gap-2">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span>Loading currencies...</span>
+          <span>{t('business:currencies.loading')}</span>
         </div>
       </TableCell>
     </TableRow>
@@ -176,12 +179,13 @@ function LoadingRow() {
 }
 
 function ErrorRow() {
+  const { t } = useTranslation(['business'])
   return (
     <TableRow>
       <TableCell colSpan={6} className="h-48 text-center">
         <div className="flex flex-col items-center text-red-500">
           <AlertCircle className="mb-2 h-8 w-8" />
-          <p className="text-sm font-medium">Failed to load currencies</p>
+          <p className="text-sm font-medium">{t('business:currencies.loadError')}</p>
         </div>
       </TableCell>
     </TableRow>
@@ -189,6 +193,7 @@ function ErrorRow() {
 }
 
 function EmptyRow({ onAdd }: { onAdd: () => void }) {
+  const { t } = useTranslation(['business'])
   return (
     <TableRow>
       <TableCell colSpan={6} className="h-56 text-center">
@@ -197,11 +202,11 @@ function EmptyRow({ onAdd }: { onAdd: () => void }) {
             <Coins className="h-6 w-6 text-slate-400" />
           </div>
           <div>
-            <p className="font-medium text-slate-800 dark:text-slate-200">No currencies found</p>
-            <p className="mt-1 text-sm text-slate-500">Create your first currency to get started.</p>
+            <p className="font-medium text-slate-800 dark:text-slate-200">{t('business:currencies.emptyTitle')}</p>
+            <p className="mt-1 text-sm text-slate-500">{t('business:currencies.emptyDesc')}</p>
           </div>
-          <Button size="sm" className="bg-primarytext-primary-foregroundhover:bg-primary/90" onClick={onAdd}>
-            <Plus className="h-4 w-4" /> Add currency
+          <Button size="sm" onClick={onAdd}>
+            <Plus className="h-4 w-4" /> {t('business:currencies.addCurrency')}
           </Button>
         </div>
       </TableCell>

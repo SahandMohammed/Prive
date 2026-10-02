@@ -228,5 +228,5 @@ export const apiClient = {
     unwrap<T>(rawClient.post<ApiEnvelope<T>>(url, body, branchConfig())),
   put: <T>(url: string, body?: unknown) =>
     unwrap<T>(rawClient.put<ApiEnvelope<T>>(url, body, branchConfig())),
-  delete: <T>(url: string) => unwrap<T>(rawClient.delete<ApiEnvelope<T>>(url, branchConfig())),
+  delete: <T>(url: string, body?: unknown) => unwrap<T>(rawClient.delete<ApiEnvelope<T>>(url, { ...branchConfig(), data: body })),
 }

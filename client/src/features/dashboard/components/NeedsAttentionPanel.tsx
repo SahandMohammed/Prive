@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { DashboardSummary } from '../types/dashboard.types'
 import { AlertCircle, ChevronRight, PackageX, FileText, ReceiptText } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface NeedsAttentionPanelProps {
   summary?: DashboardSummary
@@ -8,6 +9,7 @@ interface NeedsAttentionPanelProps {
 }
 
 export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelProps) {
+  const { t } = useTranslation(['dashboard', 'common'])
   if (isLoading || !summary) {
     return (
       <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
@@ -29,9 +31,9 @@ export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelP
 
   const items = [
     {
-      title: 'Out of Stock Products',
+      title: t('dashboard:outOfStock'),
       count: outOfStockCount,
-      label: outOfStockCount === 1 ? 'item out of stock' : 'items out of stock',
+      label: outOfStockCount === 1 ? 'item out of stock' : t('dashboard:itemsOutOfStock'),
       icon: PackageX,
       href: '/inventory/products',
       urgent: outOfStockCount > 0,
@@ -41,12 +43,12 @@ export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelP
           : 'bg-muted text-muted-foreground',
     },
     {
-      title: 'Customer Receivables',
+      title: t('dashboard:customerReceivables'),
       count: customerOutstandingInvoiceCount,
       label:
         customerOutstandingInvoiceCount === 1
           ? 'unpaid sales invoice'
-          : 'unpaid sales invoices',
+          : t('dashboard:unpaidInvoices'),
       icon: FileText,
       href: '/sales/invoices',
       urgent: customerOutstandingInvoiceCount > 0,
@@ -56,12 +58,12 @@ export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelP
           : 'bg-muted text-muted-foreground',
     },
     {
-      title: 'Supplier Payables',
+      title: t('dashboard:supplierPayables'),
       count: supplierOutstandingInvoiceCount,
       label:
         supplierOutstandingInvoiceCount === 1
           ? 'unpaid purchase bill'
-          : 'unpaid purchase bills',
+          : t('dashboard:unpaidBills'),
       icon: ReceiptText,
       href: '/purchases/invoices',
       urgent: supplierOutstandingInvoiceCount > 0,
@@ -79,7 +81,7 @@ export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelP
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-bold font-heading text-foreground">
-            Needs Attention
+            {t('dashboard:needsAttention')}
           </h2>
           {totalUrgent > 0 && (
             <span className="flex size-2 rounded-full bg-rose-500 animate-pulse" />
@@ -124,10 +126,11 @@ export function NeedsAttentionPanel({ summary, isLoading }: NeedsAttentionPanelP
                 >
                   {item.count}
                 </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary group-hover:ltr:translate-x-0.5 group-hover:rtl:-translate-x-0.5 rtl:rotate-180 transition-all" />
               </div>
             </Link>
           )
+
         })}
       </div>
     </div>

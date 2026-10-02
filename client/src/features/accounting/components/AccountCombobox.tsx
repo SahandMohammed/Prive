@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown, X } from 'lucide-react'
 import {
   accountClassificationLabels,
@@ -22,8 +23,10 @@ export function AccountCombobox({
   onChange,
   disabled = false,
   error = false,
-  placeholder = 'Type code or name...',
+  placeholder,
 }: AccountComboboxProps) {
+  const { t } = useTranslation(['accounting', 'common'])
+  const resolvedPlaceholder = placeholder ?? t('accounting:combobox.placeholder')
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -41,6 +44,7 @@ export function AccountCombobox({
   // Sync display text when value changes from outside or reset
   useEffect(() => {
     if (selectedAccount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors an externally controlled value in the input label.
       setQuery(`${selectedAccount.code} — ${selectedAccount.name}`)
     } else if (!value) {
       setQuery('')
@@ -86,6 +90,7 @@ export function AccountCombobox({
 
   // Reset highlight index when results change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keeps keyboard selection valid after the result list changes.
     setHighlightedIndex(0)
   }, [filteredAccounts.length])
 
@@ -185,7 +190,7 @@ export function AccountCombobox({
           type="text"
           value={query}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           onFocus={() => {
             setOpen(true)
             updatePosition()
@@ -199,12 +204,12 @@ export function AccountCombobox({
             }
           }}
           onKeyDown={handleKeyDown}
-          className={`h-9 w-full rounded-md border bg-white pl-2.5 pr-14 text-xs shadow-xs outline-none transition-colors placeholder:text-slate-400 focus:border-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:focus:border-slate-600 ${
+          className={`h-9 w-full rounded-md border bg-white ps-2.5 pe-14 text-xs shadow-xs outline-none transition-colors placeholder:text-slate-400 focus:border-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:focus:border-slate-600 ${
             error ? 'border-rose-400 dark:border-rose-600' : 'border-slate-200'
           } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         />
 
-        <div className="absolute right-2 flex items-center gap-1">
+        <div className="absolute end-2 flex items-center gap-1">
           {query && !disabled && (
             <button
               type="button"
@@ -253,7 +258,7 @@ export function AccountCombobox({
           >
             {filteredAccounts.length === 0 ? (
               <div className="p-3 text-center text-slate-400">
-                No matching accounts found.
+                {t('accounting:combobox.noAccountsFound')}
               </div>
             ) : (
               filteredAccounts.map((account, index) => {
@@ -301,41 +306,46 @@ export function AccountCombobox({
 }
 
 function ClassificationPill({ classification }: { classification: AccountClassification }) {
+  const { t } = useTranslation('accounting')
+  const label = t(`classificationPills.${classification}`, {
+    defaultValue: accountClassificationLabels[classification] ?? '',
+  })
+
   switch (classification) {
     case 0:
       return (
         <span className="inline-flex rounded bg-emerald-50 px-1.5 py-0.2 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-          Asset
+          {label}
         </span>
       )
     case 1:
       return (
         <span className="inline-flex rounded bg-amber-50 px-1.5 py-0.2 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-          Liab
+          {label}
         </span>
       )
     case 2:
       return (
         <span className="inline-flex rounded bg-purple-50 px-1.5 py-0.2 text-[10px] font-medium text-purple-700 dark:bg-purple-950/40 dark:text-purple-400">
-          Equity
+          {label}
         </span>
       )
     case 3:
       return (
         <span className="inline-flex rounded bg-indigo-50 px-1.5 py-0.2 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
-          Rev
+          {label}
         </span>
       )
     case 4:
       return (
         <span className="inline-flex rounded bg-rose-50 px-1.5 py-0.2 text-[10px] font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
-          Exp
+          {label}
         </span>
       )
     case 5:
       return (
         <span className="inline-flex rounded bg-cyan-50 px-1.5 py-0.2 text-[10px] font-medium text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400">
-          Contra
+          {label}
         </span>
       )
     default:

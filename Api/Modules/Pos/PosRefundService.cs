@@ -1,4 +1,7 @@
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Finance;
@@ -7,6 +10,7 @@ using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Pagination;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Pos;
@@ -15,28 +19,27 @@ public sealed class PosRefundService
 {
   private readonly AppDbContext _db;
   private readonly FinanceService _finance;
-  private readonly PosSessionService _sessions;
 
-  public PosRefundService(AppDbContext db, FinanceService finance, PosSessionService sessions)
+  public PosRefundService(AppDbContext db, FinanceService finance)
   {
     _db = db;
     _finance = finance;
-    _sessions = sessions;
   }
 
-  public async Task<PosRefundabilityResponse> GetRefundabilityAsync(Guid saleId, CancellationToken ct)
+  public async Task<PosRefundabilityResponse> GetRefundabilityAsync(Guid salesInvoiceId, CancellationToken ct)
   {
     var sale = await RefundableSaleQuery(trackChanges: false)
-      .SingleOrDefaultAsync(item => item.Id == saleId, ct) ?? throw SaleNotFound();
+      .SingleOrDefaultAsync(item => item.SalesInvoiceId == salesInvoiceId, ct) ?? throw SaleNotFound();
     return BuildRefundability(sale);
   }
 
   public async Task<PagedResult<PosRefundSummaryResponse>> GetSaleRefundsAsync(
     Guid saleId, PosRefundListQuery request, CancellationToken ct)
   {
-    if (!await _db.PosSales.AsNoTracking().AnyAsync(sale => sale.Id == saleId, ct)) throw SaleNotFound();
+    if (!await _db.PosContexts.AsNoTracking()
+      .AnyAsync(context => context.SalesInvoiceId == saleId && !context.SalesInvoice.IsDeleted, ct)) throw SaleNotFound();
     return await _db.PosRefunds.AsNoTracking()
-      .Where(refund => refund.PosSaleId == saleId && refund.Status == PosRefundStatus.Posted)
+      .Where(refund => refund.SalesInvoiceId == saleId && refund.Status == PosRefundStatus.Posted)
       .OrderBy(refund => refund.PostedAtUtc)
       .Select(refund => new PosRefundSummaryResponse(
         refund.Id, refund.DocumentNumber, refund.IsVoid, refund.Reason,
@@ -57,37 +60,53 @@ public sealed class PosRefundService
     CreatePosRefundRequest request,
     Guid userId,
     CancellationToken ct) => PostWithConflictHandlingAsync(
-      saleId, request.PosSessionId, request.Reason, request.Notes,
-      request.Lines, request.RefundTenders, isVoid: false, null, userId, ct);
+      saleId, request.Reason, request.Notes,
+      request.Lines, request.RefundPayouts, isVoid: false, null, request.ClientRequestId, userId, ct);
 
   public Task<PosRefundResponse> VoidRemainingAsync(
     Guid saleId,
     VoidPosSaleRequest request,
     Guid userId,
     CancellationToken ct) => PostWithConflictHandlingAsync(
-      saleId, request.PosSessionId, request.Reason, request.Notes,
-      null, request.RefundTenders, isVoid: true, request.RestockSalesInvoiceLineIds.ToHashSet(), userId, ct);
+      saleId, request.Reason, request.Notes,
+      null, request.RefundPayouts, isVoid: true, request.RestockSalesInvoiceLineIds.ToHashSet(), request.ClientRequestId, userId, ct);
 
   private async Task<PosRefundResponse> PostWithConflictHandlingAsync(
     Guid saleId,
-    Guid sessionId,
     PosRefundReason reason,
     string? notes,
     List<PosRefundLineRequest>? requestedLines,
-    List<PosRefundTenderRequest> tenderRequests,
+    List<PosRefundPayoutRequest> payoutRequests,
     bool isVoid,
     HashSet<Guid>? restockLineIds,
+    Guid clientRequestId,
     Guid userId,
     CancellationToken ct)
   {
+    // Internal callers predate the HTTP idempotency contract. The controller enforces it for public requests.
+    if (clientRequestId == Guid.Empty) clientRequestId = Guid.NewGuid();
+    var fingerprint = Fingerprint(saleId, reason, notes, requestedLines, payoutRequests, isVoid, restockLineIds);
+    PosRefundResponse? existing;
     try
     {
-      return await PostCoreAsync(
-        saleId, sessionId, reason, notes, requestedLines, tenderRequests,
-        isVoid, restockLineIds, userId, ct);
+      existing = await FindIdempotentRefundAsync(clientRequestId, fingerprint, ct);
     }
     catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
+      throw new ConflictException(ErrorCodes.Pos.RefundConcurrencyConflict,
+        "Another refund changed the remaining refundable quantity. Refresh the sale and try again.");
+    }
+    if (existing is not null) return existing;
+    try
+    {
+      return await PostCoreAsync(
+        saleId, reason, notes, requestedLines, payoutRequests,
+        isVoid, restockLineIds, clientRequestId, fingerprint, userId, ct);
+    }
+    catch (Exception exception) when (PosConcurrency.IsConflict(exception))
+    {
+      existing = await FindIdempotentRefundAsync(clientRequestId, fingerprint, ct);
+      if (existing is not null) return existing;
       throw new ConflictException(ErrorCodes.Pos.RefundConcurrencyConflict,
         "Another refund changed the remaining refundable quantity. Refresh the sale and try again.");
     }
@@ -95,13 +114,14 @@ public sealed class PosRefundService
 
   private async Task<PosRefundResponse> PostCoreAsync(
     Guid saleId,
-    Guid sessionId,
     PosRefundReason reason,
     string? notes,
     List<PosRefundLineRequest>? requestedLines,
-    List<PosRefundTenderRequest> tenderRequests,
+    List<PosRefundPayoutRequest> payoutRequests,
     bool isVoid,
     HashSet<Guid>? restockLineIds,
+    Guid clientRequestId,
+    string fingerprint,
     Guid userId,
     CancellationToken ct)
   {
@@ -109,22 +129,20 @@ public sealed class PosRefundService
     await RequireManagementAsync(userId, ct);
     var branchId = _db.SelectedBranchId
       ?? throw new BadRequestException(ErrorCodes.Branch.SelectionRequired, "Select a branch before using POS.");
-    if (sessionId == Guid.Empty)
-      throw new BadRequestException(ErrorCodes.Pos.RefundSessionRequired, "Open a POS Session before posting a refund.");
-
     await using var transaction = _db.Database.IsRelational()
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
-    await _sessions.RequireOpenSessionAsync(userId, sessionId, branchId, ct);
+    var existing = await FindIdempotentRefundAsync(clientRequestId, fingerprint, ct);
+    if (existing is not null) return existing;
     if (_db.Database.IsRelational())
       await _db.Database.ExecuteSqlInterpolatedAsync(
-        $"SELECT \"Id\" FROM pos_sales WHERE \"Id\" = {saleId} FOR UPDATE", ct);
+        $"SELECT \"SalesInvoiceId\" FROM pos_contexts WHERE \"SalesInvoiceId\" = {saleId} FOR UPDATE", ct);
 
     var sale = await RefundableSaleQuery(trackChanges: true)
-      .SingleOrDefaultAsync(item => item.Id == saleId, ct) ?? throw SaleNotFound();
-    if (sale.Status != PosSaleStatus.Completed || sale.SalesInvoice.Status != SalesInvoiceStatus.Posted)
+      .SingleOrDefaultAsync(item => item.SalesInvoiceId == saleId, ct) ?? throw SaleNotFound();
+    if (sale.SalesInvoice.Status != SalesInvoiceStatus.Posted)
       throw new BadRequestException(ErrorCodes.Pos.RefundNothingAvailable,
-        "Only a completed POS Sale with a posted Sales Invoice can be refunded.");
+        "Only a completed POS Sale with an active Sales Invoice can be refunded.");
     if (sale.SalesInvoice.BranchId != branchId)
       throw new ForbiddenException(ErrorCodes.Branch.ScopeMismatch,
         "The POS Sale belongs to a different branch workspace.");
@@ -200,10 +218,12 @@ public sealed class PosRefundService
       throw new BadRequestException(ErrorCodes.Pos.RefundAccountMappingInvalid,
         "The original receivable account snapshot is unavailable for this Sale.");
 
-    var tenderPostings = await ValidateTendersAsync(
-      tenderRequests, cashRefundBase, branchId, sale.SalesInvoice.BaseCurrencyId, userId, ct);
+    var payoutPostings = await ValidatePayoutsAsync(
+      payoutRequests, cashRefundBase, branchId, sale.SalesInvoice.BaseCurrencyId, userId, ct);
     var now = DateTime.UtcNow;
-    var date = DateOnly.FromDateTime(now);
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw new BadRequestException(ErrorCodes.Pos.BusinessNotConfigured, "Complete Business Setup before using POS.");
+    var date = BusinessTime.DateAt(business, now);
     var documentNumber = await NextDocumentNumberAsync(ct);
 
     var journalLines = postings.GroupBy(posting => posting.Original.RevenueAccountId!.Value)
@@ -217,16 +237,16 @@ public sealed class PosRefundService
         sale.SalesInvoice.AccountsReceivableAccountId!.Value,
         sale.SalesInvoice.BaseCurrencyId, 0, receivableReversalBase,
         $"Receivable reduction on {documentNumber}"));
-    foreach (var tender in tenderPostings)
+    foreach (var payout in payoutPostings)
     {
       journalLines.Add(new JournalLineEntity
       {
-        AccountId = tender.Account.AccountingAccountId,
-        Description = $"Refund paid from {tender.Account.Code}",
-        CurrencyId = tender.Account.CurrencyId,
-        ExchangeRate = tender.ExchangeRate,
-        OriginalCreditAmount = tender.Request.Amount,
-        CreditBaseAmount = tender.BaseAmount
+        AccountId = payout.Account.AccountingAccountId,
+        Description = $"Refund paid from {payout.Account.Code}",
+        CurrencyId = payout.Account.CurrencyId,
+        ExchangeRate = payout.ExchangeRate,
+        OriginalCreditAmount = payout.Request.Amount,
+        CreditBaseAmount = payout.BaseAmount
       });
     }
 
@@ -256,7 +276,7 @@ public sealed class PosRefundService
     {
       EntryDate = date,
       Reference = documentNumber,
-      Description = $"POS {(isVoid ? "void" : "refund")} {documentNumber} for {sale.DocumentNumber}",
+      Description = $"POS {(isVoid ? "void" : "refund")} {documentNumber} for {sale.SalesInvoice.DocumentNumber}",
       BranchId = branchId,
       Status = JournalEntryStatus.Posted,
       Type = JournalEntryType.Reversal,
@@ -266,10 +286,9 @@ public sealed class PosRefundService
     var refund = new PosRefundEntity
     {
       DocumentNumber = documentNumber,
-      PosSaleId = sale.Id,
       SalesInvoiceId = sale.SalesInvoiceId,
+      PosContext = sale,
       BranchId = branchId,
-      PosSessionId = sessionId,
       CustomerId = sale.SalesInvoice.CustomerId,
       Reason = reason,
       Notes = Trim(notes),
@@ -282,7 +301,9 @@ public sealed class PosRefundService
       ApprovedByUserId = userId,
       CreatedAtUtc = now,
       PostedAtUtc = now,
-      JournalEntry = journal
+      JournalEntry = journal,
+      ClientRequestId = clientRequestId,
+      RequestFingerprint = fingerprint
     };
 
     foreach (var posting in postings)
@@ -294,13 +315,13 @@ public sealed class PosRefundService
         ServiceId = posting.Original.ServiceId,
         ProductId = posting.Original.ProductId,
         UnitOfMeasureId = posting.Original.UnitOfMeasureId,
-        ProfessionalUserId = posting.Original.ProfessionalUserId,
+        ProfessionalId = posting.Original.ProfessionalId,
         Description = posting.Original.Description
           ?? posting.Original.Service?.Name
           ?? posting.Original.Product?.Name
           ?? "Sale line",
         UnitCode = posting.Original.UnitOfMeasure?.Code,
-        ProfessionalUsername = posting.Original.ProfessionalUser?.Username,
+        ProfessionalName = posting.Original.Professional?.Name,
         Quantity = posting.Quantity,
         BaseQuantity = posting.BaseQuantity,
         RefundAmountBase = posting.RefundAmountBase,
@@ -335,19 +356,19 @@ public sealed class PosRefundService
       }
     }
 
-    foreach (var tender in tenderPostings)
+    foreach (var payout in payoutPostings)
     {
       var ledger = FinanceService.LedgerEntry(
-        tender.Account, date, MoneyLedgerSourceType.PosRefund, refund.Id, documentNumber,
-        -tender.Request.Amount, -tender.BaseAmount, sale.SalesInvoice.BaseCurrencyId,
-        tender.ExchangeRate, journal.Id, userId, notes, now);
-      refund.Tenders.Add(new PosRefundTenderEntity
+        payout.Account, date, MoneyLedgerSourceType.PosRefund, refund.Id, documentNumber,
+        -payout.Request.Amount, -payout.BaseAmount, sale.SalesInvoice.BaseCurrencyId,
+        payout.ExchangeRate, journal.Id, userId, notes, now);
+      refund.RefundPayouts.Add(new PosRefundPayoutEntity
       {
-        Sequence = tender.Sequence,
-        MoneyAccountId = tender.Account.Id,
-        Amount = tender.Request.Amount,
-        ExchangeRate = tender.ExchangeRate,
-        BaseAmount = tender.BaseAmount,
+        Sequence = payout.Sequence,
+        MoneyAccountId = payout.Account.Id,
+        Amount = payout.Request.Amount,
+        ExchangeRate = payout.ExchangeRate,
+        BaseAmount = payout.BaseAmount,
         MoneyLedgerEntry = ledger
       });
       _db.MoneyLedgerEntries.Add(ledger);
@@ -360,8 +381,8 @@ public sealed class PosRefundService
     return await GetRefundAsync(refund.Id, ct);
   }
 
-  private async Task<List<RefundTenderPosting>> ValidateTendersAsync(
-    List<PosRefundTenderRequest> requests,
+  private async Task<List<RefundPayoutPosting>> ValidatePayoutsAsync(
+    List<PosRefundPayoutRequest> requests,
     decimal requiredBase,
     Guid branchId,
     Guid baseCurrencyId,
@@ -373,10 +394,10 @@ public sealed class PosRefundService
       throw new BadRequestException(ErrorCodes.Pos.RefundMoneyAccountInvalid,
         "Each refund Money Account may appear once with an amount greater than zero.");
     if (requiredBase == 0 && requests.Count > 0)
-      throw new BadRequestException(ErrorCodes.Pos.RefundTenderMismatch,
+      throw new BadRequestException(ErrorCodes.Pos.RefundPayoutMismatch,
         "This refund only reduces Accounts Receivable and must not return physical money.");
     if (requiredBase > 0 && requests.Count == 0)
-      throw new BadRequestException(ErrorCodes.Pos.RefundTenderMismatch,
+      throw new BadRequestException(ErrorCodes.Pos.RefundPayoutMismatch,
         $"Select Money Accounts for the {requiredBase} base-currency physical refund.");
 
     foreach (var request in requests)
@@ -398,7 +419,7 @@ public sealed class PosRefundService
         "Every physical refund must use an existing Money Account.");
 
     var now = DateTime.UtcNow;
-    var postings = new List<RefundTenderPosting>();
+    var postings = new List<RefundPayoutPosting>();
     for (var index = 0; index < requests.Count; index++)
     {
       var request = requests[index];
@@ -413,26 +434,25 @@ public sealed class PosRefundService
       if (balance < request.Amount)
         throw new BadRequestException(ErrorCodes.Pos.RefundInsufficientBalance,
           $"Money Account '{account.Code}' does not have enough physical balance for this refund.");
-      postings.Add(new RefundTenderPosting(index + 1, request, account, rate, baseAmount));
+      postings.Add(new RefundPayoutPosting(index + 1, request, account, rate, baseAmount));
     }
     if (Money(postings.Sum(posting => posting.BaseAmount)) != requiredBase)
-      throw new BadRequestException(ErrorCodes.Pos.RefundTenderMismatch,
+      throw new BadRequestException(ErrorCodes.Pos.RefundPayoutMismatch,
         $"Refund Money Account equivalents must equal exactly {requiredBase} in the base currency.");
     return postings;
   }
 
-  private IQueryable<PosSaleEntity> RefundableSaleQuery(bool trackChanges)
+  private IQueryable<PosContextEntity> RefundableSaleQuery(bool trackChanges)
   {
-    var query = _db.PosSales
-      .Include(sale => sale.CashierUser)
-      .Include(sale => sale.Tenders)
-      .Include(sale => sale.Change)
+    var query = _db.PosContexts
+      .Where(sale => !sale.SalesInvoice.IsDeleted)
+      .Include(sale => sale.OperatorUser)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Customer)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Branch)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Warehouse)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
-      .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.ReceiptAllocations)
-        .ThenInclude(allocation => allocation.CustomerReceipt)
+      .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.PaymentAllocations)
+        .ThenInclude(allocation => allocation.Payment)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
         .ThenInclude(line => line.Service)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
@@ -440,7 +460,7 @@ public sealed class PosRefundService
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
         .ThenInclude(line => line.UnitOfMeasure)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
-        .ThenInclude(line => line.ProfessionalUser)
+        .ThenInclude(line => line.Professional)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
         .ThenInclude(line => line.Movements)
       .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines)
@@ -451,30 +471,26 @@ public sealed class PosRefundService
   }
 
   private IQueryable<PosRefundEntity> RefundQuery() => _db.PosRefunds.AsNoTracking()
-    .Include(refund => refund.PosSale)
-    .Include(refund => refund.SalesInvoice)
+    .Include(refund => refund.PosContext)
+    .Include(refund => refund.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(refund => refund.Branch)
-    .Include(refund => refund.PosSession)
     .Include(refund => refund.Customer)
     .Include(refund => refund.CreatedByUser)
     .Include(refund => refund.ApprovedByUser)
     .Include(refund => refund.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
     .Include(refund => refund.Lines).ThenInclude(line => line.StockMovements)
-    .Include(refund => refund.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency);
+    .Include(refund => refund.RefundPayouts).ThenInclude(payout => payout.MoneyAccount).ThenInclude(account => account.Currency);
 
-  private static PosRefundabilityResponse BuildRefundability(PosSaleEntity sale)
+  private static PosRefundabilityResponse BuildRefundability(PosContextEntity sale)
   {
     var postedRefunds = sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).ToList();
     var refundedBase = Money(postedRefunds.Sum(refund => refund.TotalRefundBase));
     var remainingBase = Math.Max(Money(sale.SalesInvoice.BaseTotal - refundedBase), 0);
     var refundState = RefundState(refundedBase, sale.SalesInvoice.BaseTotal);
-    var settledBase = Money(sale.Tenders.Sum(tender => tender.BaseAmount) - (sale.Change?.BaseAmount ?? 0));
-    var receiptsBase = Money(sale.SalesInvoice.ReceiptAllocations
-      .Where(allocation => allocation.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
-      .Sum(allocation => allocation.BaseAmount));
+    var collectedBase = Money(sale.SalesInvoice.PaymentAllocations.Sum(allocation => allocation.BaseAmount));
     var priorReceivableReversal = Money(postedRefunds.Sum(refund => refund.ReceivableReversalBase));
     var outstandingBase = Math.Max(
-      Money(sale.SalesInvoice.BaseTotal - settledBase - receiptsBase - priorReceivableReversal), 0);
+      Money(sale.SalesInvoice.BaseTotal - collectedBase - priorReceivableReversal), 0);
 
     var lines = sale.SalesInvoice.Lines.OrderBy(line => line.LineType).ThenBy(line => line.Id).Select(line =>
     {
@@ -487,27 +503,26 @@ public sealed class PosRefundService
       return new PosRefundabilityLineResponse(
         line.Id, line.LineType,
         line.Description ?? line.Service?.Name ?? line.Product?.Name ?? "Sale line",
-        line.Product?.SKU, line.UnitOfMeasure?.Code, line.ProfessionalUser?.Username,
+        line.Product?.SKU, line.UnitOfMeasure?.Code, line.Professional?.Name,
         line.Quantity, refundedQuantity, Math.Max(Quantity(line.Quantity - refundedQuantity), 0),
         line.BaseLineAmount, refundedAmount, Math.Max(Money(line.BaseLineAmount - refundedAmount), 0),
         line.LineType == SalesLineType.Product && sale.SalesInvoice.WarehouseId is not null);
     }).ToList();
 
     return new PosRefundabilityResponse(
-      sale.Id, sale.DocumentNumber, sale.SalesInvoiceId, sale.SalesInvoice.DocumentNumber,
-      sale.SalesInvoice.BranchId, sale.SalesInvoice.CustomerId, sale.SalesInvoice.Customer?.Name,
-      sale.SalesInvoice.WarehouseId, sale.CompletedAtUtc, sale.CashierUser.Username,
+      sale.SalesInvoiceId, sale.SalesInvoice.DocumentNumber,
+      sale.SalesInvoice.BranchId, sale.SalesInvoice.CustomerId, sale.SalesInvoice.Customer.Name,
+      sale.SalesInvoice.WarehouseId, sale.CompletedAtUtc, sale.OperatorUser.Username,
       sale.SalesInvoice.BaseTotal, refundedBase, remainingBase, outstandingBase, refundState,
       sale.SalesInvoice.BaseCurrencyId, sale.SalesInvoice.BaseCurrency.Code, lines,
       postedRefunds.OrderBy(refund => refund.PostedAtUtc).Select(ToSummary).ToList());
   }
 
   private static PosRefundResponse ToResponse(PosRefundEntity refund) => new(
-    refund.Id, refund.DocumentNumber, refund.PosSaleId, refund.PosSale.DocumentNumber,
-    refund.SalesInvoiceId, refund.SalesInvoice.DocumentNumber,
+    refund.Id, refund.DocumentNumber, refund.SalesInvoiceId, refund.SalesInvoice.DocumentNumber,
     refund.BranchId, refund.Branch.Code, refund.Branch.Name,
-    refund.PosSessionId, refund.PosSession.SessionNumber,
-    refund.CustomerId, refund.Customer?.Name, refund.Reason, refund.Notes, refund.IsVoid, refund.Status,
+    refund.SalesInvoice.CustomerId, refund.SalesInvoice.Customer.Name,
+    refund.Reason, refund.Notes, refund.IsVoid, refund.Status,
     refund.TotalRefundBase, refund.ReceivableReversalBase, refund.CashRefundBase,
     refund.SalesInvoice.BaseCurrencyId, refund.SalesInvoice.BaseCurrency.Code,
     refund.CreatedByUserId, refund.CreatedByUser.Username,
@@ -515,13 +530,13 @@ public sealed class PosRefundService
     refund.CreatedAtUtc, refund.PostedAtUtc, refund.JournalEntryId,
     refund.Lines.OrderBy(line => line.Id).Select(line => new PosRefundLineResponse(
       line.Id, line.OriginalSalesInvoiceLineId, line.LineType, line.Description,
-      line.UnitCode, line.ProfessionalUsername, line.Quantity, line.BaseQuantity,
+      line.UnitCode, line.ProfessionalName, line.Quantity, line.BaseQuantity,
       line.RefundAmountBase, line.RestockProduct, line.OriginalUnitCostBase,
       line.StockMovements.OrderBy(movement => movement.Id).Select(movement => movement.Id).ToList())).ToList(),
-    refund.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosRefundTenderResponse(
-      tender.Id, tender.Sequence, tender.MoneyAccountId, tender.MoneyAccount.Code, tender.MoneyAccount.Name,
-      tender.MoneyAccount.CurrencyId, tender.MoneyAccount.Currency.Code,
-      tender.Amount, tender.ExchangeRate, tender.BaseAmount, tender.MoneyLedgerEntryId)).ToList());
+    refund.RefundPayouts.OrderBy(line => line.Sequence).Select(line => new PosRefundPayoutResponse(
+      line.Id, line.Sequence, line.MoneyAccountId, line.MoneyAccount.Code, line.MoneyAccount.Name,
+      line.MoneyAccount.CurrencyId, line.MoneyAccount.Currency.Code,
+      line.Amount, line.ExchangeRate, line.BaseAmount, line.MoneyLedgerEntryId)).ToList());
 
   private static PosRefundSummaryResponse ToSummary(PosRefundEntity refund) => new(
     refund.Id, refund.DocumentNumber, refund.IsVoid, refund.Reason,
@@ -592,6 +607,31 @@ public sealed class PosRefundService
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
   private static decimal Quantity(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
 
+  private async Task<PosRefundResponse?> FindIdempotentRefundAsync(Guid clientRequestId, string fingerprint, CancellationToken ct)
+  {
+    var existing = await _db.PosRefunds.AsNoTracking().SingleOrDefaultAsync(refund => refund.ClientRequestId == clientRequestId, ct);
+    if (existing is null) return null;
+    if (!string.Equals(existing.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+      throw new ConflictException(ErrorCodes.Pos.IdempotencyKeyReused,
+        "This client request ID was already used with different refund or void data.");
+    return await GetRefundAsync(existing.Id, ct);
+  }
+
+  private static string Fingerprint(Guid saleId, PosRefundReason reason, string? notes,
+    List<PosRefundLineRequest>? lines, List<PosRefundPayoutRequest> payouts, bool isVoid, HashSet<Guid>? restockLines) =>
+    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+    {
+      saleId,
+      reason,
+      notes = Trim(notes),
+      Lines = lines?.OrderBy(line => line.SalesInvoiceLineId)
+        .Select(line => new { line.SalesInvoiceLineId, line.Quantity, line.RestockProduct }),
+      RefundPayouts = payouts.OrderBy(line => line.MoneyAccountId).ThenBy(line => line.Amount)
+        .Select(line => new { line.MoneyAccountId, line.Amount }),
+      isVoid,
+      RestockLineIds = restockLines?.Order().ToList()
+    }))));
+
   private sealed record RefundLinePosting(
     SalesInvoiceLineEntity Original,
     decimal Quantity,
@@ -600,9 +640,9 @@ public sealed class PosRefundService
     bool RestockProduct,
     decimal? OriginalUnitCostBase);
 
-  private sealed record RefundTenderPosting(
+  private sealed record RefundPayoutPosting(
     int Sequence,
-    PosRefundTenderRequest Request,
+    PosRefundPayoutRequest Request,
     MoneyAccountEntity Account,
     decimal ExchangeRate,
     decimal BaseAmount);

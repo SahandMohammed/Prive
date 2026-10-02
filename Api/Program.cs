@@ -15,6 +15,7 @@ using Api.Modules.Sales;
 using Api.Modules.Pos;
 using Api.Modules.Expenses;
 using Api.Modules.Dashboard;
+using Api.Modules.Professional;
 using Api.Shared.Persistence;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -240,6 +241,7 @@ try
 
   builder.Services
     .AddUserModule()
+    .AddProfessionalModule()
     .AddAuthModule()
     .AddBusinessModule()
     .AddBranchModule()

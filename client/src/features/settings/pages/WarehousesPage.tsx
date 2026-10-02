@@ -49,7 +49,7 @@ export function WarehousesPage() {
           <p className="mt-1 text-sm text-slate-500">Manage the locations used for inventory movement and fulfillment.</p>
         </div>
         <Button
-          className="gap-1.5 bg-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-primary/90"
+          className="gap-1.5"
           onClick={() => setIsCreateOpen(true)}
         >
           <Plus className="h-4 w-4 stroke-[2.5]" />
@@ -191,7 +191,6 @@ function CreateWarehouseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             <Button type="button" variant="outline" onClick={close} disabled={createWarehouse.isPending}>Cancel</Button>
             <Button
               type="submit"
-              className="bg-primarytext-primary-foregroundhover:bg-primary/90"
               disabled={createWarehouse.isPending || branchQuery.isLoading || branches.length === 0}
             >
               {createWarehouse.isPending ? 'Creating...' : 'Create warehouse'}

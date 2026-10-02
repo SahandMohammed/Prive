@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 interface GoalItem {
   name: string
   percent: number
@@ -10,33 +12,34 @@ interface MonthlyGoalsCardProps {
   isLoading?: boolean
 }
 
-export function MonthlyGoalsCard({ isLoading: _isLoading }: MonthlyGoalsCardProps) {
+export function MonthlyGoalsCard({ isLoading }: MonthlyGoalsCardProps) {
+  const { t } = useTranslation(['dashboard', 'common'])
   const goals: GoalItem[] = [
     {
-      name: 'Monthly Revenue',
+      name: t('dashboard:monthlyRevenue'),
       percent: 88,
       color: '#EA580C',
       current: '48,295',
       target: '55,000',
     },
     {
-      name: 'New Customers',
+      name: t('dashboard:newCustomers'),
       percent: 85,
       color: '#0D9488',
       current: '847',
     },
     {
-      name: 'Conversion Rate',
+      name: t('dashboard:conversionRate'),
       percent: 76,
       color: '#0284C7',
     },
   ]
 
   return (
-    <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
+    <div aria-busy={isLoading || undefined} className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
       <div className="mb-4">
-        <h2 className="text-base font-bold font-heading text-foreground">Monthly Goals</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">Track progress toward targets</p>
+        <h2 className="text-base font-bold font-heading text-foreground">{t('dashboard:monthlyGoals')}</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard:trackProgress')}</p>
       </div>
 
       <div className="space-y-4">
@@ -63,11 +66,12 @@ export function MonthlyGoalsCard({ isLoading: _isLoading }: MonthlyGoalsCardProp
             {(goal.current || goal.target) && (
               <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
                 {goal.current && <span>{goal.current}</span>}
-                {goal.target && <span className="ml-auto">Target: {goal.target}</span>}
+                {goal.target && <span className="ms-auto">{t('dashboard:target')}: {goal.target}</span>}
               </div>
             )}
           </div>
         ))}
+
       </div>
     </div>
   )

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/dialog'
 
 export function ChangePasswordDialog({ children }: { children?: React.ReactElement }) {
+  const { t } = useTranslation(['auth', 'common'])
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const clearSession = useAuthSessionStore((s) => s.clearSession)
@@ -53,46 +55,46 @@ export function ChangePasswordDialog({ children }: { children?: React.ReactEleme
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={children || <Button variant="outline">Change Password</Button>} />
+      <DialogTrigger render={children || <Button variant="outline">{t('auth:changePassword.trigger')}</Button>} />
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Change Password</DialogTitle>
+          <DialogTitle>{t('auth:changePassword.title')}</DialogTitle>
           <DialogDescription>
-            Enter your current password and choose a new one. You will be logged out upon success.
+            {t('auth:changePassword.description')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current password</Label>
+            <Label htmlFor="currentPassword">{t('auth:changePassword.currentPassword')}</Label>
             <Input
               id="currentPassword"
               type="password"
               {...register('currentPassword')}
-              placeholder="Enter current password"
+              placeholder={t('auth:changePassword.currentPasswordPlaceholder')}
             />
             {errors.currentPassword && (
               <p className="text-sm text-destructive">{errors.currentPassword.message}</p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="newPassword">New password</Label>
+            <Label htmlFor="newPassword">{t('auth:changePassword.newPassword')}</Label>
             <Input
               id="newPassword"
               type="password"
               {...register('newPassword')}
-              placeholder="Enter new password"
+              placeholder={t('auth:changePassword.newPasswordPlaceholder')}
             />
             {errors.newPassword && (
               <p className="text-sm text-destructive">{errors.newPassword.message}</p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm new password</Label>
+            <Label htmlFor="confirmPassword">{t('auth:changePassword.confirmPassword')}</Label>
             <Input
               id="confirmPassword"
               type="password"
               {...register('confirmPassword')}
-              placeholder="Confirm new password"
+              placeholder={t('auth:changePassword.confirmPasswordPlaceholder')}
             />
             {errors.confirmPassword && (
               <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
@@ -102,13 +104,13 @@ export function ChangePasswordDialog({ children }: { children?: React.ReactEleme
             <div className="p-3 text-sm bg-destructive/10 text-destructive rounded-md border border-destructive/20">
               {mutation.error instanceof ApiRequestError
                 ? mutation.error.message
-                : 'An unexpected error occurred. Please try again.'}
+                : t('auth:changePassword.unexpectedError')}
             </div>
           )}
           <div className="flex justify-end pt-4">
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {mutation.isPending ? 'Changing...' : 'Change Password'}
+              {mutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {mutation.isPending ? t('auth:changePassword.submitting') : t('auth:changePassword.submit')}
             </Button>
           </div>
         </form>

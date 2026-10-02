@@ -23,6 +23,7 @@ public sealed record BranchResponse(
   string Country,
   bool IsMainBranch,
   bool IsActive,
+  Guid WalkInCustomerId,
   BranchCatalogMode CatalogMode = BranchCatalogMode.Shared);
 
 public sealed record CreateBranchRequest(

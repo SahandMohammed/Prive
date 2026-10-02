@@ -6,16 +6,44 @@ using Api.Modules.Contact;
 using Api.Modules.Currency;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
+using Api.Modules.Pos;
 using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Persistence;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 
 namespace Api.Tests;
 
 public sealed class SalesWorkflowTests
 {
+  [Fact]
+  public void Posted_invoice_endpoints_use_existing_manager_and_superadmin_roles()
+  {
+    Assert.Equal("SuperAdmin,Manager",
+      typeof(SalesController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+        .Cast<AuthorizeAttribute>().Single().Roles);
+    var deleteRoles = typeof(SalesController).GetMethod(nameof(SalesController.DeletePostedInvoice))!
+      .GetCustomAttributes(typeof(AuthorizeAttribute), true)
+      .Cast<AuthorizeAttribute>().Single().Roles;
+    Assert.Equal("SuperAdmin", deleteRoles);
+  }
+
+  [Fact]
+  public void Active_invoice_endpoints_use_existing_manager_and_superadmin_roles()
+  {
+    var deleteRoles = typeof(SalesController).GetMethod(nameof(SalesController.DeleteActiveInvoice))!
+      .GetCustomAttributes(typeof(AuthorizeAttribute), true)
+      .Cast<AuthorizeAttribute>().Single().Roles;
+
+    Assert.Equal("SuperAdmin", deleteRoles);
+    Assert.NotNull(typeof(SalesController).GetMethod(nameof(SalesController.CreateActiveInvoice)));
+    Assert.NotNull(typeof(SalesController).GetMethod(nameof(SalesController.UpdateActiveInvoice)));
+  }
+
   [Fact]
   public async Task Service_catalog_requires_revenue_account_and_preserves_base_price()
   {
@@ -43,14 +71,14 @@ public sealed class SalesWorkflowTests
     var data = await SeedAsync(db);
     await AddStockAsync(db, data, 10, 10);
     var service = CreateService(db);
-    var request = Request(data, null, data.BaseCurrencyId, null,
+    var request = Request(data, data.CustomerId, data.BaseCurrencyId, null,
       [ServiceLine(data, 1, 25_000), ProductLine(data, 2, 15_000)]);
     var movementCount = await db.StockMovements.CountAsync();
 
     var draft = await service.CreateInvoiceAsync(request, data.UserId, default);
     Assert.Equal("SI-000001", draft.DocumentNumber);
     Assert.Equal(SalesInvoiceStatus.Draft, draft.Status);
-    Assert.Null(draft.CustomerId);
+    Assert.Equal(data.CustomerId, draft.CustomerId);
     Assert.Equal(movementCount, await db.StockMovements.CountAsync());
     Assert.Empty(db.JournalEntries);
 
@@ -65,6 +93,229 @@ public sealed class SalesWorkflowTests
     Assert.Empty(db.SalesInvoices);
     Assert.Equal(movementCount, await db.StockMovements.CountAsync());
     Assert.Empty(db.JournalEntries);
+  }
+
+  [Fact]
+  public async Task Active_create_generates_effects_and_one_created_activity_without_a_post_step()
+  {
+    var branchContext = new BranchContext();
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+      .UseInMemoryDatabase(Guid.NewGuid().ToString())
+      .Options;
+    await using var db = new AppDbContext(options, branchContext);
+    var data = await SeedAsync(db);
+    branchContext.BranchId = data.BranchId;
+    await AddStockAsync(db, data, 10, 10);
+
+    var created = await CreateService(db).CreateActiveInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null,
+        [ServiceLine(data, 1, 25_000), ProductLine(data, 2, 15_000)]),
+      data.UserId,
+      default);
+
+    Assert.Equal(SalesInvoiceStatus.Posted, created.Status);
+    Assert.Equal("SI-000001", created.DocumentNumber);
+    Assert.NotNull(created.JournalEntryId);
+    Assert.Single(created.StockMovementIds);
+    Assert.Equal(8, await QuantityAsync(db, data.WarehouseId, data.ProductId));
+
+    var journal = await db.JournalEntries.Include(entry => entry.Lines).SingleAsync();
+    Assert.Equal(55_020, journal.Lines.Sum(line => line.DebitBaseAmount));
+    Assert.Equal(55_020, journal.Lines.Sum(line => line.CreditBaseAmount));
+    Assert.Equal(55_000, journal.Lines.Single(line => line.AccountId == data.ReceivableAccountId).DebitBaseAmount);
+    Assert.Equal(25_000, journal.Lines.Single(line => line.AccountId == data.ServiceRevenueAccountId).CreditBaseAmount);
+    Assert.Equal(30_000, journal.Lines.Single(line => line.AccountId == data.ProductRevenueAccountId).CreditBaseAmount);
+    Assert.Equal(20, journal.Lines.Single(line => line.AccountId == data.CostOfGoodsSoldAccountId).DebitBaseAmount);
+    Assert.Equal(20, journal.Lines.Single(line => line.AccountId == data.InventoryAccountId).CreditBaseAmount);
+    var activities = await db.ActivityLogs.Where(log => log.EntityId == created.Id).ToListAsync();
+    var activity = Assert.Single(activities);
+    Assert.Equal("created", activity.Action);
+    Assert.Equal("Created sales invoice", activity.Description);
+    Assert.DoesNotContain(activities, log => log.Action == "posted");
+  }
+
+  [Fact]
+  public async Task Active_create_save_failure_rolls_back_invoice_effects_and_activity()
+  {
+    await using var connection = new SqliteConnection("Data Source=:memory:");
+    await connection.OpenAsync();
+    var failure = new FailActiveInvoiceSaveInterceptor();
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+      .UseSqlite(connection)
+      .AddInterceptors(failure)
+      .Options;
+    var branchContext = new BranchContext();
+    int movementCount;
+
+    await using (var db = new AppDbContext(options, branchContext))
+    {
+      await db.Database.EnsureCreatedAsync();
+      var data = await SeedAsync(db);
+      branchContext.BranchId = data.BranchId;
+      await AddStockAsync(db, data, 10, 10);
+      movementCount = await db.StockMovements.CountAsync();
+      failure.Enabled = true;
+
+      await Assert.ThrowsAsync<InvalidOperationException>(() => CreateService(db).CreateActiveInvoiceAsync(
+        Request(data, data.CustomerId, data.BaseCurrencyId, null, [ProductLine(data, 2, 15_000)]),
+        data.UserId,
+        default));
+    }
+
+    var freshOptions = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+    await using var fresh = new AppDbContext(freshOptions);
+    Assert.Empty(await fresh.SalesInvoices.ToListAsync());
+    Assert.Empty(await fresh.JournalEntries.ToListAsync());
+    Assert.Equal(movementCount, await fresh.StockMovements.CountAsync());
+    Assert.Empty(await fresh.ActivityLogs.ToListAsync());
+  }
+
+  [Fact]
+  public async Task Active_create_effect_preparation_failure_leaves_no_persisted_invoice_or_effects()
+  {
+    await using var connection = new SqliteConnection("Data Source=:memory:");
+    await connection.OpenAsync();
+    var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+    var branchContext = new BranchContext();
+
+    await using (var db = new AppDbContext(options, branchContext))
+    {
+      await db.Database.EnsureCreatedAsync();
+      var data = await SeedAsync(db);
+      branchContext.BranchId = data.BranchId;
+
+      var error = await Assert.ThrowsAsync<BadRequestException>(() => CreateService(db).CreateActiveInvoiceAsync(
+        Request(data, data.CustomerId, data.BaseCurrencyId, null, [ProductLine(data, 1, 15_000)]),
+        data.UserId,
+        default));
+
+      Assert.Equal(ErrorCodes.Sales.InsufficientStock, error.Code);
+    }
+
+    await using var fresh = new AppDbContext(options);
+    Assert.Empty(await fresh.SalesInvoices.ToListAsync());
+    Assert.Empty(await fresh.SalesInvoiceLines.ToListAsync());
+    Assert.Empty(await fresh.JournalEntries.ToListAsync());
+    Assert.Empty(await fresh.StockMovements.ToListAsync());
+    Assert.Empty(await fresh.ActivityLogs.ToListAsync());
+  }
+
+  [Fact]
+  public async Task Active_invoice_embedded_payments_derive_partial_and_settled_truth()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    await AddStockAsync(db, data, 10, 10);
+    var account = await AddPaymentAccountAsync(
+      db, data, data.BranchId, data.BaseCurrencyId, "EMBED-IQD", grantOperateAccess: true);
+    var sales = CreateService(db);
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    var partial = await sales.CreateActiveInvoiceAsync(
+      EmbeddedPaymentRequest(data,
+        [new EmbeddedSalesInvoicePaymentRequest(today, account.Id, 40, 1, "Deposit")]),
+      data.UserId,
+      default);
+    Assert.Equal(40, partial.CollectedAmount);
+    Assert.Equal(60, partial.OutstandingAmount);
+    Assert.Equal(SalesInvoicePaymentStatus.PartiallyPaid, partial.PaymentStatus);
+    Assert.Single(partial.Payments);
+
+    var settled = await sales.CreateActiveInvoiceAsync(
+      EmbeddedPaymentRequest(data,
+        [
+          new EmbeddedSalesInvoicePaymentRequest(today, account.Id, 40, 1, "Deposit"),
+          new EmbeddedSalesInvoicePaymentRequest(today, account.Id, 60, 1, "Balance")
+        ]),
+      data.UserId,
+      default);
+    Assert.Equal(100, settled.CollectedAmount);
+    Assert.Equal(0, settled.OutstandingAmount);
+    Assert.Equal(SalesInvoicePaymentStatus.Paid, settled.PaymentStatus);
+    Assert.Equal(2, settled.Payments.Count);
+  }
+
+  [Theory]
+  [InlineData("over-total")]
+  [InlineData("wrong-currency")]
+  [InlineData("wrong-branch")]
+  [InlineData("no-access")]
+  [InlineData("bad-rate")]
+  public async Task Invalid_embedded_payment_rolls_back_invoice_and_every_owned_effect(string scenario)
+  {
+    await using var connection = new SqliteConnection("Data Source=:memory:");
+    await connection.OpenAsync();
+    var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+    var branchContext = new BranchContext();
+    await using var db = new AppDbContext(options, branchContext);
+    await db.Database.EnsureCreatedAsync();
+    var data = await SeedAsync(db);
+    branchContext.BranchId = data.BranchId;
+    await AddStockAsync(db, data, 10, 10);
+    var valid = await AddPaymentAccountAsync(
+      db, data, data.BranchId, data.BaseCurrencyId, "VALID-IQD", grantOperateAccess: true);
+    var selectedAccount = valid;
+    decimal amount = 40;
+    decimal? rate = 1;
+
+    if (scenario == "wrong-currency")
+      selectedAccount = await AddPaymentAccountAsync(
+        db, data, data.BranchId, data.ForeignCurrencyId, "WRONG-USD", grantOperateAccess: true);
+    else if (scenario == "wrong-branch")
+    {
+      branchContext.BranchId = null;
+      var walkInCustomerId = await db.Branches
+        .Where(branch => branch.Id == data.BranchId)
+        .Select(branch => branch.WalkInCustomerId)
+        .SingleAsync();
+      var otherBranch = new BranchEntity
+      {
+        Code = "OTHER",
+        Name = "Other",
+        Address = "A",
+        City = "C",
+        Region = "R",
+        Country = "IQ",
+        WalkInCustomerId = walkInCustomerId
+      };
+      db.Branches.Add(otherBranch);
+      await db.SaveChangesAsync();
+      selectedAccount = await AddPaymentAccountAsync(
+        db, data, otherBranch.Id, data.BaseCurrencyId, "OTHER-IQD", grantOperateAccess: true);
+      branchContext.BranchId = data.BranchId;
+    }
+    else if (scenario == "no-access")
+      selectedAccount = await AddPaymentAccountAsync(
+        db, data, data.BranchId, data.BaseCurrencyId, "NOACCESS-IQD", grantOperateAccess: false);
+    else if (scenario == "over-total")
+      amount = 101;
+    else if (scenario == "bad-rate")
+      rate = 2;
+
+    var before = new
+    {
+      Invoices = await db.SalesInvoices.CountAsync(),
+      Journals = await db.JournalEntries.CountAsync(),
+      Stock = await db.StockMovements.CountAsync(),
+      Payments = await db.Payments.CountAsync(),
+      Ledgers = await db.MoneyLedgerEntries.CountAsync(),
+      Audits = await db.ActivityLogs.CountAsync()
+    };
+    var request = EmbeddedPaymentRequest(data,
+      [new EmbeddedSalesInvoicePaymentRequest(
+        DateOnly.FromDateTime(DateTime.UtcNow), selectedAccount.Id, amount, rate, scenario)]);
+
+    await Assert.ThrowsAnyAsync<ApiException>(() =>
+      CreateService(db).CreateActiveInvoiceAsync(request, data.UserId, default));
+
+    db.ChangeTracker.Clear();
+    Assert.Equal(before.Invoices, await db.SalesInvoices.CountAsync());
+    Assert.Equal(before.Journals, await db.JournalEntries.CountAsync());
+    Assert.Equal(before.Stock, await db.StockMovements.CountAsync());
+    Assert.Equal(before.Payments, await db.Payments.CountAsync());
+    Assert.Equal(before.Ledgers, await db.MoneyLedgerEntries.CountAsync());
+    Assert.Equal(before.Audits, await db.ActivityLogs.CountAsync());
+    Assert.Equal(10, await QuantityAsync(db, data.WarehouseId, data.ProductId));
   }
 
   [Fact]
@@ -371,10 +622,9 @@ public sealed class SalesWorkflowTests
     await AddStockAsync(db, data, 10, 10);
     var service = CreateService(db);
 
-    var anonymous = await service.CreateInvoiceAsync(
-      Request(data, null, data.BaseCurrencyId, null, [ServiceLine(data, 1, 1)]), data.UserId, default);
     Assert.Equal(ErrorCodes.Sales.CustomerRequired,
-      (await Assert.ThrowsAsync<BadRequestException>(() => service.PostInvoiceAsync(anonymous.Id, data.UserId, default))).Code);
+      (await Assert.ThrowsAsync<BadRequestException>(() => service.CreateInvoiceAsync(
+        Request(data, null, data.BaseCurrencyId, null, [ServiceLine(data, 1, 1)]), data.UserId, default))).Code);
 
     var serviceDraft = await service.CreateInvoiceAsync(
       Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, 1)]), data.UserId, default);
@@ -392,7 +642,7 @@ public sealed class SalesWorkflowTests
       (await Assert.ThrowsAsync<BadRequestException>(() => service.PostInvoiceAsync(productDraft.Id, data.UserId, default))).Code);
 
     Assert.Empty(db.JournalEntries);
-    Assert.Equal(3, await db.SalesInvoices.CountAsync(invoice => invoice.Status == SalesInvoiceStatus.Draft));
+    Assert.Equal(2, await db.SalesInvoices.CountAsync(invoice => invoice.Status == SalesInvoiceStatus.Draft));
   }
 
   [Fact]
@@ -417,14 +667,312 @@ public sealed class SalesWorkflowTests
   }
 
   [Fact]
+  public async Task Posted_invoice_correction_preserves_identity_and_replaces_owned_effects_with_one_audit()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var sales = CreateService(db);
+    var draft = await sales.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, 50_000)]),
+      data.UserId,
+      default);
+    var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+    var originalJournalId = posted.JournalEntryId;
+    var originalPostedAtUtc = posted.PostedAtUtc;
+    var originalCreatedAtUtc = posted.CreatedAtUtc;
+
+    var corrected = await CreateCorrectionService(db).UpdateAsync(posted.Id,
+      new UpdatePostedSalesInvoiceRequest(
+        null,
+        posted.UpdatedAtUtc,
+        data.CustomerId,
+        posted.InvoiceDate,
+        data.BranchId,
+        null,
+        data.BaseCurrencyId,
+        null,
+        "Corrected",
+        [ServiceLine(data, 1, 45_000)]),
+      data.UserId,
+      default);
+
+    Assert.Equal(posted.Id, corrected.Id);
+    Assert.Equal(posted.DocumentNumber, corrected.DocumentNumber);
+    Assert.Equal(originalPostedAtUtc, corrected.PostedAtUtc);
+    Assert.Equal(originalCreatedAtUtc, corrected.CreatedAtUtc);
+    Assert.Equal(45_000, corrected.Total);
+    Assert.NotEqual(originalJournalId, corrected.JournalEntryId);
+    var journal = await db.JournalEntries.Include(entry => entry.Lines).SingleAsync();
+    Assert.Equal(45_000, journal.Lines.Sum(line => line.DebitBaseAmount));
+    Assert.Equal(45_000, journal.Lines.Sum(line => line.CreditBaseAmount));
+    var audit = await db.ActivityLogs.SingleAsync(log => log.EntityId == posted.Id && log.Action == "edited");
+    Assert.Null(audit.Reason);
+    Assert.Contains("50000", audit.BeforeState);
+    Assert.Contains("45000", audit.AfterState);
+  }
+
+  [Fact]
+  public async Task Posted_invoice_correction_first_save_only_flushes_owned_effect_removal()
+  {
+    var interceptor = new CorrectionSaveObserver();
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+      .UseInMemoryDatabase(Guid.NewGuid().ToString())
+      .AddInterceptors(interceptor)
+      .Options;
+    await using var db = new AppDbContext(options);
+    var data = await SeedAsync(db);
+    var sales = CreateService(db);
+    var draft = await sales.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, 50_000)]),
+      data.UserId,
+      default);
+    var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+    interceptor.Observations.Clear();
+    interceptor.Enabled = true;
+
+    await CreateCorrectionService(db).UpdateAsync(posted.Id,
+      new UpdatePostedSalesInvoiceRequest(
+        "Correct amount",
+        posted.UpdatedAtUtc,
+        data.CustomerId,
+        posted.InvoiceDate,
+        data.BranchId,
+        null,
+        data.BaseCurrencyId,
+        null,
+        null,
+        [ServiceLine(data, 1, 45_000)]),
+      data.UserId,
+      default);
+
+    Assert.Equal(2, interceptor.Observations.Count);
+    var first = interceptor.Observations[0];
+    Assert.Equal(50_000, first.Total);
+    Assert.False(first.IsDeleted);
+    Assert.Equal(0, first.AddedActivityCount);
+    Assert.Contains(nameof(SalesInvoiceEntity.JournalEntryId), first.ModifiedInvoiceProperties);
+    Assert.DoesNotContain(nameof(SalesInvoiceEntity.Total), first.ModifiedInvoiceProperties);
+    Assert.DoesNotContain(nameof(SalesInvoiceEntity.UpdatedAtUtc), first.ModifiedInvoiceProperties);
+    var second = interceptor.Observations[1];
+    Assert.Equal(45_000, second.Total);
+    Assert.False(second.IsDeleted);
+    Assert.Equal(1, second.AddedActivityCount);
+  }
+
+  [Fact]
+  public async Task Posted_invoice_delete_saves_deleted_state_and_audit_atomically()
+  {
+    var interceptor = new CorrectionSaveObserver();
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+      .UseInMemoryDatabase(Guid.NewGuid().ToString())
+      .AddInterceptors(interceptor)
+      .Options;
+    await using var db = new AppDbContext(options);
+    var data = await SeedAsync(db);
+    var sales = CreateService(db);
+    var draft = await sales.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, 50_000)]),
+      data.UserId,
+      default);
+    var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+    interceptor.Observations.Clear();
+    interceptor.Enabled = true;
+
+    await CreateCorrectionService(db).DeleteAsync(posted.Id,
+      new DeletePostedSalesInvoiceRequest("Duplicate", posted.UpdatedAtUtc),
+      data.UserId,
+      default);
+
+    var saved = Assert.Single(interceptor.Observations);
+    Assert.True(saved.IsDeleted);
+    Assert.Equal(1, saved.AddedActivityCount);
+    Assert.Contains(nameof(SalesInvoiceEntity.JournalEntryId), saved.ModifiedInvoiceProperties);
+    Assert.Contains(nameof(SalesInvoiceEntity.IsDeleted), saved.ModifiedInvoiceProperties);
+    Assert.Contains(nameof(SalesInvoiceEntity.DeletedAtUtc), saved.ModifiedInvoiceProperties);
+  }
+
+  [Fact]
+  public async Task Posted_invoice_correction_failure_after_first_save_rolls_back_original_state()
+  {
+    await using var connection = new SqliteConnection("Data Source=:memory:");
+    await connection.OpenAsync();
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+      .UseSqlite(connection)
+      .Options;
+    Guid invoiceId;
+    Guid journalId;
+    Guid movementId;
+    string documentNumber;
+    DateTime updatedAtUtc;
+    await using (var db = new AppDbContext(options))
+    {
+      await db.Database.EnsureCreatedAsync();
+      var data = await SeedAsync(db);
+      await AddStockAsync(db, data, 10, 10);
+      var sales = CreateService(db);
+      var draft = await sales.CreateInvoiceAsync(
+        Request(data, data.CustomerId, data.BaseCurrencyId, null, [ProductLine(data, 2, 15_000)]),
+        data.UserId,
+        default);
+      var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+      invoiceId = posted.Id;
+      journalId = posted.JournalEntryId!.Value;
+      movementId = posted.StockMovementIds.Single();
+      documentNumber = posted.DocumentNumber;
+      updatedAtUtc = posted.UpdatedAtUtc;
+      var requestUpdatedAtUtc = DateTime.SpecifyKind(posted.UpdatedAtUtc, DateTimeKind.Utc);
+
+      var error = await Assert.ThrowsAsync<BadRequestException>(() => CreateCorrectionService(db).UpdateAsync(
+        posted.Id,
+        new UpdatePostedSalesInvoiceRequest(
+          "Quantity entered incorrectly",
+          requestUpdatedAtUtc,
+          data.CustomerId,
+          posted.InvoiceDate,
+          data.BranchId,
+          data.WarehouseId,
+          data.BaseCurrencyId,
+          null,
+          posted.Notes,
+          [ProductLine(data, 20, 15_000)]),
+        data.UserId,
+        default));
+      Assert.Equal(ErrorCodes.Sales.InsufficientStock, error.Code);
+    }
+
+    await using var fresh = new AppDbContext(options);
+    var original = await fresh.SalesInvoices.Include(invoice => invoice.Lines)
+      .SingleAsync(invoice => invoice.Id == invoiceId);
+    Assert.Equal(documentNumber, original.DocumentNumber);
+    Assert.Equal(updatedAtUtc, original.UpdatedAtUtc);
+    Assert.Equal(30_000, original.Total);
+    Assert.Equal(2, original.Lines.Single().Quantity);
+    Assert.Equal(journalId, original.JournalEntryId);
+    Assert.NotNull(await fresh.JournalEntries.FindAsync(journalId));
+    var movement = await fresh.StockMovements.SingleAsync(item => item.Id == movementId);
+    Assert.Equal(2, movement.QuantityOut);
+    Assert.False(await fresh.ActivityLogs.AnyAsync(log => log.EntityId == invoiceId && log.Action == "edited"));
+  }
+
+  [Fact]
+  public async Task Posted_invoice_delete_hides_invoice_preserves_lines_and_appends_audit()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    await AddStockAsync(db, data, 10, 10);
+    var sales = CreateService(db);
+    var draft = await sales.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null, [ProductLine(data, 2, 15_000)]),
+      data.UserId,
+      default);
+    var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+    var lineIds = posted.Lines.Select(line => line.Id).ToList();
+
+    var corrections = CreateCorrectionService(db);
+    await corrections.DeleteAsync(posted.Id,
+      new DeletePostedSalesInvoiceRequest("Duplicate sale", posted.UpdatedAtUtc),
+      data.UserId,
+      default);
+
+    Assert.False(await db.SalesInvoices.AnyAsync(invoice => invoice.Id == posted.Id));
+    var deleted = await db.SalesInvoices.IgnoreQueryFilters().SingleAsync(invoice => invoice.Id == posted.Id);
+    Assert.True(deleted.IsDeleted);
+    Assert.Equal("Duplicate sale", deleted.DeleteReason);
+    Assert.Equal(data.UserId, deleted.DeletedByUserId);
+    Assert.Equal(lineIds.Count, await db.SalesInvoiceLines.IgnoreQueryFilters()
+      .CountAsync(line => line.SalesInvoiceId == posted.Id));
+    Assert.False(await db.StockMovements.AnyAsync(movement => movement.SalesInvoiceId == posted.Id));
+    Assert.False(await db.JournalEntries.AnyAsync(entry => entry.Id == posted.JournalEntryId));
+    Assert.Single(await db.ActivityLogs.Where(log => log.EntityId == posted.Id && log.Action == "deleted").ToListAsync());
+    Assert.Single(await corrections.GetHistoryAsync(posted.Id, default));
+  }
+
+  [Fact]
+  public async Task Posted_invoice_correction_rejects_stale_timestamp()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var sales = CreateService(db);
+    var draft = await sales.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, 50_000)]),
+      data.UserId,
+      default);
+    var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+    var request = new UpdatePostedSalesInvoiceRequest(
+      "Correct amount",
+      posted.UpdatedAtUtc,
+      data.CustomerId,
+      posted.InvoiceDate,
+      data.BranchId,
+      null,
+      data.BaseCurrencyId,
+      null,
+      null,
+      [ServiceLine(data, 1, 45_000)]);
+    var corrections = CreateCorrectionService(db);
+    await corrections.UpdateAsync(posted.Id, request, data.UserId, default);
+
+    var error = await Assert.ThrowsAsync<ConflictException>(() =>
+      corrections.UpdateAsync(posted.Id, request, data.UserId, default));
+
+    Assert.Equal(ErrorCodes.Sales.ConcurrencyConflict, error.Code);
+  }
+
+  [Fact]
+  public async Task Posted_invoice_correction_is_blocked_by_customer_receipt()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var sales = CreateService(db);
+    var draft = await sales.CreateInvoiceAsync(
+      Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, 50_000)]),
+      data.UserId,
+      default);
+    var posted = await sales.PostInvoiceAsync(draft.Id, data.UserId, default);
+    var payment = new PaymentEntity
+    {
+      DocumentNumber = "PAY-000001",
+      BranchId = data.BranchId,
+      CustomerId = data.CustomerId,
+      PaymentDate = posted.InvoiceDate,
+      CurrencyId = data.BaseCurrencyId,
+      BaseCurrencyId = data.BaseCurrencyId,
+      Amount = 10_000,
+      BaseAmount = 10_000,
+      Origin = PaymentOrigin.CustomerReceipt,
+      CreatedByUserId = data.UserId,
+      JournalEntryId = Guid.NewGuid()
+    };
+    db.PaymentAllocations.Add(new PaymentAllocationEntity
+    {
+      Payment = payment,
+      SalesInvoiceId = posted.Id,
+      Amount = 10_000,
+      BaseAmount = 10_000
+    });
+    await db.SaveChangesAsync();
+
+    var error = await Assert.ThrowsAsync<ConflictException>(() => CreateCorrectionService(db).DeleteAsync(
+      posted.Id,
+      new DeletePostedSalesInvoiceRequest("Entered twice", posted.UpdatedAtUtc),
+      data.UserId,
+      default));
+
+    Assert.Equal(ErrorCodes.Sales.InvoiceHasPayment, error.Code);
+    Assert.Contains("active Payments", error.Message);
+    Assert.NotNull(await db.SalesInvoices.FindAsync(posted.Id));
+    Assert.NotNull(await db.JournalEntries.FindAsync(posted.JournalEntryId));
+  }
+
+  [Fact]
   public async Task Invoice_list_uses_shared_pagination_and_filters()
   {
     await using var db = CreateDb();
     var data = await SeedAsync(db);
     var service = CreateService(db);
     for (var index = 0; index < 3; index++)
-      await service.CreateInvoiceAsync(
-        Request(data, null, data.BaseCurrencyId, null, [ServiceLine(data, 1, index + 1)]),
+      await service.CreateActiveInvoiceAsync(
+        Request(data, data.CustomerId, data.BaseCurrencyId, null, [ServiceLine(data, 1, index + 1)]),
         data.UserId,
         default);
 
@@ -439,6 +987,82 @@ public sealed class SalesWorkflowTests
     Assert.Equal(3, page.TotalCount);
     Assert.Equal(2, page.Page);
     Assert.Equal(2, page.TotalPages);
+  }
+
+  [Fact]
+  public async Task Lines_without_explicit_line_type_or_unit_are_automatically_resolved_by_backend()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    await AddStockAsync(db, data, 10, 10_000);
+    var service = CreateService(db);
+
+    // Create an invoice passing only ItemId for both a service and a product, omitting LineType and UnitOfMeasureId
+    var request = new SalesInvoiceDraftRequest(
+      data.CustomerId,
+      DateOnly.FromDateTime(DateTime.UtcNow),
+      data.BranchId,
+      data.WarehouseId,
+      data.BaseCurrencyId,
+      null,
+      "Unified line test",
+      [
+        new SalesInvoiceLineRequest(
+          LineType: null,
+          ServiceId: null,
+          ProductId: null,
+          UnitOfMeasureId: null,
+          Description: "Service line via ItemId",
+          Quantity: 1,
+          UnitPrice: 25_000,
+          ItemId: data.ServiceId),
+        new SalesInvoiceLineRequest(
+          LineType: null,
+          ServiceId: null,
+          ProductId: null,
+          UnitOfMeasureId: null,
+          Description: "Product line via ItemId",
+          Quantity: 2,
+          UnitPrice: 15_000,
+          ItemId: data.ProductId),
+      ]);
+
+    var created = await service.CreateActiveInvoiceAsync(request, data.UserId, default);
+
+    Assert.NotNull(created);
+    Assert.Equal(2, created.Lines.Count);
+
+    var serviceLine = created.Lines.Single(l => l.ServiceId == data.ServiceId);
+    Assert.Equal(SalesLineType.Service, serviceLine.LineType);
+    Assert.Null(serviceLine.ProductId);
+
+    var productLine = created.Lines.Single(l => l.ProductId == data.ProductId);
+    Assert.Equal(SalesLineType.Product, productLine.LineType);
+    Assert.Null(productLine.ServiceId);
+    Assert.Equal(data.UnitId, productLine.UnitOfMeasureId);
+  }
+
+  [Fact]
+  public async Task Catalog_items_endpoint_returns_combined_services_and_products_with_search_support()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var service = CreateService(db);
+
+    // Unified query with no filter returns both
+    var catalog = await service.GetCatalogItemsAsync(new SalesCatalogQuery { Page = 1, PageSize = 20 }, default);
+    Assert.Equal(2, catalog.TotalCount);
+    Assert.Contains(catalog.Items, item => item.Type == SalesLineType.Service && item.Id == data.ServiceId);
+    Assert.Contains(catalog.Items, item => item.Type == SalesLineType.Product && item.Id == data.ProductId);
+
+    // Search by name filters across services and products
+    var haircutSearch = await service.GetCatalogItemsAsync(new SalesCatalogQuery { Search = "Haircut" }, default);
+    Assert.Single(haircutSearch.Items);
+    Assert.Equal(data.ServiceId, haircutSearch.Items[0].Id);
+
+    var shampooSearch = await service.GetCatalogItemsAsync(new SalesCatalogQuery { Search = "SHAMPOO" }, default);
+    Assert.Single(shampooSearch.Items);
+    Assert.Equal(data.ProductId, shampooSearch.Items[0].Id);
   }
 
   private static AppDbContext CreateDb()
@@ -458,6 +1082,12 @@ public sealed class SalesWorkflowTests
       CostOfGoodsSoldAccountCode = "3641",
       InventoryAccountCode = "1317"
     }));
+
+  private static SalesInvoiceCorrectionService CreateCorrectionService(AppDbContext db)
+  {
+    var sales = CreateService(db);
+    return new SalesInvoiceCorrectionService(db, sales, new PaymentService(db));
+  }
 
   private static SalesInvoiceDraftRequest Request(
     TestData data,
@@ -495,6 +1125,49 @@ public sealed class SalesWorkflowTests
     await db.SaveChangesAsync();
   }
 
+  private static SalesInvoiceDraftRequest EmbeddedPaymentRequest(
+    TestData data,
+    List<EmbeddedSalesInvoicePaymentRequest> payments) =>
+    Request(data, data.CustomerId, data.BaseCurrencyId, null, [ProductLine(data, 1, 100)]) with
+    {
+      Payments = payments
+    };
+
+  private static async Task<MoneyAccountEntity> AddPaymentAccountAsync(
+    AppDbContext db,
+    TestData data,
+    Guid branchId,
+    Guid currencyId,
+    string code,
+    bool grantOperateAccess)
+  {
+    var ledgerAccount = new AccountEntity
+    {
+      Code = $"GL-{code}",
+      Name = code,
+      Classification = AccountClassification.Asset
+    };
+    var moneyAccount = new MoneyAccountEntity
+    {
+      Code = code,
+      Name = code,
+      Type = MoneyAccountType.Cashbox,
+      BranchId = branchId,
+      CurrencyId = currencyId,
+      AccountingAccount = ledgerAccount
+    };
+    db.MoneyAccounts.Add(moneyAccount);
+    if (grantOperateAccess)
+      db.MoneyAccountAccess.Add(new MoneyAccountAccessEntity
+      {
+        MoneyAccount = moneyAccount,
+        UserId = data.UserId,
+        AccessLevel = MoneyAccountAccessLevel.Operate
+      });
+    await db.SaveChangesAsync();
+    return moneyAccount;
+  }
+
   private static Task<decimal> QuantityAsync(AppDbContext db, Guid warehouseId, Guid productId) =>
     db.StockMovements.Where(movement => movement.WarehouseId == warehouseId && movement.ProductId == productId)
       .SumAsync(movement => movement.QuantityIn - movement.QuantityOut);
@@ -519,6 +1192,11 @@ public sealed class SalesWorkflowTests
     {
       Code = "MAIN", Name = "Main", Address = "A", City = "C", Region = "R", Country = "IQ", IsMainBranch = true
     };
+    var walkInCustomer = new ContactEntity
+    {
+      Name = "Walk-in Customer", IsCustomer = true, IsActive = true, SystemRole = ContactSystemRole.WalkInCustomer
+    };
+    branch.WalkInCustomer = walkInCustomer;
     var customer = new ContactEntity { Name = "Customer", IsCustomer = true, IsActive = true };
     var productCategory = new ProductCategoryEntity { Name = "Retail" };
     var unit = new UnitOfMeasureEntity { Name = "Piece", Code = "PC" };
@@ -547,7 +1225,7 @@ public sealed class SalesWorkflowTests
       DurationMinutes = 30,
       RevenueAccount = serviceRevenue
     };
-    db.AddRange(user, iqd, usd, business, branch, customer, productCategory, unit, warehouse, product,
+    db.AddRange(user, iqd, usd, business, branch, walkInCustomer, customer, productCategory, unit, warehouse, product,
       receivable, inventory, productRevenue, serviceRevenue, cogs, serviceCategory, salonService);
     await db.SaveChangesAsync();
     return new TestData(
@@ -584,4 +1262,54 @@ public sealed class SalesWorkflowTests
     Guid ProductRevenueAccountId,
     Guid ServiceRevenueAccountId,
     Guid CostOfGoodsSoldAccountId);
+
+  private sealed class CorrectionSaveObserver : SaveChangesInterceptor
+  {
+    public List<CorrectionSaveObservation> Observations { get; } = [];
+    public bool Enabled { get; set; }
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+      DbContextEventData eventData,
+      InterceptionResult<int> result,
+      CancellationToken cancellationToken = default)
+    {
+      if (!Enabled) return base.SavingChangesAsync(eventData, result, cancellationToken);
+      var context = eventData.Context!;
+      var invoiceEntry = context.ChangeTracker.Entries<SalesInvoiceEntity>()
+        .Single(entry => entry.State == EntityState.Modified);
+      Observations.Add(new CorrectionSaveObservation(
+        invoiceEntry.Entity.Total,
+        invoiceEntry.Entity.IsDeleted,
+        context.ChangeTracker.Entries<Api.Modules.Dashboard.ActivityLogEntity>()
+          .Count(entry => entry.State == EntityState.Added),
+        invoiceEntry.Properties.Where(property => property.IsModified)
+          .Select(property => property.Metadata.Name).ToHashSet()));
+      return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+  }
+
+  private sealed record CorrectionSaveObservation(
+    decimal Total,
+    bool IsDeleted,
+    int AddedActivityCount,
+    HashSet<string> ModifiedInvoiceProperties);
+
+  private sealed class FailActiveInvoiceSaveInterceptor : SaveChangesInterceptor
+  {
+    public bool Enabled { get; set; }
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+      DbContextEventData eventData,
+      InterceptionResult<int> result,
+      CancellationToken cancellationToken = default)
+    {
+      if (Enabled && eventData.Context!.ChangeTracker.Entries<SalesInvoiceEntity>()
+        .Any(entry => entry.State == EntityState.Added
+          && entry.Entity.Status == SalesInvoiceStatus.Posted
+          && entry.Entity.PosContext is null))
+        throw new InvalidOperationException("Forced active invoice save failure.");
+
+      return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+  }
 }

@@ -19,6 +19,9 @@ public sealed class BranchEntityConfiguration : IEntityTypeConfiguration<BranchE
     builder.Property(branch => branch.City).HasMaxLength(100).IsRequired();
     builder.Property(branch => branch.Region).HasMaxLength(100).IsRequired();
     builder.Property(branch => branch.Country).HasMaxLength(100).IsRequired();
+    builder.HasOne(branch => branch.WalkInCustomer).WithMany().HasForeignKey(branch => branch.WalkInCustomerId)
+      .OnDelete(DeleteBehavior.Restrict);
+    builder.HasIndex(branch => branch.WalkInCustomerId);
     builder.HasIndex(branch => branch.IsMainBranch)
       .IsUnique()
       .HasFilter("\"IsMainBranch\" = true");

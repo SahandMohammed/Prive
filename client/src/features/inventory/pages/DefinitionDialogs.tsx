@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,7 @@ interface CategoryDialogProps {
 }
 
 export function CategoryDialog({ open, onOpenChange, category, onSaved }: CategoryDialogProps) {
+  const { t } = useTranslation(['inventory', 'common'])
   const form = useForm<CategoryInput>({
     resolver: zodResolver(categorySchema),
     defaultValues: categoryDefaults,
@@ -39,8 +41,12 @@ export function CategoryDialog({ open, onOpenChange, category, onSaved }: Catego
     <Dialog open={open} onOpenChange={(nextOpen) => nextOpen ? onOpenChange(true) : close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{category ? `Edit ${category.name}` : 'Add category'}</DialogTitle>
-          <DialogDescription>Categories affect organization and filtering only.</DialogDescription>
+          <DialogTitle>
+            {category
+              ? t('inventory:categories.editCategory', { name: category.name })
+              : t('inventory:categories.addCategory')}
+          </DialogTitle>
+          <DialogDescription>{t('inventory:categories.dialogDescription')}</DialogDescription>
         </DialogHeader>
         <form
           onSubmit={form.handleSubmit((values) => save.mutate(values, {
@@ -51,19 +57,19 @@ export function CategoryDialog({ open, onOpenChange, category, onSaved }: Catego
           }))}
           className="space-y-4"
         >
-          <DialogField label="Name" error={form.formState.errors.name?.message}>
+          <DialogField label={t('inventory:categories.name')} error={form.formState.errors.name?.message}>
             <Input {...form.register('name')} autoFocus />
           </DialogField>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...form.register('isActive')} />
-            Active
+            {t('inventory:categories.active')}
           </label>
           {save.isError && <p className="text-sm text-destructive">{save.error.message}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={close}>{t('common:actions.cancel')}</Button>
             <Button type="submit" disabled={save.isPending}>
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
-              {category ? 'Save changes' : 'Add category'}
+              {category ? t('common:actions.save') : t('inventory:categories.addCategory')}
             </Button>
           </DialogFooter>
         </form>
@@ -89,6 +95,7 @@ export function SubcategoryDialog({
   defaultCategoryId = '',
   onSaved,
 }: SubcategoryDialogProps) {
+  const { t } = useTranslation(['inventory', 'common'])
   const form = useForm<SubcategoryInput>({
     resolver: zodResolver(subcategorySchema),
     defaultValues: subcategoryDefaults,
@@ -111,8 +118,12 @@ export function SubcategoryDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => nextOpen ? onOpenChange(true) : close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{subcategory ? `Edit ${subcategory.name}` : 'Add subcategory'}</DialogTitle>
-          <DialogDescription>A subcategory belongs to exactly one category and has no children.</DialogDescription>
+          <DialogTitle>
+            {subcategory
+              ? t('inventory:subcategories.editSubcategory', { name: subcategory.name })
+              : t('inventory:subcategories.addSubcategory')}
+          </DialogTitle>
+          <DialogDescription>{t('inventory:subcategories.dialogDescription')}</DialogDescription>
         </DialogHeader>
         <form
           onSubmit={form.handleSubmit((values) => save.mutate(values, {
@@ -123,27 +134,31 @@ export function SubcategoryDialog({
           }))}
           className="space-y-4"
         >
-          <DialogField label="Category" error={form.formState.errors.categoryId?.message}>
+          <DialogField label={t('inventory:subcategories.category')} error={form.formState.errors.categoryId?.message}>
             <select {...form.register('categoryId')} className="h-9 rounded-md border border-input bg-background px-3 text-sm">
-              <option value="">Select category</option>
+              <option value="">{t('inventory:subcategories.selectCategory')}</option>
               {categories
                 .filter((item) => item.isActive || item.id === subcategory?.categoryId)
-                .map((item) => <option key={item.id} value={item.id}>{item.name}{!item.isActive ? ' (inactive)' : ''}</option>)}
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}{!item.isActive ? ` ${t('inventory:subcategories.inactiveSuffix')}` : ''}
+                  </option>
+                ))}
             </select>
           </DialogField>
-          <DialogField label="Name" error={form.formState.errors.name?.message}>
+          <DialogField label={t('inventory:subcategories.name')} error={form.formState.errors.name?.message}>
             <Input {...form.register('name')} autoFocus />
           </DialogField>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...form.register('isActive')} />
-            Active
+            {t('inventory:subcategories.active')}
           </label>
           {save.isError && <p className="text-sm text-destructive">{save.error.message}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={close}>{t('common:actions.cancel')}</Button>
             <Button type="submit" disabled={save.isPending}>
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
-              {subcategory ? 'Save changes' : 'Add subcategory'}
+              {subcategory ? t('common:actions.save') : t('inventory:subcategories.addSubcategory')}
             </Button>
           </DialogFooter>
         </form>
@@ -154,7 +169,7 @@ export function SubcategoryDialog({
 
 function DialogField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+    <label className="grid gap-1.5 text-start text-sm font-medium text-slate-700 dark:text-slate-300">
       {label}
       {children}
       {error && <span className="text-xs font-normal text-destructive">{error}</span>}

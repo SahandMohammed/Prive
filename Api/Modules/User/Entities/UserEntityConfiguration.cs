@@ -13,5 +13,8 @@ public sealed class UserEntityConfiguration : IEntityTypeConfiguration<UserEntit
     builder.HasIndex(user => user.Username).IsUnique();
     builder.Property(user => user.PasswordHash).HasMaxLength(512).IsRequired();
     builder.Property(user => user.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
+    builder.HasIndex(user => user.LinkedProfessionalId).IsUnique().HasFilter("\"LinkedProfessionalId\" IS NOT NULL");
+    builder.HasOne(user => user.LinkedProfessional).WithOne(professional => professional.LinkedUser)
+      .HasForeignKey<UserEntity>(user => user.LinkedProfessionalId).OnDelete(DeleteBehavior.SetNull);
   }
 }

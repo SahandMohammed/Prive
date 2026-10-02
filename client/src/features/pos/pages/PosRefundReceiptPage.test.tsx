@@ -8,17 +8,13 @@ import { PosRefundReason, type PosRefund } from '../types/pos.types'
 const refund: PosRefund = {
   id: 'refund-1',
   documentNumber: 'REF-000001',
-  posSaleId: 'sale-1',
-  posSaleDocumentNumber: 'POS-000001',
   salesInvoiceId: 'invoice-1',
   salesInvoiceDocumentNumber: 'SI-000001',
   branchId: 'branch',
   branchCode: 'MAIN',
   branchName: 'Main',
-  posSessionId: 'session',
-  posSessionNumber: 'SES-1',
-  customerId: null,
-  customerName: null,
+  customerId: 'walk-in-customer',
+  customerName: 'Walk-in Customer',
   reason: PosRefundReason.ProductReturned,
   notes: 'Unopened return',
   isVoid: false,
@@ -42,7 +38,7 @@ const refund: PosRefund = {
       lineType: SalesLineType.Product,
       description: 'Shampoo',
       unitCode: 'PC',
-      professionalUsername: null,
+      professionalName: null,
       quantity: 1,
       baseQuantity: 1,
       refundAmountBase: 15_000,
@@ -51,9 +47,9 @@ const refund: PosRefund = {
       stockMovementIds: ['movement'],
     },
   ],
-  tenders: [
+  refundPayouts: [
     {
-      id: 'tender',
+      id: 'payout',
       sequence: 1,
       moneyAccountId: 'usd-account',
       moneyAccountCode: 'CASH-USD',
@@ -72,6 +68,13 @@ vi.mock('../hooks/usePos', () => ({
   usePosRefund: () => ({ data: refund, isPending: false, isError: false, error: null }),
 }))
 
+vi.mock('@/features/auth', () => ({
+  useCurrentUser: () => ({ data: { role: 'Manager' } }),
+  hasCapability: () => true,
+}))
+
+vi.mock('@/features/business', () => ({ useCurrentBusiness: () => ({ data: undefined }), useBranches: () => ({ data: undefined }) }))
+
 afterEach(cleanup)
 
 describe('PosRefundReceiptPage', () => {
@@ -84,13 +87,13 @@ describe('PosRefundReceiptPage', () => {
       </MemoryRouter>
     )
     expect(screen.getAllByText('REF-000001').length).toBeGreaterThan(0)
-    expect(screen.getByText('Restocked')).toBeInTheDocument()
-    expect(screen.getByText(/Refund-time rate: 1 USD = 1,250 IQD/)).toBeInTheDocument()
-    expect(screen.getByText('Receivable reduction')).toBeInTheDocument()
+    expect(screen.getByText('Restock product')).toBeInTheDocument()
+    expect(screen.getByText(/1 USD = 1,250 IQD/)).toBeInTheDocument()
+    expect(screen.getByText('AR reduction first')).toBeInTheDocument()
     expect(screen.getByText('Physical payout')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Original sale/ })).toHaveAttribute(
       'href',
-      '/pos/sales/sale-1'
+      '/pos/sales/invoice-1'
     )
   })
 })

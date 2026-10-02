@@ -5,6 +5,7 @@ using Api.Modules.Pos;
 using Api.Modules.Purchase;
 using Api.Modules.Sales;
 using Api.Shared.Persistence;
+using Api.Shared.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Dashboard;
@@ -55,11 +56,12 @@ public sealed class DashboardService
   public async Task<DashboardSummaryResponse> GetSummaryAsync(CancellationToken ct)
   {
     var branchId = RequireBranchId();
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw new BadRequestException(ErrorCodes.Dashboard.BusinessNotConfigured, "Complete Business Setup before viewing the dashboard.");
     var (currencyCode, currencySymbol) = await GetBaseCurrencyAsync(ct);
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessTime.DateAt(business, DateTime.UtcNow);
     var yesterday = today.AddDays(-1);
-    var todayStart = today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-    var tomorrowStart = today.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var (todayStart, tomorrowStart) = BusinessTime.UtcRange(business, today, today);
 
     // 1. Today's Sales (Both POS and regular posted sales invoices via SalesInvoices table)
     var salesToday = await _db.SalesInvoices.AsNoTracking()
@@ -77,7 +79,7 @@ public sealed class DashboardService
     var yesterdaySalesBase = await _db.SalesInvoices.AsNoTracking()
       .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.InvoiceDate == yesterday)
       .SumAsync(s => (decimal?)s.BaseTotal, ct) ?? 0m;
-    var yesterdayStart = yesterday.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var (yesterdayStart, _) = BusinessTime.UtcRange(business, yesterday, yesterday);
     var yesterdayRefundsBase = await _db.PosRefunds.AsNoTracking()
       .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
         && refund.PostedAtUtc >= yesterdayStart && refund.PostedAtUtc < todayStart)
@@ -100,7 +102,7 @@ public sealed class DashboardService
     var todayCashPaidBase = ledgerEntriesToday.Where(a => a < 0).Sum(a => -a);
     var todayNetCashMovementBase = todayCashReceivedBase - todayCashPaidBase;
 
-    // 3. Customer Receivables (all posted invoices minus initial POS settlement and posted customer receipts)
+    // 3. Customer Receivables (posted receivables minus active Payment allocations and AR refunds)
     var unpaidCustomerInvoices = await _db.SalesInvoices.AsNoTracking()
       .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted)
       .Select(s => new
@@ -108,24 +110,20 @@ public sealed class DashboardService
         s.Id,
         s.CustomerId,
         s.BaseTotal,
-        PosSettledBase = s.PosSale == null
-          ? 0m
-          : (s.PosSale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m)
-            - (s.PosSale.Change == null ? 0m : s.PosSale.Change.BaseAmount),
-        AllocatedBase = _db.CustomerReceiptAllocations
-          .Where(a => a.SalesInvoiceId == s.Id && a.CustomerReceipt.Status == FinanceDocumentStatus.Posted)
+        AllocatedBase = _db.PaymentAllocations
+          .Where(a => a.SalesInvoiceId == s.Id)
           .Sum(a => (decimal?)a.BaseAmount) ?? 0m,
         RefundReceivableBase = _db.PosRefunds
           .Where(refund => refund.SalesInvoiceId == s.Id && refund.Status == PosRefundStatus.Posted)
           .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m
       })
-      .Where(s => s.BaseTotal - s.PosSettledBase - s.AllocatedBase - s.RefundReceivableBase > 0.001m)
+      .Where(s => s.BaseTotal - s.AllocatedBase - s.RefundReceivableBase > 0.001m)
       .ToListAsync(ct);
 
     var customerReceivablesBase = unpaidCustomerInvoices.Sum(s =>
-      s.BaseTotal - s.PosSettledBase - s.AllocatedBase - s.RefundReceivableBase);
+      s.BaseTotal - s.AllocatedBase - s.RefundReceivableBase);
     var customerOutstandingInvoiceCount = unpaidCustomerInvoices.Count;
-    var customerOutstandingCustomerCount = unpaidCustomerInvoices.Select(s => s.CustomerId).Where(c => c != null).Distinct().Count();
+    var customerOutstandingCustomerCount = unpaidCustomerInvoices.Select(s => s.CustomerId).Distinct().Count();
 
     // 4. Supplier Payables (Posted purchase invoices minus posted supplier payment allocations)
     var unpaidPurchaseInvoices = await _db.PurchaseInvoices.AsNoTracking()
@@ -199,8 +197,10 @@ public sealed class DashboardService
       throw new BadRequestException(ErrorCodes.Dashboard.InvalidTrendRange, "Days must be between 1 and 90.");
     }
 
+    var business = await _db.Businesses.AsNoTracking().SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
+      ?? throw new BadRequestException(ErrorCodes.Dashboard.BusinessNotConfigured, "Complete Business Setup before viewing the dashboard.");
     var (currencyCode, currencySymbol) = await GetBaseCurrencyAsync(ct);
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var today = BusinessTime.DateAt(business, DateTime.UtcNow);
     var startDate = today.AddDays(-days + 1);
 
     var salesMap = await _db.SalesInvoices.AsNoTracking()
@@ -208,14 +208,13 @@ public sealed class DashboardService
       .GroupBy(s => s.InvoiceDate)
       .Select(g => new { Date = g.Key, Total = g.Sum(s => s.BaseTotal) })
       .ToDictionaryAsync(x => x.Date, x => x.Total, ct);
-    var trendStart = startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-    var trendEnd = today.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    var (trendStart, trendEnd) = BusinessTime.UtcRange(business, startDate, today);
     var refundRows = await _db.PosRefunds.AsNoTracking()
       .Where(refund => refund.BranchId == branchId && refund.Status == PosRefundStatus.Posted
         && refund.PostedAtUtc >= trendStart && refund.PostedAtUtc < trendEnd)
       .Select(refund => new { refund.PostedAtUtc, refund.TotalRefundBase })
       .ToListAsync(ct);
-    var refundMap = refundRows.GroupBy(refund => DateOnly.FromDateTime(refund.PostedAtUtc))
+    var refundMap = refundRows.GroupBy(refund => BusinessTime.DateAt(business, refund.PostedAtUtc))
       .ToDictionary(group => group.Key, group => group.Sum(refund => refund.TotalRefundBase));
 
     var expenseMap = await _db.ExpenseDocuments.AsNoTracking()
@@ -278,13 +277,13 @@ public sealed class DashboardService
     var transactions = new List<DashboardRecentTransactionResponse>();
 
     // 1. POS Sales
-    var posSales = await _db.PosSales.AsNoTracking()
-      .Where(p => p.SalesInvoice.BranchId == branchId)
+    var posSales = await _db.PosContexts.AsNoTracking()
+      .Where(p => p.SalesInvoice.BranchId == branchId && !p.SalesInvoice.IsDeleted)
       .OrderByDescending(p => p.CompletedAtUtc)
       .Take(safeLimit)
       .Select(p => new DashboardRecentTransactionResponse(
-        p.Id,
-        p.DocumentNumber,
+        p.SalesInvoiceId,
+        p.SalesInvoice.DocumentNumber,
         "POS Sale",
         p.CompletedAtUtc,
         p.SalesInvoice.Total,
@@ -292,7 +291,7 @@ public sealed class DashboardService
         p.SalesInvoice.BaseTotal,
         "in",
         p.SalesInvoice.Customer != null ? p.SalesInvoice.Customer.Name : "Walk-in Customer",
-        $"/pos/sales/{p.Id}"))
+        $"/pos/sales/{p.SalesInvoiceId}"))
       .ToListAsync(ct);
     transactions.AddRange(posSales);
 
@@ -316,7 +315,7 @@ public sealed class DashboardService
 
     // 2. Regular Sales Invoices (non-POS)
     var salesInvoices = await _db.SalesInvoices.AsNoTracking()
-      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.PosSale == null)
+      .Where(s => s.BranchId == branchId && s.Status == SalesInvoiceStatus.Posted && s.PosContext == null)
       .OrderByDescending(s => s.PostedAtUtc ?? s.CreatedAtUtc)
       .Take(safeLimit)
       .Select(s => new DashboardRecentTransactionResponse(
@@ -438,10 +437,18 @@ public sealed class DashboardService
   {
     var branchId = RequireBranchId();
     var safeLimit = Math.Clamp(limit, 1, 50);
+    var deletedInvoiceIds = _db.SalesInvoices.IgnoreQueryFilters()
+      .Where(invoice => invoice.BranchId == branchId && invoice.IsDeleted)
+      .Select(invoice => invoice.Id);
+    var deletedPosInvoiceIds = _db.PosContexts.IgnoreQueryFilters()
+      .Where(sale => sale.SalesInvoice.BranchId == branchId && sale.SalesInvoice.IsDeleted)
+      .Select(context => context.SalesInvoiceId);
 
     var loggedActivities = await _db.ActivityLogs.AsNoTracking()
       .Include(a => a.User)
-      .Where(a => a.BranchId == branchId)
+      .Where(a => a.BranchId == branchId
+        && (a.EntityType != "Sales Invoice" || !deletedInvoiceIds.Contains(a.EntityId))
+        && (a.EntityType != "POS Sale" || !deletedPosInvoiceIds.Contains(a.EntityId)))
       .OrderByDescending(a => a.TimestampUtc)
       .Take(safeLimit)
       .Select(a => new DashboardRecentActivityResponse(
@@ -464,17 +471,19 @@ public sealed class DashboardService
     var seenDocNumbers = new HashSet<string>(loggedActivities.Select(a => a.DocumentNumber));
 
     // POS Sales
-    var recentPos = await _db.PosSales.AsNoTracking()
-      .Include(p => p.CashierUser)
-      .Where(p => p.SalesInvoice.BranchId == branchId && !seenDocNumbers.Contains(p.DocumentNumber))
+    var recentPos = await _db.PosContexts.AsNoTracking()
+      .Include(p => p.OperatorUser)
+      .Where(p => p.SalesInvoice.BranchId == branchId
+        && !p.SalesInvoice.IsDeleted
+        && !seenDocNumbers.Contains(p.SalesInvoice.DocumentNumber))
       .OrderByDescending(p => p.CompletedAtUtc)
       .Take(safeLimit)
       .Select(p => new DashboardRecentActivityResponse(
-        p.Id,
-        p.CashierUser.Username,
+        p.SalesInvoiceId,
+        p.OperatorUser.Username,
         "completed",
         "POS Sale",
-        p.DocumentNumber,
+        p.SalesInvoice.DocumentNumber,
         p.CompletedAtUtc,
         "Completed sale at POS"))
       .ToListAsync(ct);
@@ -483,17 +492,20 @@ public sealed class DashboardService
     // Sales Invoices
     var recentSales = await _db.SalesInvoices.AsNoTracking()
       .Include(s => s.CreatedByUser)
-      .Where(s => s.BranchId == branchId && s.PosSale == null && !seenDocNumbers.Contains(s.DocumentNumber))
+      .Where(s => s.BranchId == branchId
+        && s.Status == SalesInvoiceStatus.Posted
+        && s.PosContext == null
+        && !seenDocNumbers.Contains(s.DocumentNumber))
       .OrderByDescending(s => s.PostedAtUtc ?? s.CreatedAtUtc)
       .Take(safeLimit)
       .Select(s => new DashboardRecentActivityResponse(
         s.Id,
         s.CreatedByUser.Username,
-        s.Status == SalesInvoiceStatus.Posted ? "posted" : "created",
+        "created",
         "Sales Invoice",
         s.DocumentNumber,
         s.PostedAtUtc ?? s.CreatedAtUtc,
-        s.Status == SalesInvoiceStatus.Posted ? "Posted sales invoice" : "Created sales invoice draft"))
+        "Created sales invoice"))
       .ToListAsync(ct);
     supplemental.AddRange(recentSales);
 

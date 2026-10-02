@@ -34,8 +34,8 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
     {
       logger.LogError(
         exception,
-        "Server-level exception [{Code}] for {Method} {Path}",
-        code, httpContext.Request.Method, httpContext.Request.Path);
+        "Server-level exception [{Code}] for {Method} {Path} with trace ID {TraceId}",
+        code, httpContext.Request.Method, httpContext.Request.Path, httpContext.TraceIdentifier);
     }
     else
     {

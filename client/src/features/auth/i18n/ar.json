@@ -1,0 +1,43 @@
+{
+  "login": {
+    "title": "مرحباً بعودتك",
+    "subtitle": "أدخل بيانات اعتمادك للوصول إلى مساحة عمل Privé.",
+    "cardTitle": "تسجيل الدخول",
+    "cardDesc": "لموظفي الصالون المصرح لهم فقط",
+    "username": "اسم المستخدم",
+    "usernamePlaceholder": "أدخل اسم المستخدم",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "••••••••••••",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور",
+    "signIn": "تسجيل الدخول إلى Privé",
+    "signingIn": "جارٍ تسجيل الدخول...",
+    "unexpectedError": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+    "themeToggleLight": "التبديل إلى الوضع الفاتح",
+    "themeToggleDark": "التبديل إلى الوضع الداكن",
+    "themeToggleAria": "تبديل المظهر",
+    "editorial": {
+      "headlinePart1": "فن العناية الراقية، ",
+      "headlinePart2": "بتناغم وسهولة تامة.",
+      "narrative": "إدارة آمنة للحجوزات، ملفات العملاء، نقاط البيع، والعمليات المالية بكل رقي وسلاسة.",
+      "product": "مخصص من BloomERP",
+      "system": "نظام الإدارة",
+      "version": "الإصدار"
+    },
+    "copyright": "حقوق النظام محفوظة لشركة LogicBloom. جميع الحقوق محفوظة."
+  },
+  "changePassword": {
+    "trigger": "تغيير كلمة المرور",
+    "title": "تغيير كلمة المرور",
+    "description": "أدخل كلمة المرور الحالية واختر كلمة مرور جديدة. سيتم تسجيل خروجك عند النجاح.",
+    "currentPassword": "كلمة المرور الحالية",
+    "currentPasswordPlaceholder": "أدخل كلمة المرور الحالية",
+    "newPassword": "كلمة المرور الجديدة",
+    "newPasswordPlaceholder": "أدخل كلمة المرور الجديدة",
+    "confirmPassword": "تأكيد كلمة المرور الجديدة",
+    "confirmPasswordPlaceholder": "أعد إدخال كلمة المرور الجديدة",
+    "submit": "تغيير كلمة المرور",
+    "submitting": "جارٍ التغيير...",
+    "unexpectedError": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى."
+  }
+}

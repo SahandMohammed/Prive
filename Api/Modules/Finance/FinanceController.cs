@@ -14,8 +14,38 @@ public sealed class FinanceController : ControllerBase
 {
   private const string Administrators = "SuperAdmin,Manager,Owner";
   private readonly FinanceService _service;
+  private readonly PaymentService _payments;
+  private readonly CustomerAccountReader _customerAccounts;
 
-  public FinanceController(FinanceService service) => _service = service;
+  public FinanceController(
+    FinanceService service,
+    PaymentService payments,
+    CustomerAccountReader customerAccounts)
+  {
+    _service = service;
+    _payments = payments;
+    _customerAccounts = customerAccounts;
+  }
+
+  [HttpGet("payments/{id:guid}")]
+  [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetPayment(Guid id, CancellationToken ct) =>
+    Ok(ApiResponse<PaymentResponse>.Ok(await _payments.GetAsync(id, ct)));
+
+  [HttpGet("customers/{customerId:guid}/account-summary")]
+  [ProducesResponseType(typeof(ApiResponse<CustomerAccountSummaryResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetCustomerAccountSummary(Guid customerId, CancellationToken ct) =>
+    Ok(ApiResponse<CustomerAccountSummaryResponse>.Ok(
+      await _customerAccounts.GetSummaryAsync(customerId, ct)));
+
+  [HttpGet("customers/{customerId:guid}/statement")]
+  [ProducesResponseType(typeof(ApiResponse<CustomerAccountStatementResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> GetCustomerStatement(
+    Guid customerId,
+    [FromQuery] CustomerAccountStatementQuery query,
+    CancellationToken ct) =>
+    Ok(ApiResponse<CustomerAccountStatementResponse>.Ok(
+      await _customerAccounts.GetStatementAsync(customerId, query, ct)));
 
   [HttpGet("money-accounts")]
   [ProducesResponseType(typeof(ApiResponse<List<MoneyAccountResponse>>), StatusCodes.Status200OK)]
@@ -100,38 +130,6 @@ public sealed class FinanceController : ControllerBase
     var result = await _service.GetMoneyLedgerAsync(query, GetUserId(), ct);
     return Ok(ApiResponse<List<MoneyLedgerEntryResponse>>.Ok(result.Items, result.ToMetadata()));
   }
-
-  [HttpGet("exchange-rates")]
-  [ProducesResponseType(typeof(ApiResponse<List<ExchangeRateResponse>>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> GetExchangeRates([FromQuery] ExchangeRateListQuery query, CancellationToken ct)
-  {
-    var result = await _service.GetExchangeRatesAsync(query, ct);
-    return Ok(ApiResponse<List<ExchangeRateResponse>>.Ok(result.Items, result.ToMetadata()));
-  }
-
-  [HttpGet("exchange-rates/effective")]
-  [ProducesResponseType(typeof(ApiResponse<EffectiveExchangeRateResponse>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> GetEffectiveExchangeRate(
-    [FromQuery] Guid currencyId,
-    [FromQuery] DateOnly date,
-    CancellationToken ct) =>
-    Ok(ApiResponse<EffectiveExchangeRateResponse>.Ok(
-      await _service.GetEffectiveExchangeRateAsync(currencyId, date, ct)));
-
-  [HttpPost("exchange-rates")]
-  [Authorize(Roles = Administrators)]
-  [ProducesResponseType(typeof(ApiResponse<ExchangeRateResponse>), StatusCodes.Status201Created)]
-  public async Task<IActionResult> CreateExchangeRate([FromBody] CreateExchangeRateRequest request, CancellationToken ct)
-  {
-    var rate = await _service.CreateExchangeRateAsync(request, GetUserId(), ct);
-    return StatusCode(StatusCodes.Status201Created, ApiResponse<ExchangeRateResponse>.Ok(rate));
-  }
-
-  [HttpPut("exchange-rates/{id:guid}/deactivate")]
-  [Authorize(Roles = Administrators)]
-  [ProducesResponseType(typeof(ApiResponse<ExchangeRateResponse>), StatusCodes.Status200OK)]
-  public async Task<IActionResult> DeactivateExchangeRate(Guid id, CancellationToken ct) =>
-    Ok(ApiResponse<ExchangeRateResponse>.Ok(await _service.DeactivateExchangeRateAsync(id, ct)));
 
   [HttpGet("transfers")]
   [ProducesResponseType(typeof(ApiResponse<List<MoneyTransferResponse>>), StatusCodes.Status200OK)]
@@ -288,6 +286,26 @@ public sealed class FinanceController : ControllerBase
   public async Task<IActionResult> PostCustomerReceipt(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<CustomerReceiptResponse>.Ok(
       await _service.PostCustomerReceiptAsync(id, GetUserId(), ct)));
+
+  [HttpPut("customer-receipts/{id:guid}/posted")]
+  [ProducesResponseType(typeof(ApiResponse<CustomerReceiptResponse>), StatusCodes.Status200OK)]
+  public async Task<IActionResult> CorrectPostedCustomerReceipt(
+    Guid id,
+    [FromBody] CorrectCustomerReceiptRequest request,
+    CancellationToken ct) =>
+    Ok(ApiResponse<CustomerReceiptResponse>.Ok(
+      await _service.CorrectPostedCustomerReceiptAsync(id, request, GetUserId(), ct)));
+
+  [HttpDelete("customer-receipts/{id:guid}/posted")]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  public async Task<IActionResult> DeletePostedCustomerReceipt(
+    Guid id,
+    [FromBody] DeletePaymentRequest request,
+    CancellationToken ct)
+  {
+    await _service.DeletePostedCustomerReceiptAsync(id, request, GetUserId(), ct);
+    return NoContent();
+  }
 
   private Guid GetUserId()
   {

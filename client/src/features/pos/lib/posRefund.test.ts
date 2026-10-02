@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { posTenderedBaseTotal } from './posMoney'
+import { posCollectionBaseTotal } from './posMoney'
 import { posRefundPreview } from './posRefund'
 
 const lines = [
@@ -38,10 +38,10 @@ describe('POS refund preview', () => {
   })
 
   it('uses the supplied current rates for exact mixed-currency refund math', () => {
-    expect(posTenderedBaseTotal([
+    expect(posCollectionBaseTotal([
       { amount: 10, exchangeRate: 1_200 },
       { amount: 13_000, exchangeRate: 1 },
     ])).toBe(25_000)
-    expect(posTenderedBaseTotal([{ amount: 10, exchangeRate: 1_300 }])).toBe(13_000)
+    expect(posCollectionBaseTotal([{ amount: 10, exchangeRate: 1_300 }])).toBe(13_000)
   })
 })

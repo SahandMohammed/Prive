@@ -23,13 +23,13 @@ export function DataTablePagination({
   const currentPage = Math.min(Math.max(page, 1), totalPages)
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
-      <p className="text-xs text-slate-500">{totalItems} result{totalItems === 1 ? '' : 's'}</p>
+    <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs text-muted-foreground">{totalItems} result{totalItems === 1 ? '' : 's'}</p>
       <div className="flex items-center justify-between gap-4 sm:justify-end">
-        <label className="flex items-center gap-2 text-xs text-slate-500">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
           Rows per page:
           <select
-            className="h-8 cursor-pointer rounded-lg border border-slate-200 bg-white px-2 text-xs shadow-2xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+            className="h-8 cursor-pointer rounded-lg border border-border bg-card px-2 text-xs text-foreground shadow-2xs outline-none focus:border-ring"
             value={pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
           >
@@ -39,7 +39,7 @@ export function DataTablePagination({
         <div className="flex items-center gap-1.5">
           <PaginationButton label="First page" disabled={currentPage === 1} onClick={() => onPageChange(1)}><ChevronsLeft /></PaginationButton>
           <PaginationButton label="Previous page" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}><ChevronLeft /></PaginationButton>
-          <span className="min-w-12 text-center text-xs text-slate-600 dark:text-slate-300">{currentPage} / {totalPages}</span>
+          <span className="min-w-12 text-center text-xs text-foreground font-medium">{currentPage} / {totalPages}</span>
           <PaginationButton label="Next page" disabled={currentPage === totalPages} onClick={() => onPageChange(currentPage + 1)}><ChevronRight /></PaginationButton>
           <PaginationButton label="Last page" disabled={currentPage === totalPages} onClick={() => onPageChange(totalPages)}><ChevronsRight /></PaginationButton>
         </div>

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { DashboardTrendResponse } from '../types/dashboard.types'
 import { formatCompactNumber, formatDashboardAmount } from '../utils/dashboard.utils'
+import { formatDate } from '@/lib/i18n'
+import { useTranslation } from 'react-i18next'
 
 interface SalesExpenseTrendChartProps {
   data?: DashboardTrendResponse
@@ -82,18 +84,13 @@ export function SalesExpenseTrendChart({
   const maxExpenses = Math.max(...items.map((d) => d.expensesBase), 0)
   const maxNet = Math.max(...items.map((d) => Math.max(0, d.netBase)), 0)
 
-  let highest = 1000
-  if (metricMode === 'all') {
-    highest = Math.max(maxSales, maxExpenses, 1000)
-  } else if (metricMode === 'sales') {
-    highest = Math.max(maxSales, 1000)
-  } else if (metricMode === 'expenses') {
-    highest = Math.max(maxExpenses, 1000)
-  } else {
-    highest = Math.max(maxNet, 1000)
-  }
-
-  const maxVal = highest
+  const maxVal = metricMode === 'all'
+    ? Math.max(maxSales, maxExpenses, 1000)
+    : metricMode === 'sales'
+      ? Math.max(maxSales, 1000)
+      : metricMode === 'expenses'
+        ? Math.max(maxExpenses, 1000)
+        : Math.max(maxNet, 1000)
 
   const getY = (val: number) => {
     const clamped = Math.max(0, val)
@@ -115,9 +112,9 @@ export function SalesExpenseTrendChart({
       const p2 = pts[i + 1]
       const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1]
 
-      let cp1x = p1.x + (p2.x - p0.x) / 6
+      const cp1x = p1.x + (p2.x - p0.x) / 6
       let cp1y = p1.y + (p2.y - p0.y) / 6
-      let cp2x = p2.x - (p3.x - p1.x) / 6
+      const cp2x = p2.x - (p3.x - p1.x) / 6
       let cp2y = p2.y - (p3.y - p1.y) / 6
 
       // Clamping: when endpoints are both on baseline, remain strictly flat at baseline
@@ -172,6 +169,8 @@ export function SalesExpenseTrendChart({
     }
   }
 
+  const { t } = useTranslation(['dashboard', 'common'])
+
   return (
     <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all">
       {/* Header */}
@@ -179,14 +178,14 @@ export function SalesExpenseTrendChart({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base sm:text-lg font-bold font-heading text-foreground">
-              Sales & Expense Trend
+              {t('dashboard:salesExpenseTrend')}
             </h2>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-muted-foreground font-medium">
-              {selectedDays} Days
+              {t('dashboard:daysCount', { count: selectedDays })}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Daily operational cash and sales trends over the selected period
+            {t('dashboard:daysTrendSubtitle')}
           </p>
         </div>
 
@@ -195,10 +194,10 @@ export function SalesExpenseTrendChart({
           <div className="inline-flex rounded-lg bg-neutral-100 dark:bg-neutral-800/80 p-1 text-xs font-medium">
             {(
               [
-                { mode: 'all', label: 'All' },
-                { mode: 'sales', label: 'Sales' },
-                { mode: 'expenses', label: 'Expenses' },
-                { mode: 'profit', label: 'Net' },
+                { mode: 'all', label: t('dashboard:all') },
+                { mode: 'sales', label: t('dashboard:sales') },
+                { mode: 'expenses', label: t('dashboard:expenses') },
+                { mode: 'profit', label: t('dashboard:net') },
               ] as const
             ).map(({ mode, label }) => (
               <button
@@ -241,13 +240,14 @@ export function SalesExpenseTrendChart({
       {/* SVG Spline Chart */}
       {isLoading ? (
         <div className="w-full h-[300px] flex items-center justify-center bg-muted/20 rounded-xl animate-pulse">
-          <span className="text-xs text-muted-foreground">Loading chart data...</span>
+          <span className="text-xs text-muted-foreground">{t('dashboard:loadingChartData')}</span>
         </div>
       ) : hasEmptyData ? (
         <div className="w-full h-[300px] flex items-center justify-center border border-dashed border-border rounded-xl">
-          <p className="text-xs text-muted-foreground">No transaction data for this period.</p>
+          <p className="text-xs text-muted-foreground">{t('dashboard:noTransactionData')}</p>
         </div>
       ) : (
+
         <div ref={containerRef} className="relative w-full h-[300px] overflow-hidden pt-1 select-none">
           <svg
             width="100%"
@@ -450,27 +450,23 @@ export function SalesExpenseTrendChart({
               }}
             >
               <p className="font-semibold text-foreground border-b border-border/60 pb-1 mb-1.5">
-                {new Date(activeItem.date).toLocaleDateString(undefined, {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}
+                {formatDate(activeItem.date)}
               </p>
               <div className="space-y-1">
                 <div className="flex items-center justify-between gap-4 text-orange-600 dark:text-orange-400 font-medium">
-                  <span>Sales:</span>
+                  <span>{t('dashboard:sales')}:</span>
                   <span className="font-bold">
                     +{formatDashboardAmount(activeItem.salesBase, currency)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 text-rose-600 dark:text-rose-400">
-                  <span>Expenses:</span>
+                  <span>{t('dashboard:expenses')}:</span>
                   <span className="font-semibold">
                     -{formatDashboardAmount(activeItem.expensesBase, currency)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 text-teal-600 dark:text-teal-400 pt-1 border-t border-border/40 font-semibold">
-                  <span>Net:</span>
+                  <span>{t('dashboard:net')}:</span>
                   <span>
                     {activeItem.netBase >= 0 ? '+' : ''}
                     {formatDashboardAmount(activeItem.netBase, currency)}
@@ -478,6 +474,7 @@ export function SalesExpenseTrendChart({
                 </div>
               </div>
             </div>
+
           )}
         </div>
       )}

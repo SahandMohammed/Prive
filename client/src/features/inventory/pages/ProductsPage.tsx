@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCurrentBusiness } from '@/features/business'
-import { formatMoney } from '@/lib/money'
+import { formatCurrency } from '@/lib/i18n'
 import { useCategories, useDeleteProduct, useProducts, useSubcategories } from '../hooks/useInventory'
 import { Empty, Loading, Status } from './CategoriesPage'
 
 export function ProductsPage() {
+  const { t } = useTranslation(['inventory', 'common'])
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [subcategoryId, setSubcategoryId] = useState('')
@@ -41,81 +43,145 @@ export function ProductsPage() {
     resetPage()
   }
   const deleteProduct = (id: string, name: string) => {
-    if (window.confirm(`Delete ${name}? Products with history cannot be deleted.`)) remove.mutate(id)
+    if (window.confirm(t('inventory:items.deleteConfirm', { name }))) {
+      remove.mutate(id)
+    }
   }
-  const money = (value: number) => formatMoney(
-    value,
-    business?.baseCurrencySymbol ?? business?.baseCurrencyCode ?? '',
-    business?.baseCurrencyDecimalPlaces ?? 2,
-  )
+
+  const currencyCode = business?.baseCurrencyCode ?? 'IQD'
 
   return (
     <div className="flex h-full w-full flex-col space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-semibold">Items</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Define inventory items, their base units, and selling or purchasing conversions.</p>
+          <h2 className="text-xl font-semibold">{t('inventory:items.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('inventory:items.description')}</p>
         </div>
-        <Link to="/settings/items/new"><Button className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"><Plus className="size-4" />Add item</Button></Link>
+        <Link to="/settings/items/new">
+          <Button className="gap-1.5">
+            <Plus className="size-4" />
+            {t('inventory:items.addItem')}
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(event) => { setSearch(event.target.value); resetPage() }} placeholder="Search name, SKU, or barcode" className="pl-9" />
+          <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => { setSearch(event.target.value); resetPage() }}
+            placeholder={t('inventory:items.searchPlaceholder')}
+            className="ps-9"
+          />
         </div>
-        <Select value={categoryId} onChange={selectCategory} label="All categories">
+        <Select value={categoryId} onChange={selectCategory} label={t('inventory:items.allCategories')}>
           {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
         </Select>
-        <Select value={subcategoryId} onChange={(value) => { setSubcategoryId(value); resetPage() }} label="All subcategories">
+        <Select value={subcategoryId} onChange={(value) => { setSubcategoryId(value); resetPage() }} label={t('inventory:items.allSubcategories')}>
           {subcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>)}
         </Select>
-        <Select value={status} onChange={(value) => { setStatus(value); resetPage() }} label="All statuses">
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+        <Select value={status} onChange={(value) => { setStatus(value); resetPage() }} label={t('inventory:items.allStatuses')}>
+          <option value="true">{t('inventory:items.active')}</option>
+          <option value="false">{t('inventory:items.inactive')}</option>
         </Select>
       </div>
 
       <DataTableShell>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className={head}>
-              <TableHead className="px-4">Item</TableHead>
-              <TableHead className="px-4">Category</TableHead>
-              <TableHead className="px-4">Base unit</TableHead>
-              <TableHead className="px-4 text-right">Purchase price</TableHead>
-              <TableHead className="px-4 text-right">Selling price</TableHead>
-              <TableHead className="px-4">Status</TableHead>
-              <TableHead className="w-24 px-4 text-right">Actions</TableHead>
-            </TableRow></TableHeader>
+            <TableHeader>
+              <TableRow className={head}>
+                <TableHead className="px-4 text-start">{t('inventory:items.th.item')}</TableHead>
+                <TableHead className="px-4 text-start">{t('inventory:items.th.category')}</TableHead>
+                <TableHead className="px-4 text-start">{t('inventory:items.th.baseUnit')}</TableHead>
+                <TableHead className="px-4 text-end">{t('inventory:items.th.purchasePrice')}</TableHead>
+                <TableHead className="px-4 text-end">{t('inventory:items.th.sellingPrice')}</TableHead>
+                <TableHead className="px-4 text-start">{t('inventory:items.th.status')}</TableHead>
+                <TableHead className="w-24 px-4 text-end">{t('inventory:items.th.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {products.isLoading ? <Loading colSpan={7} /> : rows.length === 0 ? <Empty colSpan={7} label="No items found" /> : rows.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="px-4 py-3.5"><p className="font-medium">{item.name}</p><p className="font-mono text-xs text-muted-foreground">{item.sku}</p></TableCell>
-                  <TableCell className="px-4 py-3.5"><p>{item.categoryName}</p><p className="text-xs text-muted-foreground">{item.subcategoryName ?? 'No subcategory'}</p></TableCell>
-                  <TableCell className="px-4 py-3.5"><p>{item.unitName}</p><p className="text-xs text-muted-foreground">{item.unitCode}{item.unitConversions.length > 0 ? ` · ${item.unitConversions.length} conversion${item.unitConversions.length === 1 ? '' : 's'}` : ''}</p></TableCell>
-                  <TableCell className="px-4 py-3.5 text-right font-mono">{money(item.purchasePriceBase)}</TableCell>
-                  <TableCell className="px-4 py-3.5 text-right font-mono">{money(item.sellingPriceBase)}</TableCell>
-                  <TableCell className="px-4 py-3.5"><Status active={item.isActive} /></TableCell>
-                  <TableCell className="px-4 py-3.5 text-right">
-                    <Link to={`/settings/items/${item.id}`} aria-label={`Edit ${item.name}`}><Button variant="ghost" size="icon-sm"><Pencil className="size-4" /></Button></Link>
-                    <Button variant="ghost" size="icon-sm" onClick={() => deleteProduct(item.id, item.name)} disabled={remove.isPending} aria-label={`Delete ${item.name}`}><Trash2 className="size-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {products.isLoading ? (
+                <Loading colSpan={7} />
+              ) : rows.length === 0 ? (
+                <Empty colSpan={7} label={t('inventory:items.empty')} />
+              ) : (
+                rows.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="px-4 py-3.5 text-start">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{item.sku}</p>
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-start">
+                      <p>{item.categoryName}</p>
+                      <p className="text-xs text-muted-foreground">{item.subcategoryName ?? t('inventory:items.noSubcategory')}</p>
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-start">
+                      <p>{item.unitName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.unitCode}
+                        {item.unitConversions.length > 0
+                          ? ` · ${t('inventory:items.conversionsCount', { count: item.unitConversions.length })}`
+                          : ''}
+                      </p>
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-end font-mono">
+                      {formatCurrency(item.purchasePriceBase, currencyCode)}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-end font-mono">
+                      {formatCurrency(item.sellingPriceBase, currencyCode)}
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-start">
+                      <Status active={item.isActive} />
+                    </TableCell>
+                    <TableCell className="px-4 py-3.5 text-end">
+                      <Link to={`/settings/items/${item.id}`} aria-label={`${t('common:actions.edit')} ${item.name}`}>
+                        <Button variant="ghost" size="icon-sm">
+                          <Pencil className="size-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteProduct(item.id, item.name)}
+                        disabled={remove.isPending}
+                        aria-label={`${t('common:actions.delete')} ${item.name}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
       </DataTableShell>
       {products.isError && <p className="text-sm text-destructive">{products.error.message}</p>}
       {remove.isError && <p className="text-sm text-destructive">{remove.error.message}</p>}
-      <DataTablePagination page={page} pageSize={pageSize} totalItems={total} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} />
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={total}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+      />
     </div>
   )
 }
 
 function Select({ value, onChange, label, children }: { value: string; onChange: (value: string) => void; label: string; children: React.ReactNode }) {
-  return <select value={value} onChange={(event) => onChange(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm"><option value="">{label}</option>{children}</select>
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+    >
+      <option value="">{label}</option>
+      {children}
+    </select>
+  )
 }
 
 const head = 'border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60'

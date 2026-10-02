@@ -22,6 +22,9 @@ public static class FinanceModule
         "Finance:OpeningBalanceEquityAccountCode is required.")
       .ValidateOnStart();
     services.AddScoped<FinanceService>();
+    services.AddScoped<PaymentService>();
+    services.AddScoped<InvoiceSettlementReader>();
+    services.AddScoped<CustomerAccountReader>();
     return services;
   }
 }

@@ -1,3 +1,5 @@
+using Api.Modules.Professional;
+
 namespace Api.Modules.User;
 
 public sealed class UserEntity
@@ -7,6 +9,7 @@ public sealed class UserEntity
   public string PasswordHash { get; set; } = string.Empty;
   public UserRole Role { get; set; } = UserRole.Unassigned;
   public Guid? LinkedProfessionalId { get; set; }
+  public ProfessionalEntity? LinkedProfessional { get; set; }
   public bool IsActive { get; set; } = true;
   public bool MustChangePassword { get; set; }
   public int FailedLoginAttemptCount { get; set; }

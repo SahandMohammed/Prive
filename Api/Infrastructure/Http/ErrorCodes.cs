@@ -26,11 +26,21 @@ public static class ErrorCodes
     public const string UsernameTaken = "USER_USERNAME_TAKEN";
   }
 
+  public static class Professional
+  {
+    public const string NotFound = "PROFESSIONAL_NOT_FOUND";
+    public const string BranchInvalid = "PROFESSIONAL_BRANCH_INVALID";
+    public const string LinkedUserInvalid = "PROFESSIONAL_LINKED_USER_INVALID";
+    public const string LinkedUserAlreadyAssigned = "PROFESSIONAL_LINKED_USER_ALREADY_ASSIGNED";
+    public const string HasHistory = "PROFESSIONAL_HAS_HISTORY";
+  }
+
   public static class Business
   {
     public const string NotConfigured = "BUSINESS_NOT_CONFIGURED";
     public const string AlreadyConfigured = "BUSINESS_ALREADY_CONFIGURED";
     public const string BaseCurrencyInvalid = "BUSINESS_BASE_CURRENCY_INVALID";
+    public const string TimeZoneInvalid = "BUSINESS_TIME_ZONE_INVALID";
   }
 
   public static class Branch
@@ -95,6 +105,7 @@ public static class ErrorCodes
     public const string NotFound = "CONTACT_NOT_FOUND";
     public const string RoleRequired = "CONTACT_ROLE_REQUIRED";
     public const string HasHistory = "CONTACT_HAS_HISTORY";
+    public const string SystemProtected = "CONTACT_SYSTEM_PROTECTED";
   }
 
   public static class Purchase
@@ -140,6 +151,7 @@ public static class ErrorCodes
     public const string ExchangeRateNotFound = "FINANCE_EXCHANGE_RATE_NOT_FOUND";
     public const string ExchangeRatePairInvalid = "FINANCE_EXCHANGE_RATE_PAIR_INVALID";
     public const string ExchangeRateConflict = "FINANCE_EXCHANGE_RATE_CONFLICT";
+    public const string DollarCurrencyNotConfigured = "FINANCE_DOLLAR_CURRENCY_NOT_CONFIGURED";
     public const string MoneyTransferNotFound = "FINANCE_MONEY_TRANSFER_NOT_FOUND";
     public const string TransferSameAccount = "FINANCE_TRANSFER_SAME_ACCOUNT";
     public const string TransferCurrencyMismatch = "FINANCE_TRANSFER_CURRENCY_MISMATCH";
@@ -169,6 +181,17 @@ public static class ErrorCodes
     public const string ReceiptCurrencyMismatch = "FINANCE_RECEIPT_CURRENCY_MISMATCH";
     public const string ReceiptExchangeRateMismatch = "FINANCE_RECEIPT_EXCHANGE_RATE_MISMATCH";
     public const string ReceiptAllocationExceedsOutstanding = "FINANCE_RECEIPT_ALLOCATION_EXCEEDS_OUTSTANDING";
+    public const string PaymentNotFound = "FINANCE_CUSTOMER_PAYMENT_NOT_FOUND";
+    public const string PaymentCustomerMismatch = "FINANCE_PAYMENT_CUSTOMER_MISMATCH";
+    public const string PaymentBranchMismatch = "FINANCE_PAYMENT_BRANCH_MISMATCH";
+    public const string PaymentSourceInvoiceMismatch = "FINANCE_PAYMENT_SOURCE_INVOICE_MISMATCH";
+    public const string PaymentMoneyLinesInvalid = "FINANCE_PAYMENT_MONEY_LINES_INVALID";
+    public const string PaymentMoneyAccountCurrencyMismatch = "FINANCE_PAYMENT_MONEY_ACCOUNT_CURRENCY_MISMATCH";
+    public const string PaymentMoneyLinesUnbalanced = "FINANCE_PAYMENT_MONEY_LINES_UNBALANCED";
+    public const string PaymentReceivableAccountMissing = "FINANCE_PAYMENT_RECEIVABLE_ACCOUNT_MISSING";
+    public const string PaymentHasRefundDependency = "FINANCE_PAYMENT_HAS_REFUND_DEPENDENCY";
+    public const string PaymentConcurrencyConflict = "FINANCE_PAYMENT_CONCURRENCY_CONFLICT";
+    public const string CustomerAccountDateRangeInvalid = "FINANCE_CUSTOMER_ACCOUNT_DATE_RANGE_INVALID";
     public const string InsufficientBalance = "FINANCE_INSUFFICIENT_BALANCE";
     public const string DocumentNotDraft = "FINANCE_DOCUMENT_NOT_DRAFT";
     public const string JournalDirectReversalNotAllowed = "FINANCE_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
@@ -209,6 +232,12 @@ public static class ErrorCodes
     public const string InsufficientStock = "SALES_INSUFFICIENT_STOCK";
     public const string AccountMappingInvalid = "SALES_ACCOUNT_MAPPING_INVALID";
     public const string JournalDirectReversalNotAllowed = "SALES_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
+    public const string InvoiceHasPayment = "SALES_INVOICE_HAS_PAYMENT";
+    public const string InvoiceHasRefundOrVoid = "SALES_INVOICE_HAS_REFUND_OR_VOID";
+    public const string InvoiceHasDependentTransaction = "SALES_INVOICE_HAS_DEPENDENT_TRANSACTION";
+    public const string ConcurrencyConflict = "SALES_INVOICE_CONCURRENCY_CONFLICT";
+    public const string PosBranchImmutable = "SALES_POS_BRANCH_IMMUTABLE";
+    public const string PosInvoiceDateImmutable = "SALES_POS_INVOICE_DATE_IMMUTABLE";
   }
 
   public static class Pos
@@ -218,8 +247,8 @@ public static class ErrorCodes
     public const string LinesRequired = "POS_LINES_REQUIRED";
     public const string LineInvalid = "POS_LINE_INVALID";
     public const string DuplicateLine = "POS_DUPLICATE_LINE";
-    public const string TenderRequired = "POS_TENDER_REQUIRED";
-    public const string TenderInvalid = "POS_TENDER_INVALID";
+    public const string CollectionRequired = "POS_COLLECTION_REQUIRED";
+    public const string CollectionInvalid = "POS_COLLECTION_INVALID";
     public const string MoneyAccountInvalid = "POS_MONEY_ACCOUNT_INVALID";
     public const string MoneyAccountBranchMismatch = "POS_MONEY_ACCOUNT_BRANCH_MISMATCH";
     public const string Underpayment = "POS_UNDERPAYMENT";
@@ -228,31 +257,24 @@ public static class ErrorCodes
     public const string ChangeMismatch = "POS_CHANGE_MISMATCH";
     public const string ChangeBalanceInsufficient = "POS_CHANGE_BALANCE_INSUFFICIENT";
     public const string ConcurrentCheckout = "POS_CONCURRENT_CHECKOUT";
+    public const string SettlementConcurrencyConflict = "POS_SETTLEMENT_CONCURRENCY_CONFLICT";
+    public const string SettlementHasRefundDependency = "POS_SETTLEMENT_HAS_REFUND_DEPENDENCY";
+    public const string RealCustomerRequired = "POS_REAL_CUSTOMER_REQUIRED";
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
-    public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
-    public const string RegisterInactive = "POS_REGISTER_INACTIVE";
-    public const string RegisterCodeTaken = "POS_REGISTER_CODE_TAKEN";
-    public const string SessionNotFound = "POS_SESSION_NOT_FOUND";
-    public const string SessionAlreadyOpen = "POS_SESSION_ALREADY_OPEN";
-    public const string SessionRequired = "POS_SESSION_REQUIRED";
-    public const string SessionClosed = "POS_SESSION_CLOSED";
-    public const string SessionAccessDenied = "POS_SESSION_ACCESS_DENIED";
-    public const string SessionCloseConflict = "POS_SESSION_CLOSE_CONFLICT";
-    public const string OpeningCountInvalid = "POS_OPENING_COUNT_INVALID";
-    public const string ClosingCountInvalid = "POS_CLOSING_COUNT_INVALID";
-    public const string ZReportNotFound = "POS_Z_REPORT_NOT_FOUND";
     public const string RefundNotFound = "POS_REFUND_NOT_FOUND";
     public const string RefundNothingAvailable = "POS_REFUND_NOTHING_AVAILABLE";
     public const string RefundQuantityExceeded = "POS_REFUND_QUANTITY_EXCEEDED";
-    public const string RefundTenderMismatch = "POS_REFUND_TENDER_MISMATCH";
+    public const string RefundPayoutMismatch = "POS_REFUND_PAYOUT_MISMATCH";
     public const string RefundMoneyAccountInvalid = "POS_REFUND_MONEY_ACCOUNT_INVALID";
     public const string RefundInsufficientBalance = "POS_REFUND_INSUFFICIENT_BALANCE";
-    public const string RefundSessionRequired = "POS_REFUND_SESSION_REQUIRED";
     public const string RefundConcurrencyConflict = "POS_REFUND_CONCURRENCY_CONFLICT";
     public const string RefundReasonInvalid = "POS_REFUND_REASON_INVALID";
     public const string RefundNotesRequired = "POS_REFUND_NOTES_REQUIRED";
     public const string RefundAccountMappingInvalid = "POS_REFUND_ACCOUNT_MAPPING_INVALID";
     public const string RefundLinesInvalid = "POS_REFUND_LINES_INVALID";
+    public const string IdempotencyKeyReused = "POS_IDEMPOTENCY_KEY_REUSED";
+    public const string IdempotencyKeyRequired = "POS_IDEMPOTENCY_KEY_REQUIRED";
+    public const string BaseCashboxRequired = "POS_BASE_CASHBOX_REQUIRED";
   }
 
   public static class Expenses

@@ -12,6 +12,7 @@ public sealed class ContactEntityConfiguration : IEntityTypeConfiguration<Contac
     builder.HasKey(contact => contact.Id);
     builder.Property(contact => contact.Name).HasMaxLength(200).IsRequired();
     builder.Property(contact => contact.Kind).HasConversion<string>().HasMaxLength(16).IsRequired();
+    builder.Property(contact => contact.SystemRole).HasConversion<string>().HasMaxLength(32);
     builder.Property(contact => contact.PrimaryPhoneNumber).HasMaxLength(50);
     builder.Property(contact => contact.PrimaryPhoneNormalized).HasMaxLength(50);
     builder.Property(contact => contact.SecondaryPhoneNumber).HasMaxLength(50);
@@ -27,5 +28,9 @@ public sealed class ContactEntityConfiguration : IEntityTypeConfiguration<Contac
     builder.HasIndex(contact => contact.PrimaryPhoneNormalized);
     builder.HasIndex(contact => contact.SecondaryPhoneNormalized);
     builder.HasIndex(contact => new { contact.IsCustomer, contact.IsSupplier, contact.IsActive });
+    builder.HasIndex(contact => contact.SystemRole).IsUnique()
+      .HasFilter("\"CatalogBranchId\" IS NULL AND \"SystemRole\" IS NOT NULL");
+    builder.HasIndex(contact => new { contact.CatalogBranchId, contact.SystemRole }).IsUnique()
+      .HasFilter("\"CatalogBranchId\" IS NOT NULL AND \"SystemRole\" IS NOT NULL");
   }
 }

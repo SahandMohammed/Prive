@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowUpRight,
   BookOpen,
@@ -22,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useBranches, useCurrentBusiness } from '@/features/business'
+import { formatDate, formatNumber } from '@/lib/i18n'
 import { useAccountTree, useGeneralLedger } from '../hooks/useAccounting'
 import {
   accountClassificationLabels,
@@ -29,6 +31,7 @@ import {
 } from '../types/accounting.types'
 
 export function GeneralLedgerPage() {
+  const { t } = useTranslation(['accounting', 'common'])
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [accountId, setAccountId] = useState(searchParams.get('accountId') ?? '')
@@ -74,7 +77,7 @@ export function GeneralLedgerPage() {
         line.branchCode.toLowerCase().includes(term) ||
         line.currencyCode.toLowerCase().includes(term)
     )
-  }, [ledger?.lines, lineSearch])
+  }, [ledger, lineSearch])
 
   // Summary Metrics calculations
   const totalDebits = useMemo(
@@ -142,15 +145,15 @@ export function GeneralLedgerPage() {
   const handleExportCsv = () => {
     if (!ledger) return
     const headers = [
-      'Date',
-      'Reference',
-      'Journal Description',
-      'Line Description',
-      'Branch',
-      'Currency',
-      'Debit',
-      'Credit',
-      'Running Balance',
+      t('accounting:generalLedger.th.date'),
+      t('accounting:generalLedger.th.reference'),
+      t('accounting:generalLedger.th.description'),
+      t('accounting:createJournal.th.description'),
+      t('accounting:generalLedger.th.branch'),
+      t('accounting:generalLedger.th.currency'),
+      t('accounting:generalLedger.th.debit'),
+      t('accounting:generalLedger.th.credit'),
+      t('accounting:generalLedger.th.runningBalance'),
     ]
     const rows = lines.map((l) => [
       l.entryDate,
@@ -196,15 +199,15 @@ export function GeneralLedgerPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              General Ledger
+              {t('accounting:generalLedger.title')}
             </h1>
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               <BookOpen className="h-3.5 w-3.5 text-primary" />
-              Detailed Account Activity
+              {t('accounting:generalLedger.badge')}
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Chronological audit trail of all posted journal vouchers and double-entry movements.
+            {t('accounting:generalLedger.description')}
           </p>
         </div>
 
@@ -216,7 +219,7 @@ export function GeneralLedgerPage() {
             onClick={() => window.print()}
           >
             <Printer className="h-3.5 w-3.5" />
-            Print Statement
+            {t('accounting:generalLedger.printStatement')}
           </Button>
           <Button
             variant="outline"
@@ -226,7 +229,7 @@ export function GeneralLedgerPage() {
             disabled={!ledger || lines.length === 0}
           >
             <Download className="h-3.5 w-3.5" />
-            Export CSV
+            {t('accounting:generalLedger.exportCsv')}
           </Button>
         </div>
       </div>
@@ -248,11 +251,11 @@ export function GeneralLedgerPage() {
 
           <div className="flex flex-wrap items-center gap-5">
             <div>
-              <span className="text-slate-500">Opening: </span>
+              <span className="text-slate-500">{t('accounting:generalLedger.opening')} </span>
               <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                 {formatNumber(Math.abs(openingBalance))} {currencyCode}
-                <span className="ml-1 text-[10px] font-normal text-slate-400">
-                  ({openingBalance >= 0 ? 'Dr' : 'Cr'})
+                <span className="ms-1 text-[10px] font-normal text-slate-400">
+                  ({openingBalance >= 0 ? t('accounting:generalLedger.dr') : t('accounting:generalLedger.cr')})
                 </span>
               </span>
             </div>
@@ -261,21 +264,21 @@ export function GeneralLedgerPage() {
 
             <div className="flex items-center gap-3 text-slate-500">
               <span>
-                Dr: <strong className="font-mono font-semibold text-emerald-600">+{formatNumber(totalDebits)}</strong>
+                {t('accounting:generalLedger.dr')}: <strong className="font-mono font-semibold text-emerald-600">+{formatNumber(totalDebits)}</strong>
               </span>
               <span>
-                Cr: <strong className="font-mono font-semibold text-blue-600">+{formatNumber(totalCredits)}</strong>
+                {t('accounting:generalLedger.cr')}: <strong className="font-mono font-semibold text-blue-600">+{formatNumber(totalCredits)}</strong>
               </span>
             </div>
 
             <div className="hidden h-4 w-px bg-slate-200 dark:bg-slate-800 sm:block" />
 
             <div>
-              <span className="text-slate-500">Ending: </span>
+              <span className="text-slate-500">{t('accounting:generalLedger.ending')} </span>
               <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
                 {formatNumber(Math.abs(endingBalance))} {currencyCode}
-                <span className="ml-1 text-[10px] font-semibold text-emerald-600">
-                  ({endingBalance >= 0 ? 'Dr' : 'Cr'})
+                <span className="ms-1 text-[10px] font-semibold text-emerald-600">
+                  ({endingBalance >= 0 ? t('accounting:generalLedger.dr') : t('accounting:generalLedger.cr')})
                 </span>
               </span>
             </div>
@@ -288,14 +291,14 @@ export function GeneralLedgerPage() {
         {/* Quick presets row */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="font-medium text-slate-500">Quick Period:</span>
+            <span className="font-medium text-slate-500">{t('accounting:generalLedger.quickPeriod')}</span>
             <Button
               variant="ghost"
               size="xs"
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('thisMonth')}
             >
-              This Month
+              {t('accounting:generalLedger.thisMonth')}
             </Button>
             <Button
               variant="ghost"
@@ -303,7 +306,7 @@ export function GeneralLedgerPage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('lastMonth')}
             >
-              Last Month
+              {t('accounting:generalLedger.lastMonth')}
             </Button>
             <Button
               variant="ghost"
@@ -311,7 +314,7 @@ export function GeneralLedgerPage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('thisQuarter')}
             >
-              This Quarter
+              {t('accounting:generalLedger.thisQuarter')}
             </Button>
             <Button
               variant="ghost"
@@ -319,7 +322,7 @@ export function GeneralLedgerPage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('thisYear')}
             >
-              This Year
+              {t('accounting:generalLedger.thisYear')}
             </Button>
             <Button
               variant="ghost"
@@ -327,12 +330,12 @@ export function GeneralLedgerPage() {
               className="h-7 px-2 text-xs"
               onClick={() => applyPreset('allTime')}
             >
-              All Time
+              {t('accounting:generalLedger.allTime')}
             </Button>
           </div>
 
           <Link to="/accounting/trial-balance" className="text-xs text-primary hover:underline">
-            View Trial Balance Verification →
+            {t('accounting:generalLedger.viewTrialBalance')}
           </Link>
         </div>
 
@@ -345,11 +348,13 @@ export function GeneralLedgerPage() {
               onChange={(e) => handleSelectAccount(e.target.value)}
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs font-medium"
             >
-              <option value="">Select posting account...</option>
+              <option value="">{t('accounting:generalLedger.selectAccountPrompt')}</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.code} — {account.name} (
-                  {accountClassificationLabels[account.classification] ?? ''})
+                  {t(`accounting:classifications.${account.classification}`, {
+                    defaultValue: accountClassificationLabels[account.classification] ?? '',
+                  })})
                 </option>
               ))}
             </select>
@@ -361,7 +366,7 @@ export function GeneralLedgerPage() {
             onChange={(e) => setBranchId(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="">Current branch</option>
+            <option value="">{t('accounting:generalLedger.currentBranch')}</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.code} — {b.name}
@@ -371,7 +376,7 @@ export function GeneralLedgerPage() {
 
           {/* Date Range Inputs */}
           <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-400">From:</span>
+            <span className="text-xs text-slate-400">{t('accounting:generalLedger.from')}</span>
             <Input
               type="date"
               value={fromDate}
@@ -382,7 +387,7 @@ export function GeneralLedgerPage() {
 
           <div className="flex items-center gap-2">
             <div className="flex flex-1 items-center gap-1">
-              <span className="text-xs text-slate-400">To:</span>
+              <span className="text-xs text-slate-400">{t('accounting:generalLedger.to')}</span>
               <Input
                 type="date"
                 value={toDate}
@@ -394,7 +399,7 @@ export function GeneralLedgerPage() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                title="Reset filters"
+                title={t('accounting:generalLedger.resetFilters')}
                 onClick={handleClearFilters}
                 className="h-9 w-9 shrink-0 text-slate-500"
               >
@@ -407,12 +412,12 @@ export function GeneralLedgerPage() {
         {/* Search within ledger entries */}
         {accountId && (
           <div className="relative pt-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={lineSearch}
               onChange={(e) => setLineSearch(e.target.value)}
-              placeholder="Search reference, journal memo, description, or currency in this ledger..."
-              className="h-8 pl-9 text-xs"
+              placeholder={t('accounting:generalLedger.searchPlaceholder')}
+              className="h-8 ps-9 text-xs"
             />
           </div>
         )}
@@ -426,11 +431,10 @@ export function GeneralLedgerPage() {
               <Wallet className="h-8 w-8" />
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              Select an account to view its General Ledger
+              {t('accounting:generalLedger.unselectedTitle')}
             </h2>
             <p className="text-xs text-slate-500">
-              Choose an active posting account from the selector above or pick a standard account
-              below to inspect its complete debit, credit, and running balance activity.
+              {t('accounting:generalLedger.unselectedDesc')}
             </p>
 
             {quickAccounts.length > 0 && (
@@ -458,19 +462,19 @@ export function GeneralLedgerPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-bold uppercase tracking-wider text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                  <TableHead className="w-32 px-4 py-3">Date</TableHead>
-                  <TableHead className="w-36 px-4 py-3">Reference</TableHead>
-                  <TableHead className="min-w-64 px-4 py-3">Journal Memo / Description</TableHead>
-                  <TableHead className="w-28 px-4 py-3">Branch</TableHead>
-                  <TableHead className="w-24 px-4 py-3">Currency</TableHead>
-                  <TableHead className="w-36 px-4 py-3 text-right text-emerald-700 dark:text-emerald-400">
-                    Debit (Base)
+                  <TableHead className="w-32 px-4 py-3">{t('accounting:generalLedger.th.date')}</TableHead>
+                  <TableHead className="w-36 px-4 py-3">{t('accounting:generalLedger.th.reference')}</TableHead>
+                  <TableHead className="min-w-64 px-4 py-3">{t('accounting:generalLedger.th.description')}</TableHead>
+                  <TableHead className="w-28 px-4 py-3">{t('accounting:generalLedger.th.branch')}</TableHead>
+                  <TableHead className="w-24 px-4 py-3">{t('accounting:generalLedger.th.currency')}</TableHead>
+                  <TableHead className="w-36 px-4 py-3 text-end text-emerald-700 dark:text-emerald-400">
+                    {t('accounting:generalLedger.th.debit')}
                   </TableHead>
-                  <TableHead className="w-36 px-4 py-3 text-right text-blue-700 dark:text-blue-400">
-                    Credit (Base)
+                  <TableHead className="w-36 px-4 py-3 text-end text-blue-700 dark:text-blue-400">
+                    {t('accounting:generalLedger.th.credit')}
                   </TableHead>
-                  <TableHead className="w-40 px-4 py-3 text-right">
-                    Running Balance
+                  <TableHead className="w-40 px-4 py-3 text-end">
+                    {t('accounting:generalLedger.th.runningBalance')}
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -478,7 +482,7 @@ export function GeneralLedgerPage() {
                 {ledgerQuery.isPending ? (
                   <TableRow>
                     <TableCell colSpan={8} className="h-48 text-center text-sm text-slate-500">
-                      Loading general ledger transactions...
+                      {t('accounting:generalLedger.loading')}
                     </TableCell>
                   </TableRow>
                 ) : ledgerQuery.isError ? (
@@ -493,14 +497,13 @@ export function GeneralLedgerPage() {
                       <div className="flex flex-col items-center justify-center gap-2">
                         <BookOpen className="h-8 w-8 text-slate-300 dark:text-slate-600" />
                         <p className="font-medium text-slate-700 dark:text-slate-300">
-                          No posted activity found for the selected period
+                          {t('accounting:generalLedger.noActivity')}
                         </p>
                         <p className="text-xs text-slate-400">
-                          Opening balance for this period is{' '}
-                          <span className="font-mono font-semibold">
-                            {formatNumber(openingBalance)} {currencyCode}
-                          </span>
-                          .
+                          {t('accounting:generalLedger.openingBalanceForPeriod', {
+                            balance: formatNumber(openingBalance),
+                            currency: currencyCode,
+                          })}
                         </p>
                       </div>
                     </TableCell>
@@ -512,7 +515,7 @@ export function GeneralLedgerPage() {
                       className="hover:bg-slate-50/80 transition-colors dark:hover:bg-slate-800/40"
                     >
                       <TableCell className="px-4 py-3 text-xs text-slate-700 dark:text-slate-300">
-                        {line.entryDate}
+                        {formatDate(line.entryDate)}
                       </TableCell>
 
                       <TableCell className="px-4 py-3 font-mono text-xs font-semibold">
@@ -523,7 +526,7 @@ export function GeneralLedgerPage() {
                           className="inline-flex items-center gap-1 text-primary hover:underline"
                         >
                           {line.reference || 'Journal'}
-                          <ArrowUpRight className="h-3 w-3" />
+                          <ArrowUpRight className="h-3 w-3 rtl:-scale-x-100" />
                         </Link>
                       </TableCell>
 
@@ -546,18 +549,18 @@ export function GeneralLedgerPage() {
                         {line.currencyCode}
                       </TableCell>
 
-                      <TableCell className="px-4 py-3 text-right font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <TableCell className="px-4 py-3 text-end font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                         {line.debitBaseAmount > 0 ? formatNumber(line.debitBaseAmount) : '—'}
                       </TableCell>
 
-                      <TableCell className="px-4 py-3 text-right font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      <TableCell className="px-4 py-3 text-end font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                         {line.creditBaseAmount > 0 ? formatNumber(line.creditBaseAmount) : '—'}
                       </TableCell>
 
-                      <TableCell className="px-4 py-3 text-right font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      <TableCell className="px-4 py-3 text-end font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
                         <span>{formatNumber(Math.abs(line.runningBalance))}</span>{' '}
                         <span className="text-[10px] text-slate-400">
-                          {line.runningBalance >= 0 ? 'Dr' : 'Cr'}
+                          ({line.runningBalance >= 0 ? t('accounting:generalLedger.dr') : t('accounting:generalLedger.cr')})
                         </span>
                       </TableCell>
                     </TableRow>
@@ -570,18 +573,18 @@ export function GeneralLedgerPage() {
                 <tfoot>
                   <TableRow className="border-t-2 border-slate-300 bg-slate-100/90 font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
                     <TableCell className="px-4 py-3 text-xs uppercase" colSpan={5}>
-                      Total Period Activity & Closing
+                      {t('accounting:generalLedger.totalPeriodActivity')}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-right font-mono text-xs text-emerald-700 dark:text-emerald-400">
+                    <TableCell className="px-4 py-3 text-end font-mono text-xs text-emerald-700 dark:text-emerald-400">
                       {formatNumber(totalDebits)}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-right font-mono text-xs text-blue-700 dark:text-blue-400">
+                    <TableCell className="px-4 py-3 text-end font-mono text-xs text-blue-700 dark:text-blue-400">
                       {formatNumber(totalCredits)}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-right font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    <TableCell className="px-4 py-3 text-end font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
                       {formatNumber(Math.abs(endingBalance))}{' '}
                       <span className="text-[10px] text-slate-500">
-                        {endingBalance >= 0 ? 'Dr' : 'Cr'}
+                        ({endingBalance >= 0 ? t('accounting:generalLedger.dr') : t('accounting:generalLedger.cr')})
                       </span>
                     </TableCell>
                   </TableRow>
@@ -596,55 +599,53 @@ export function GeneralLedgerPage() {
 }
 
 function ClassificationBadge({ classification }: { classification: AccountClassification }) {
+  const { t } = useTranslation('accounting')
+  const label = t(`classifications.${classification}`, {
+    defaultValue: accountClassificationLabels[classification] ?? 'Other',
+  })
+
   switch (classification) {
     case 0:
       return (
         <span className="inline-flex rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-          Asset
+          {label}
         </span>
       )
     case 1:
       return (
         <span className="inline-flex rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-          Liability
+          {label}
         </span>
       )
     case 2:
       return (
         <span className="inline-flex rounded bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-950/40 dark:text-purple-400">
-          Equity
+          {label}
         </span>
       )
     case 3:
       return (
         <span className="inline-flex rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
-          Revenue
+          {label}
         </span>
       )
     case 4:
       return (
         <span className="inline-flex rounded bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
-          Expense
+          {label}
         </span>
       )
     case 5:
       return (
         <span className="inline-flex rounded bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400">
-          Contra Asset
+          {label}
         </span>
       )
     default:
       return (
         <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-          {accountClassificationLabels[classification] ?? 'Other'}
+          {label}
         </span>
       )
   }
-}
-
-function formatNumber(value: number) {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  })
 }

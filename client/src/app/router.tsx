@@ -1,6 +1,7 @@
 import { UsersPage } from '@/features/users'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
+import { CapabilityRoute } from './CapabilityRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
 import { AppLayout } from './layout/AppLayout'
 import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
@@ -16,6 +17,8 @@ import {
   SupplierPaymentPage,
   CustomerReceiptsPage,
   CustomerReceiptPage,
+  CustomerAccountPage,
+  PaymentPage,
 } from '@/features/finance'
 import {
   AccountingDashboard,
@@ -26,7 +29,7 @@ import {
   GeneralLedgerPage,
   TrialBalancePage,
 } from '@/features/accounting'
-import { ServicesPage, SalesInvoicesPage, CreateSalesInvoicePage } from '@/features/sales'
+import { ServicesPage, SalesInvoicesPage, CreateSalesInvoicePage, DeletedSalesInvoicesPage } from '@/features/sales'
 import { PurchaseInvoicePage, PurchaseInvoicesPage } from '@/features/purchases'
 import { ItemsPage, CreateItemPage, WarehousesPage } from '@/features/settings'
 import {
@@ -49,8 +52,9 @@ import {
   CurrenciesPage as BaseCurrenciesPage,
 } from '@/features/business'
 import { ContactsPage } from '@/features/contacts'
-import { PosPage, PosReceiptPage, PosRefundReceiptPage, PosSessionsPage, PosZReportPage } from '@/features/pos'
+import { PosPage, PosReceiptPage, PosRefundReceiptPage } from '@/features/pos'
 import { ExpensesPage, ExpenseDetailPage, ExpenseCategoriesPage } from '@/features/expenses'
+import { ProfessionalPerformancePage, ProfessionalsPage } from '@/features/professionals'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace />, errorElement: <RouteErrorBoundary /> },
@@ -70,12 +74,14 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/contacts', element: <ContactsPage /> },
 
-          // POS full-screen workspace and historical reports.
-          { path: '/pos', element: <PosPage /> },
-          { path: '/pos/sessions', element: <PosSessionsPage /> },
-          { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
-          { path: '/pos/sales/:id', element: <PosReceiptPage /> },
-          { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
+          {
+            element: <CapabilityRoute capability="pos" />,
+            children: [
+              { path: '/pos', element: <PosPage /> },
+              { path: '/pos/sales/:id', element: <PosReceiptPage /> },
+              { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
+            ],
+          },
 
           // Finance
           { path: '/finance', element: <Navigate to="/finance/money-accounts" replace /> },
@@ -89,6 +95,8 @@ export const router = createBrowserRouter([
           { path: '/finance/customer-receipts', element: <CustomerReceiptsPage /> },
           { path: '/finance/customer-receipts/new', element: <CustomerReceiptPage /> },
           { path: '/finance/customer-receipts/:id', element: <CustomerReceiptPage /> },
+          { path: '/finance/customers/:customerId/account', element: <CustomerAccountPage /> },
+          { path: '/finance/payments/:id', element: <PaymentPage /> },
 
           // Expenses
           { path: '/expenses', element: <ExpensesPage /> },
@@ -111,6 +119,10 @@ export const router = createBrowserRouter([
           { path: '/sales/invoices', element: <SalesInvoicesPage /> },
           { path: '/sales/invoices/new', element: <CreateSalesInvoicePage /> },
           { path: '/sales/invoices/:id', element: <CreateSalesInvoicePage /> },
+          {
+            element: <CapabilityRoute capability="deletePostedInvoice" />,
+            children: [{ path: '/sales/invoices-deleted', element: <DeletedSalesInvoicesPage /> }],
+          },
 
           // Purchases
           { path: '/purchases', element: <Navigate to="/purchases/invoices" replace /> },
@@ -121,6 +133,13 @@ export const router = createBrowserRouter([
           // Settings
           { path: '/settings/business', element: <BaseBusinessSettingsPage /> },
           { path: '/users', element: <UsersPage /> },
+          {
+            element: <CapabilityRoute capability="manageProfessionals" />,
+            children: [
+              { path: '/professionals', element: <ProfessionalsPage /> },
+              { path: '/professionals/performance', element: <ProfessionalPerformancePage /> },
+            ],
+          },
           { path: '/settings/branches', element: <BranchesPage /> },
           { path: '/settings/currencies', element: <BaseCurrenciesPage /> },
           { path: '/settings/items', element: <ItemsPage /> },

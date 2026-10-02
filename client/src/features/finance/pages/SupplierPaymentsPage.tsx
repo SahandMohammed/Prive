@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Landmark, Loader2, Plus, RotateCcw, Search, Send, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatDate, formatNumber } from '@/lib/i18n'
 import { useCurrencies } from '@/features/business'
 import {
   useFinanceSuppliers,
@@ -23,6 +25,7 @@ import {
 import { FinanceDocumentStatus } from '../types/finance.types'
 
 export function SupplierPaymentsPage() {
+  const { t } = useTranslation(['finance', 'common'])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [search, setSearch] = useState('')
@@ -73,17 +76,16 @@ export function SupplierPaymentsPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Supplier Payments
+            {t('finance:supplierPayments.title')}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Accounts Payable settlements. Draft payments hold allocations against supplier bills until
-            posted to update the Money Ledger and General Ledger.
+            {t('finance:supplierPayments.description')}
           </p>
         </div>
         <Link to="/finance/supplier-payments/new">
-          <Button className="gap-1.5 bg-primary font-medium text-white shadow-xs hover:bg-primary/90">
+          <Button className="gap-1.5">
             <Plus className="size-4 stroke-[2.5]" />
-            New Supplier Payment
+            {t('finance:supplierPayments.newPayment')}
           </Button>
         </Link>
       </div>
@@ -91,15 +93,15 @@ export function SupplierPaymentsPage() {
       {/* FILTER CONTROLS TOOLBAR */}
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-xs dark:border-slate-800 md:grid-cols-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <Input
-            placeholder="Payment voucher or supplier..."
+            placeholder={t('finance:supplierPayments.searchPlaceholder')}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
               resetPage()
             }}
-            className="h-9 pl-9 text-xs"
+            className="h-9 ps-9 text-xs"
           />
         </div>
 
@@ -111,7 +113,7 @@ export function SupplierPaymentsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Suppliers</option>
+          <option value="">{t('finance:supplierPayments.allSuppliers')}</option>
           {suppliers.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -127,7 +129,7 @@ export function SupplierPaymentsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Money Accounts</option>
+          <option value="">{t('finance:supplierPayments.allAccounts')}</option>
           {moneyAccounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.code} — {account.name}
@@ -143,7 +145,7 @@ export function SupplierPaymentsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Currencies</option>
+          <option value="">{t('finance:supplierPayments.allCurrencies')}</option>
           {currencies.map((c) => (
             <option key={c.id} value={c.id}>
               {c.code}
@@ -159,14 +161,14 @@ export function SupplierPaymentsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Statuses</option>
-          <option value="0">Draft</option>
-          <option value="1">Posted</option>
+          <option value="">{t('finance:supplierPayments.allStatuses')}</option>
+          <option value="0">{t('finance:transfersPage.draft')}</option>
+          <option value="1">{t('finance:transfersPage.posted')}</option>
         </select>
 
         <Input
           type="date"
-          aria-label="From Date"
+          aria-label={t('finance:transfersPage.fromDate')}
           value={fromDate}
           onChange={(e) => {
             setFromDate(e.target.value)
@@ -177,7 +179,7 @@ export function SupplierPaymentsPage() {
 
         <Input
           type="date"
-          aria-label="To Date"
+          aria-label={t('finance:transfersPage.toDate')}
           value={toDate}
           onChange={(e) => {
             setToDate(e.target.value)
@@ -195,7 +197,7 @@ export function SupplierPaymentsPage() {
               onClick={handleClearFilters}
             >
               <RotateCcw className="size-3.5" />
-              Reset Filters
+              {t('finance:supplierPayments.clearFilters')}
             </Button>
           )}
         </div>
@@ -207,15 +209,15 @@ export function SupplierPaymentsPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                <TableHead className="px-4 py-3">Voucher #</TableHead>
-                <TableHead className="px-4 py-3">Date</TableHead>
-                <TableHead className="px-4 py-3">Supplier</TableHead>
-                <TableHead className="px-4 py-3">Money Account</TableHead>
-                <TableHead className="px-4 py-3">Currency</TableHead>
-                <TableHead className="px-4 py-3 text-right">Payment Amount</TableHead>
-                <TableHead className="px-4 py-3">Status</TableHead>
-                <TableHead className="px-4 py-3">Created By</TableHead>
-                <TableHead className="px-4 py-3 text-right">Actions</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:supplierPayments.th.document')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:supplierPayments.th.date')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:supplierPayments.th.supplier')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:supplierPayments.th.account')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:moneyAccountsPage.th.currency')}</TableHead>
+                <TableHead className="px-4 py-3 text-end">{t('finance:supplierPayments.th.amount')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:supplierPayments.th.status')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:exchangeRatesPage.th.createdBy')}</TableHead>
+                <TableHead className="px-4 py-3 text-end">{t('finance:supplierPayments.th.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -223,7 +225,7 @@ export function SupplierPaymentsPage() {
                 <TableRow>
                   <TableCell colSpan={9} className="h-48 text-center text-sm text-slate-500">
                     <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
-                    Loading supplier payments...
+                    {t('finance:supplierPayments.loading')}
                   </TableCell>
                 </TableRow>
               ) : query.isError ? (
@@ -238,14 +240,11 @@ export function SupplierPaymentsPage() {
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Landmark className="size-8 text-slate-300 dark:text-slate-600" />
                       <p className="font-medium text-slate-700 dark:text-slate-300">
-                        No supplier payments found
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        Record a new payment to settle unpaid purchase invoices.
+                        {t('finance:supplierPayments.empty')}
                       </p>
                       <Link to="/finance/supplier-payments/new">
                         <Button size="xs" className="mt-1 gap-1">
-                          <Plus className="size-3.5" /> Record Payment
+                          <Plus className="size-3.5" /> {t('finance:supplierPayments.newPayment')}
                         </Button>
                       </Link>
                     </div>
@@ -257,7 +256,7 @@ export function SupplierPaymentsPage() {
                     key={payment.id}
                     className="hover:bg-slate-50/80 transition-colors dark:hover:bg-slate-800/40"
                   >
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <Link
                         className="font-mono text-xs font-bold text-primary hover:underline"
                         to={`/finance/supplier-payments/${payment.id}`}
@@ -265,27 +264,24 @@ export function SupplierPaymentsPage() {
                         {payment.documentNumber}
                       </Link>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
-                      {payment.paymentDate}
+                    <TableCell className="px-4 py-3.5 text-start text-xs text-slate-700 dark:text-slate-300">
+                      {formatDate(payment.paymentDate)}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs font-medium text-slate-900 dark:text-slate-100">
+                    <TableCell className="px-4 py-3.5 text-start text-xs font-medium text-slate-900 dark:text-slate-100">
                       {payment.supplierName}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs">
+                    <TableCell className="px-4 py-3.5 text-start text-xs">
                       <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
                         {payment.moneyAccountCode}
                       </span>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-400">
+                    <TableCell className="px-4 py-3.5 text-start font-mono text-xs text-slate-600 dark:text-slate-400">
                       {payment.currencyCode}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
-                      {payment.totalAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 4,
-                      })}
+                    <TableCell className="px-4 py-3.5 text-end font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      {formatNumber(payment.totalAmount, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <span
                         className={`inline-flex rounded px-2 py-0.5 text-[11px] font-semibold ${
                           payment.status === FinanceDocumentStatus.Posted
@@ -293,30 +289,26 @@ export function SupplierPaymentsPage() {
                             : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
                         }`}
                       >
-                        {payment.status === FinanceDocumentStatus.Posted ? 'Posted' : 'Draft'}
+                        {payment.status === FinanceDocumentStatus.Posted ? t('finance:transfersPage.posted') : t('finance:transfersPage.draft')}
                       </span>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs text-slate-500">
+                    <TableCell className="px-4 py-3.5 text-start text-xs text-slate-500">
                       {payment.createdByUsername}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
+                    <TableCell className="px-4 py-3.5 text-end">
                       {payment.status === FinanceDocumentStatus.Draft && (
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             size="xs"
-                            className="gap-1 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                            className="gap-1"
                             disabled={actions.post.isPending}
                             onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Post supplier payment ${payment.documentNumber}? This will settle AP and update the Money Ledger.`
-                                )
-                              ) {
+                              if (window.confirm(t('finance:supplierPayments.postConfirm'))) {
                                 actions.post.mutate(payment.id)
                               }
                             }}
                           >
-                            <Send className="size-3" /> Post
+                            <Send className="size-3 rtl:rotate-180" /> {t('finance:transfersPage.form.postTransfer')}
                           </Button>
                           <Button
                             size="xs"
@@ -324,11 +316,7 @@ export function SupplierPaymentsPage() {
                             className="text-red-600 hover:bg-red-50 hover:border-red-200"
                             disabled={actions.remove.isPending}
                             onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Delete draft supplier payment ${payment.documentNumber}?`
-                                )
-                              ) {
+                              if (window.confirm(t('finance:supplierPayments.deleteConfirm'))) {
                                 actions.remove.mutate(payment.id)
                               }
                             }}

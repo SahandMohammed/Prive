@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useForm, useWatch } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { useCurrentBusiness } from '@/features/business'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/i18n'
 import { SupplierPaymentInvoiceDialog } from '../components/SupplierPaymentInvoiceDialog'
 import {
   useFinanceSuppliers,
@@ -46,6 +48,7 @@ import type {
 type FormValue = Omit<SupplierPaymentInput, 'notes'> & { notes: string }
 
 export function SupplierPaymentPage() {
+  const { t } = useTranslation(['finance', 'common'])
   const { id } = useParams()
   const navigate = useNavigate()
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
@@ -151,7 +154,7 @@ export function SupplierPaymentPage() {
 
   const submit = form.handleSubmit((value) => {
     if (round4(allocated) !== round4(value.totalAmount)) {
-      form.setError('root', { message: 'Payment total must equal the allocated total' })
+      form.setError('root', { message: t('finance:supplierPaymentPage.totalAllocatedMismatch') })
       return
     }
     const body: SupplierPaymentInput = {
@@ -188,18 +191,18 @@ export function SupplierPaymentPage() {
         <div className="flex items-center gap-3">
           <Link to="/finance/supplier-payments">
             <Button variant="ghost" size="icon">
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="size-4 rtl:rotate-180" />
             </Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Supplier Payment{' '}
-              <span className="font-mono text-primary">{payment?.documentNumber ?? 'New draft'}</span>
+              {t('finance:supplierPaymentPage.title')}{' '}
+              <span className="font-mono text-primary">{payment?.documentNumber ?? t('finance:supplierPaymentPage.newDraft')}</span>
             </h1>
             <p className="text-xs text-slate-500">
               {posted
-                ? 'Posted · immutable Money Account and Accounts Payable settlement history'
-                : 'Draft · allocate funds against open purchase invoices/bills'}
+                ? t('finance:supplierPaymentPage.descriptionPosted')
+                : t('finance:supplierPaymentPage.descriptionDraft')}
             </p>
           </div>
         </div>
@@ -212,7 +215,7 @@ export function SupplierPaymentPage() {
                   : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
               }`}
             >
-              {posted ? 'Posted' : 'Draft'}
+              {posted ? t('finance:transfersPage.posted') : t('finance:transfersPage.draft')}
             </span>
           )}
           {posted && payment && (
@@ -224,7 +227,7 @@ export function SupplierPaymentPage() {
               >
                 <Button variant="outline" size="sm">
                   <Landmark className="size-4" />
-                  Money Ledger
+                  {t('finance:supplierPaymentPage.moneyLedger')}
                 </Button>
               </Link>
               {payment.journalEntryId && (
@@ -233,7 +236,7 @@ export function SupplierPaymentPage() {
                 >
                   <Button variant="outline" size="sm">
                     <BookOpen className="size-4" />
-                    Accounting journal
+                    {t('finance:supplierPaymentPage.accountingJournal')}
                   </Button>
                 </Link>
               )}
@@ -247,16 +250,16 @@ export function SupplierPaymentPage() {
           {/* PAYMENT DETAILS CARD */}
           <Card className="border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Payment Details</CardTitle>
+              <CardTitle className="text-base font-semibold">{t('finance:supplierPaymentPage.paymentDetails')}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
-              <Field label="Supplier" error={form.formState.errors.supplierId?.message}>
+              <Field label={t('finance:supplierPaymentPage.supplier')} error={form.formState.errors.supplierId?.message}>
                 <Select
                   {...form.register('supplierId', {
                     onChange: () => form.setValue('allocations', [], { shouldDirty: true }),
                   })}
                 >
-                  <option value="">Select supplier</option>
+                  <option value="">{t('finance:supplierPaymentPage.selectSupplier')}</option>
                   {suppliers.map((supplier) => (
                     <option key={supplier.id} value={supplier.id}>
                       {supplier.name}
@@ -270,11 +273,11 @@ export function SupplierPaymentPage() {
                 </Select>
               </Field>
 
-              <Field label="Payment Date" error={form.formState.errors.paymentDate?.message}>
+              <Field label={t('finance:supplierPaymentPage.paymentDate')} error={form.formState.errors.paymentDate?.message}>
                 <Input type="date" className="h-9 text-xs" {...form.register('paymentDate')} />
               </Field>
 
-              <Field label="Funding Money Account" error={form.formState.errors.moneyAccountId?.message}>
+              <Field label={t('finance:supplierPaymentPage.disbursingAccount')} error={form.formState.errors.moneyAccountId?.message}>
                 <Select
                   {...form.register('moneyAccountId', {
                     onChange: (event) => {
@@ -288,7 +291,7 @@ export function SupplierPaymentPage() {
                     },
                   })}
                 >
-                  <option value="">Select funding account</option>
+                  <option value="">{t('finance:supplierPaymentPage.selectAccount')}</option>
                   {accounts.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.code} — {account.name} · {formatAmount(account.balance)}{' '}
@@ -303,16 +306,19 @@ export function SupplierPaymentPage() {
                 </Select>
               </Field>
 
-              <Field label="Payment Currency">
+              <Field label={t('finance:supplierPaymentPage.paymentCurrency')}>
                 <div className="flex h-9 items-center justify-between rounded-md border border-slate-100 bg-slate-50 px-3 font-mono text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-800/40">
                   <span>{currencyCode}</span>
-                  {!isForeign && <span className="text-[10px] text-slate-400">1.0 (Base)</span>}
+                  {!isForeign && <span className="text-[10px] text-slate-400">{t('finance:supplierPaymentPage.baseRate')}</span>}
                 </div>
               </Field>
 
               {isForeign && (
                 <Field
-                  label={`Rate: 1 ${currencyCode} in ${business?.baseCurrencyCode ?? 'base currency'}`}
+                  label={t('finance:supplierPaymentPage.rateLabel', {
+                    currency: currencyCode,
+                    baseCurrency: business?.baseCurrencyCode ?? '',
+                  })}
                   error={form.formState.errors.exchangeRate?.message}
                 >
                   <Input
@@ -328,7 +334,7 @@ export function SupplierPaymentPage() {
                 </Field>
               )}
 
-              <Field label="Payment Total" error={form.formState.errors.totalAmount?.message}>
+              <Field label={t('finance:supplierPaymentPage.paymentTotal')} error={form.formState.errors.totalAmount?.message}>
                 <Input
                   type="number"
                   min="0.0001"
@@ -340,8 +346,8 @@ export function SupplierPaymentPage() {
               </Field>
 
               <div className="md:col-span-3">
-                <Field label="Notes / Memo" error={form.formState.errors.notes?.message}>
-                  <Textarea rows={2} placeholder="Optional memo" {...form.register('notes')} />
+                <Field label={t('finance:supplierPaymentPage.notes')} error={form.formState.errors.notes?.message}>
+                  <Textarea rows={2} placeholder={t('finance:supplierPaymentPage.notesPlaceholder')} {...form.register('notes')} />
                 </Field>
               </div>
             </CardContent>
@@ -354,23 +360,23 @@ export function SupplierPaymentPage() {
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                   <div>
                     <CardTitle className="text-base font-semibold">
-                      Invoices to Settle
+                      {t('finance:supplierPaymentPage.invoicesToSettle')}
                     </CardTitle>
                     <CardDescription>
-                      Allocate payment directly to open supplier purchase bills.
+                      {t('finance:supplierPaymentPage.invoicesToSettleDesc')}
                     </CardDescription>
                   </div>
 
                   <Button
                     type="button"
                     size="sm"
-                    className="gap-1.5 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                    className="gap-1.5"
                     disabled={!values.supplierId || !currencyId}
                     onClick={() => setIsInvoiceDialogOpen(true)}
                   >
                     <FileText className="size-4" />
-                    Choose Invoices to Pay{' '}
-                    {draftRows.length > 0 ? `(${draftRows.length} available)` : ''}
+                    {t('finance:supplierPaymentPage.chooseInvoices')}{' '}
+                    {draftRows.length > 0 ? t('finance:supplierPaymentPage.availableCount', { count: draftRows.length }) : ''}
                   </Button>
                 </div>
               </CardHeader>
@@ -379,13 +385,13 @@ export function SupplierPaymentPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                        <TableHead className="px-3 font-semibold">Invoice #</TableHead>
-                        <TableHead className="px-3 font-semibold">Date</TableHead>
-                        <TableHead className="px-3 text-right font-semibold">Original Total</TableHead>
-                        <TableHead className="px-3 text-right font-semibold">Paid So Far</TableHead>
-                        <TableHead className="px-3 text-right font-semibold">Remaining Outstanding</TableHead>
-                        <TableHead className="w-44 px-3 text-right font-semibold text-primary">
-                          Paid Amount ({currencyCode})
+                        <TableHead className="px-3 text-start font-semibold">{t('finance:supplierPaymentPage.th.invoice')}</TableHead>
+                        <TableHead className="px-3 text-start font-semibold">{t('finance:supplierPaymentPage.th.date')}</TableHead>
+                        <TableHead className="px-3 text-end font-semibold">{t('finance:supplierPaymentPage.th.originalTotal')}</TableHead>
+                        <TableHead className="px-3 text-end font-semibold">{t('finance:supplierPaymentPage.th.paidSoFar')}</TableHead>
+                        <TableHead className="px-3 text-end font-semibold">{t('finance:supplierPaymentPage.th.remainingOutstanding')}</TableHead>
+                        <TableHead className="w-44 px-3 text-end font-semibold text-primary">
+                          {t('finance:supplierPaymentPage.th.settledAmount', { currency: currencyCode })}
                         </TableHead>
                         <TableHead className="w-12 px-2 text-center" />
                       </TableRow>
@@ -394,21 +400,21 @@ export function SupplierPaymentPage() {
                       {!values.supplierId || !currencyId ? (
                         <TableRow>
                           <TableCell colSpan={7} className="h-24 text-center text-xs text-slate-400">
-                            Select a supplier and Money Account to view open purchase bills.
+                            {t('finance:supplierPaymentPage.selectSupplierAndAccount')}
                           </TableCell>
                         </TableRow>
                       ) : outstandingQuery.isPending ? (
                         <TableRow>
                           <TableCell colSpan={7} className="h-24 text-center text-xs text-slate-400">
                             <Loader2 className="mx-auto mb-1 size-5 animate-spin text-primary" />
-                            Loading outstanding invoices…
+                            {t('finance:supplierPaymentPage.loadingInvoices')}
                           </TableCell>
                         </TableRow>
                       ) : activeAllocations.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="h-28 text-center text-xs text-slate-400">
                             <div className="flex flex-col items-center justify-center gap-2">
-                              <p>No invoices chosen yet.</p>
+                              <p>{t('finance:supplierPaymentPage.noInvoicesChosen')}</p>
                               <Button
                                 type="button"
                                 variant="outline"
@@ -416,7 +422,7 @@ export function SupplierPaymentPage() {
                                 className="gap-1 text-primary"
                                 onClick={() => setIsInvoiceDialogOpen(true)}
                               >
-                                <Plus className="size-3.5" /> Select Invoices to Pay
+                                <Plus className="size-3.5" /> {t('finance:supplierPaymentPage.selectInvoicesBtn')}
                               </Button>
                             </div>
                           </TableCell>
@@ -430,24 +436,24 @@ export function SupplierPaymentPage() {
 
                           return (
                             <TableRow key={alloc.purchaseInvoiceId}>
-                              <TableCell className="px-3 py-2">
+                              <TableCell className="px-3 py-2 text-start">
                                 <Link
                                   className="font-mono text-xs font-bold text-primary hover:underline"
                                   to={`/purchases/invoices/${alloc.purchaseInvoiceId}`}
                                 >
-                                  {invoice?.documentNumber ?? 'Purchase Invoice'}
+                                  {invoice?.documentNumber ?? t('finance:supplierPaymentPage.th.invoice')}
                                 </Link>
                               </TableCell>
-                              <TableCell className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
-                                {invoice?.invoiceDate ?? '—'}
+                              <TableCell className="px-3 py-2 text-start text-xs text-slate-600 dark:text-slate-400">
+                                {invoice?.invoiceDate ? formatDate(invoice.invoiceDate) : '—'}
                               </TableCell>
-                              <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
+                              <TableCell className="px-3 py-2 text-end font-mono text-xs text-slate-600 dark:text-slate-400">
                                 {invoice ? formatAmount(invoice.originalTotal) : '—'}
                               </TableCell>
-                              <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-500">
+                              <TableCell className="px-3 py-2 text-end font-mono text-xs text-slate-500">
                                 {invoice ? formatAmount(invoice.paidAmount) : '—'}
                               </TableCell>
-                              <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-slate-900 dark:text-slate-100">
+                              <TableCell className="px-3 py-2 text-end font-mono text-xs font-semibold text-slate-900 dark:text-slate-100">
                                 {invoice ? formatAmount(invoice.outstandingAmount) : '—'}
                               </TableCell>
                               <TableCell className="px-3 py-2">
@@ -464,7 +470,7 @@ export function SupplierPaymentPage() {
                                       maxOutstanding
                                     )
                                   }
-                                  className="ml-auto h-8 max-w-36 text-right font-mono text-xs font-bold text-primary"
+                                  className="ms-auto h-8 max-w-36 text-end font-mono text-xs font-bold text-primary"
                                 />
                               </TableCell>
                               <TableCell className="px-2 py-2 text-center">
@@ -472,7 +478,7 @@ export function SupplierPaymentPage() {
                                   type="button"
                                   variant="ghost"
                                   size="icon-xs"
-                                  title="Remove allocation"
+                                  title={t('finance:supplierPaymentPage.removeAllocation')}
                                   className="text-slate-400 hover:text-red-600"
                                   onClick={() => handleRemoveAllocation(alloc.purchaseInvoiceId)}
                                 >
@@ -493,31 +499,34 @@ export function SupplierPaymentPage() {
                     {isBalanced ? (
                       <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                         <CheckCircle2 className="size-3.5 text-emerald-600" />
-                        Payment Fully Allocated
+                        {t('finance:supplierPaymentPage.paymentFullyAllocated')}
                       </div>
                     ) : (
                       <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
                         <AlertCircle className="size-3.5 text-rose-600" />
-                        Variance: {formatAmount(unallocatedAmount)} {currencyCode}
+                        {t('finance:supplierPaymentPage.variance', {
+                          amount: formatAmount(unallocatedAmount),
+                          currency: currencyCode,
+                        })}
                       </div>
                     )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-6 text-xs">
                     <div>
-                      <span className="text-slate-500">Payment Total: </span>
+                      <span className="text-slate-500">{t('finance:supplierPaymentPage.paymentTotal')}: </span>
                       <strong className="font-mono text-slate-900 dark:text-slate-100">
                         {formatAmount(totalAmountNum)} {currencyCode}
                       </strong>
                     </div>
                     <div>
-                      <span className="text-slate-500">Allocated: </span>
+                      <span className="text-slate-500">{t('finance:supplierPaymentPage.allocated')} </span>
                       <strong className="font-mono text-emerald-600 dark:text-emerald-400">
                         {formatAmount(allocated)} {currencyCode}
                       </strong>
                     </div>
                     <div>
-                      <span className="text-slate-500">Unallocated: </span>
+                      <span className="text-slate-500">{t('finance:supplierPaymentPage.unallocated')} </span>
                       <strong
                         className={`font-mono ${
                           unallocatedAmount === 0 ? 'text-slate-600' : 'text-rose-600'
@@ -536,21 +545,21 @@ export function SupplierPaymentPage() {
         {posted && payment && (
           <Card>
             <CardHeader>
-              <CardTitle>Applied Purchase Invoices</CardTitle>
+              <CardTitle>{t('finance:supplierPaymentPage.appliedInvoices')}</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead className="text-right">Applied Amount</TableHead>
-                    <TableHead className="text-right">Base Applied</TableHead>
+                    <TableHead className="text-start">{t('finance:supplierPaymentPage.th.invoice')}</TableHead>
+                    <TableHead className="text-end">{t('finance:supplierPaymentPage.th.applied')}</TableHead>
+                    <TableHead className="text-end">{t('finance:supplierPaymentPage.th.baseApplied')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payment.allocations.map((allocation) => (
                     <TableRow key={allocation.id}>
-                      <TableCell>
+                      <TableCell className="text-start">
                         <Link
                           className="font-mono text-primary"
                           to={`/purchases/invoices/${allocation.purchaseInvoiceId}`}
@@ -558,10 +567,10 @@ export function SupplierPaymentPage() {
                           {allocation.purchaseInvoiceDocumentNumber}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-end font-mono">
                         {formatAmount(allocation.amount)} {payment.currencyCode}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-end font-mono">
                         {formatAmount(allocation.baseAmount)} {payment.baseCurrencyCode}
                       </TableCell>
                     </TableRow>
@@ -576,13 +585,16 @@ export function SupplierPaymentPage() {
           <Card>
             <CardContent className="grid gap-3 pt-6 text-sm sm:grid-cols-3">
               <Audit
-                label="Created"
-                value={`${payment.createdByUsername} · ${formatTimestamp(payment.createdAtUtc)}`}
+                label={t('finance:supplierPaymentPage.created')}
+                value={`${payment.createdByUsername} · ${formatDateTime(payment.createdAtUtc)}`}
               />
-              <Audit label="Updated" value={formatTimestamp(payment.updatedAtUtc)} />
               <Audit
-                label="Posted"
-                value={payment.postedAtUtc ? formatTimestamp(payment.postedAtUtc) : 'Not posted'}
+                label={t('finance:supplierPaymentPage.updated')}
+                value={formatDateTime(payment.updatedAtUtc)}
+              />
+              <Audit
+                label={t('finance:supplierPaymentPage.posted')}
+                value={payment.postedAtUtc ? formatDateTime(payment.postedAtUtc) : t('finance:supplierPaymentPage.notPosted')}
               />
             </CardContent>
           </Card>
@@ -596,8 +608,7 @@ export function SupplierPaymentPage() {
               )}
               {actionError && <p className="text-sm text-destructive">{actionError.message}</p>}
               <p className="text-xs text-muted-foreground">
-                Posting revalidates supplier, account access, invoice outstanding amounts, currency,
-                and historical exchange rates.
+                {t('finance:supplierPaymentPage.postingNotice')}
               </p>
             </div>
             <div className="flex gap-2">
@@ -607,13 +618,13 @@ export function SupplierPaymentPage() {
                   variant="destructive"
                   disabled={actions.remove.isPending}
                   onClick={() => {
-                    if (window.confirm('Delete this Draft Supplier Payment?'))
+                    if (window.confirm(t('finance:supplierPaymentPage.deleteConfirm')))
                       actions.remove.mutate(id, {
                         onSuccess: () => navigate('/finance/supplier-payments'),
                       })
                   }}
                 >
-                  Delete
+                  {t('common:actions.delete')}
                 </Button>
               )}
               <Button
@@ -624,7 +635,7 @@ export function SupplierPaymentPage() {
                 {(actions.create.isPending || actions.update.isPending) && (
                   <Loader2 className="size-4 animate-spin" />
                 )}
-                Save Draft
+                {t('finance:supplierPaymentPage.saveDraft')}
               </Button>
               {id && (
                 <Button
@@ -633,14 +644,14 @@ export function SupplierPaymentPage() {
                   onClick={() => {
                     if (
                       window.confirm(
-                        'Post this Supplier Payment? Money Account and Accounts Payable effects will be permanent.'
+                        t('finance:supplierPaymentPage.postConfirm')
                       )
                     )
                       actions.post.mutate(id)
                   }}
                 >
                   <Send className="size-4" />
-                  Post Payment
+                  {t('finance:supplierPaymentPage.postPayment')}
                 </Button>
               )}
             </div>
@@ -717,5 +728,4 @@ function Audit({ label, value }: { label: string; value: string }) {
 const today = () => new Date().toISOString().slice(0, 10)
 const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10000) / 10000
 const formatAmount = (value: number) =>
-  value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-const formatTimestamp = (value: string) => new Date(value).toLocaleString()
+  formatNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 4 })

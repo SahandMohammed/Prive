@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom'
 import { Providers } from '@/app/providers'
 import { router } from '@/app/router'
 import '@/lib/i18n'
+import '@/app/i18n-features'
 import '@/index.css'
 
 createRoot(document.getElementById('root')!).render(

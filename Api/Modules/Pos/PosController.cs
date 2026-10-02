@@ -50,33 +50,46 @@ public sealed class PosController : ControllerBase
     return Ok(ApiResponse<List<PosSaleListResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
-  [HttpGet("sales/{id:guid}", Name = nameof(GetSale))]
+  [HttpGet("sales/{salesInvoiceId:guid}", Name = nameof(GetSale))]
   [ProducesResponseType(typeof(ApiResponse<PosSaleResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-  public async Task<IActionResult> GetSale(Guid id, CancellationToken ct) =>
-    Ok(ApiResponse<PosSaleResponse>.Ok(await _service.GetSaleAsync(id, ct)));
+  public async Task<IActionResult> GetSale(Guid salesInvoiceId, CancellationToken ct) =>
+    Ok(ApiResponse<PosSaleResponse>.Ok(await _service.GetSaleAsync(salesInvoiceId, ct)));
 
   [HttpPost("sales")]
   [ProducesResponseType(typeof(ApiResponse<PosSaleResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> CompleteSale([FromBody] CompletePosSaleRequest request, CancellationToken ct)
   {
+    RequireClientRequestId(request.ClientRequestId, "checkout");
     var sale = await _service.CompleteSaleAsync(request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
-    return CreatedAtAction(nameof(GetSale), new { id = sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
+    return CreatedAtAction(nameof(GetSale), new { salesInvoiceId = sale.Id, version }, ApiResponse<PosSaleResponse>.Ok(sale));
   }
 
-  [HttpGet("sales/{id:guid}/refundability")]
+  [HttpPut("sales/{salesInvoiceId:guid}/settlement")]
+  [Authorize(Roles = "SuperAdmin,Manager,Owner")]
+  [ProducesResponseType(typeof(ApiResponse<PosSaleResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+  [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
+  public async Task<IActionResult> CorrectSettlement(
+    Guid salesInvoiceId,
+    [FromBody] CorrectPosSettlementRequest request,
+    CancellationToken ct) =>
+    Ok(ApiResponse<PosSaleResponse>.Ok(
+      await _service.CorrectSettlementAsync(salesInvoiceId, request, GetUserId(), ct)));
+
+  [HttpGet("sales/{salesInvoiceId:guid}/refundability")]
   [ProducesResponseType(typeof(ApiResponse<PosRefundabilityResponse>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-  public async Task<IActionResult> GetRefundability(Guid id, CancellationToken ct) =>
-    Ok(ApiResponse<PosRefundabilityResponse>.Ok(await _refunds.GetRefundabilityAsync(id, ct)));
+  public async Task<IActionResult> GetRefundability(Guid salesInvoiceId, CancellationToken ct) =>
+    Ok(ApiResponse<PosRefundabilityResponse>.Ok(await _refunds.GetRefundabilityAsync(salesInvoiceId, ct)));
 
-  [HttpGet("sales/{id:guid}/refunds")]
+  [HttpGet("sales/{salesInvoiceId:guid}/refunds")]
   [ProducesResponseType(typeof(ApiResponse<List<PosRefundSummaryResponse>>), StatusCodes.Status200OK)]
   [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-  public async Task<IActionResult> GetSaleRefunds(Guid id, [FromQuery] PosRefundListQuery query, CancellationToken ct)
+  public async Task<IActionResult> GetSaleRefunds(Guid salesInvoiceId, [FromQuery] PosRefundListQuery query, CancellationToken ct)
   {
-    var result = await _refunds.GetSaleRefundsAsync(id, query, ct);
+    var result = await _refunds.GetSaleRefundsAsync(salesInvoiceId, query, ct);
     return Ok(ApiResponse<List<PosRefundSummaryResponse>>.Ok(result.Items, result.ToMetadata()));
   }
 
@@ -86,28 +99,30 @@ public sealed class PosController : ControllerBase
   public async Task<IActionResult> GetRefund(Guid id, CancellationToken ct) =>
     Ok(ApiResponse<PosRefundResponse>.Ok(await _refunds.GetRefundAsync(id, ct)));
 
-  [HttpPost("sales/{id:guid}/refunds")]
+  [HttpPost("sales/{salesInvoiceId:guid}/refunds")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]
   [ProducesResponseType(typeof(ApiResponse<PosRefundResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> PostRefund(
-    Guid id,
+    Guid salesInvoiceId,
     [FromBody] CreatePosRefundRequest request,
     CancellationToken ct)
   {
-    var refund = await _refunds.PostRefundAsync(id, request, GetUserId(), ct);
+    RequireClientRequestId(request.ClientRequestId, "refund");
+    var refund = await _refunds.PostRefundAsync(salesInvoiceId, request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
     return CreatedAtAction(nameof(GetRefund), new { id = refund.Id, version }, ApiResponse<PosRefundResponse>.Ok(refund));
   }
 
-  [HttpPost("sales/{id:guid}/void")]
+  [HttpPost("sales/{salesInvoiceId:guid}/void")]
   [Authorize(Roles = "SuperAdmin,Manager,Owner")]
   [ProducesResponseType(typeof(ApiResponse<PosRefundResponse>), StatusCodes.Status201Created)]
   public async Task<IActionResult> VoidRemaining(
-    Guid id,
+    Guid salesInvoiceId,
     [FromBody] VoidPosSaleRequest request,
     CancellationToken ct)
   {
-    var refund = await _refunds.VoidRemainingAsync(id, request, GetUserId(), ct);
+    RequireClientRequestId(request.ClientRequestId, "void");
+    var refund = await _refunds.VoidRemainingAsync(salesInvoiceId, request, GetUserId(), ct);
     var version = RouteData.Values["version"]?.ToString() ?? "1.0";
     return CreatedAtAction(nameof(GetRefund), new { id = refund.Id, version }, ApiResponse<PosRefundResponse>.Ok(refund));
   }
@@ -118,5 +133,12 @@ public sealed class PosController : ControllerBase
     if (!Guid.TryParse(value, out var userId))
       throw new UnauthorizedException(ErrorCodes.Common.Unauthorized, "Invalid token subject.");
     return userId;
+  }
+
+  private static void RequireClientRequestId(Guid clientRequestId, string operation)
+  {
+    if (clientRequestId == Guid.Empty)
+      throw new BadRequestException(ErrorCodes.Pos.IdempotencyKeyRequired,
+        $"A client request ID is required for POS {operation}.");
   }
 }

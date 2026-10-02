@@ -1,14 +1,22 @@
 import { apiClient } from '@/lib/apiClient'
 import type {
+  InvoicePaymentInput,
+  UpdateInvoicePaymentInput,
   SalesInvoice,
   SalesInvoiceDraftInput,
   SalesInvoiceFilters,
+  PostedSalesInvoiceInput,
+  SalesInvoiceHistory,
+  DeletedSalesInvoice,
+  DeletedSalesInvoiceFilters,
   SalesInvoiceSummary,
+  SalesCatalogItem,
   Service,
   ServiceCategory,
   ServiceCategoryInput,
   ServiceInput,
 } from '../types/sales.types'
+import type { Payment } from '@/features/finance'
 
 function queryString(values: object) {
   const query = new URLSearchParams()
@@ -19,6 +27,9 @@ function queryString(values: object) {
 }
 
 export const salesApi = {
+  items: (filters: Record<string, string | number | boolean | undefined> = {}) =>
+    apiClient.getPaginated<SalesCatalogItem>(`/sales/items?${queryString({ page: 1, pageSize: 50, ...filters })}`),
+
   categories: (filters: Record<string, string | number | boolean | undefined> = {}) =>
     apiClient.getPaginated<ServiceCategory>(`/sales/service-categories?${queryString({ page: 1, pageSize: 100, ...filters })}`),
   createCategory: (body: ServiceCategoryInput) => apiClient.post<ServiceCategory>('/sales/service-categories', body),
@@ -35,8 +46,13 @@ export const salesApi = {
   invoices: (filters: SalesInvoiceFilters) =>
     apiClient.getPaginated<SalesInvoiceSummary>(`/sales/invoices?${queryString(filters)}`),
   getInvoice: (id: string) => apiClient.get<SalesInvoice>(`/sales/invoices/${id}`),
-  createInvoice: (body: SalesInvoiceDraftInput) => apiClient.post<SalesInvoice>('/sales/invoices', body),
-  updateInvoice: (id: string, body: SalesInvoiceDraftInput) => apiClient.put<SalesInvoice>(`/sales/invoices/${id}`, body),
-  deleteInvoice: (id: string) => apiClient.delete<void>(`/sales/invoices/${id}`),
-  postInvoice: (id: string) => apiClient.post<SalesInvoice>(`/sales/invoices/${id}/post`),
+  createActiveInvoice: (body: SalesInvoiceDraftInput) => apiClient.post<SalesInvoice>('/sales/invoices/active', body),
+  updateActiveInvoice: (id: string, body: PostedSalesInvoiceInput) => apiClient.put<SalesInvoice>(`/sales/invoices/${id}/active`, body),
+  deleteActiveInvoice: (id: string, body: { reason: string; expectedUpdatedAtUtc: string }) => apiClient.delete<void>(`/sales/invoices/${id}/active`, body),
+  invoiceHistory: (id: string) => apiClient.get<SalesInvoiceHistory[]>(`/sales/invoices/${id}/history`),
+  deletedInvoices: (filters: DeletedSalesInvoiceFilters) =>
+    apiClient.getPaginated<DeletedSalesInvoice>(`/sales/invoices/deleted?${queryString(filters)}`),
+  createInvoicePayment: (invoiceId: string, body: InvoicePaymentInput) => apiClient.post<Payment>(`/sales/invoices/${invoiceId}/payments`, body),
+  updateInvoicePayment: (invoiceId: string, paymentId: string, body: UpdateInvoicePaymentInput) => apiClient.put<Payment>(`/sales/invoices/${invoiceId}/payments/${paymentId}`, body),
+  deleteInvoicePayment: (invoiceId: string, paymentId: string, body: { reason: string; expectedUpdatedAtUtc: string }) => apiClient.delete<void>(`/sales/invoices/${invoiceId}/payments/${paymentId}`, body),
 }

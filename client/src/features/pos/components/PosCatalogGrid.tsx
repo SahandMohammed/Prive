@@ -6,8 +6,10 @@ import {
   Plus,
   Search,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { formatNumber } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { PosCatalogItemType } from '../types/pos.types'
 import type { PosCatalogItem } from '../types/pos.types'
@@ -45,17 +47,19 @@ export function PosCatalogGrid({
   onPreviousPage: () => void
   onNextPage: () => void
 }) {
+  const { t } = useTranslation(['pos', 'common'])
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
       <div className="shrink-0 border-b p-3 sm:p-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             autoFocus
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search service, product, SKU or barcode"
-            className="h-11 rounded-xl pl-9 text-sm"
+            placeholder={t('pos:catalogSearchPlaceholder', { defaultValue: 'Search service, product, SKU or barcode' })}
+            className="h-11 rounded-xl ps-9 text-sm"
           />
         </div>
       </div>
@@ -73,7 +77,7 @@ export function PosCatalogGrid({
           </div>
         ) : items.length === 0 ? (
           <div className="grid h-64 place-items-center rounded-2xl border border-dashed px-6 text-center text-sm text-muted-foreground">
-            No matching services or products.
+            {t('pos:noCatalogItems', { defaultValue: 'No matching services or products.' })}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
@@ -87,7 +91,7 @@ export function PosCatalogGrid({
                   type="button"
                   disabled={unavailable}
                   onClick={() => onAdd(item)}
-                  className="group flex min-h-44 flex-col overflow-hidden rounded-2xl border bg-card text-left shadow-xs transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="group flex min-h-44 flex-col overflow-hidden rounded-2xl border bg-card text-start shadow-xs transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <div className="flex h-20 items-center justify-center overflow-hidden border-b bg-muted/30">
                     {item.imageReference ? (
@@ -108,7 +112,9 @@ export function PosCatalogGrid({
                             : 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
                         )}
                       >
-                        {isProduct ? 'Product' : 'Service'}
+                        {isProduct
+                          ? t('pos:product', { defaultValue: 'Product' })
+                          : t('pos:service', { defaultValue: 'Service' })}
                       </span>
                       <Plus className="size-4 text-muted-foreground transition group-hover:text-foreground" />
                     </div>
@@ -129,7 +135,11 @@ export function PosCatalogGrid({
                               : 'text-destructive'
                           )}
                         >
-                          {amount(item.availableQuantity ?? 0)} available
+                          {t('pos:availableCount', {
+                            count: item.availableQuantity ?? 0,
+                            formattedCount: amount(item.availableQuantity ?? 0),
+                            defaultValue: `${amount(item.availableQuantity ?? 0)} available`,
+                          })}
                         </span>
                       )}
                     </div>
@@ -142,7 +152,12 @@ export function PosCatalogGrid({
       </div>
 
       <footer className="flex h-14 shrink-0 items-center justify-between border-t px-3 text-xs sm:px-4">
-        <span className="text-muted-foreground">{meta?.totalCount ?? 0} items</span>
+        <span className="text-muted-foreground">
+          {t('pos:totalItemsCount', {
+            count: meta?.totalCount ?? 0,
+            defaultValue: `${meta?.totalCount ?? 0} items`,
+          })}
+        </span>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -151,7 +166,7 @@ export function PosCatalogGrid({
             disabled={!meta?.hasPreviousPage}
             onClick={onPreviousPage}
           >
-            <ChevronLeft className="size-4" />
+            <ChevronLeft className="size-4 rtl:rotate-180" />
           </Button>
           <span className="min-w-16 text-center font-mono">
             {meta?.page ?? 1} / {Math.max(meta?.totalPages ?? 1, 1)}
@@ -163,7 +178,7 @@ export function PosCatalogGrid({
             disabled={!meta?.hasNextPage}
             onClick={onNextPage}
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-4 rtl:rotate-180" />
           </Button>
         </div>
       </footer>
@@ -171,4 +186,4 @@ export function PosCatalogGrid({
   )
 }
 
-const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+const amount = (value: number) => formatNumber(value, { maximumFractionDigits: 4 })

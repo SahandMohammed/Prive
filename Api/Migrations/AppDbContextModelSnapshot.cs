@@ -250,6 +250,9 @@ namespace api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid>("WalkInCustomerId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -258,6 +261,8 @@ namespace api.Migrations
                     b.HasIndex("IsMainBranch")
                         .IsUnique()
                         .HasFilter("\"IsMainBranch\" = true");
+
+                    b.HasIndex("WalkInCustomerId");
 
                     b.ToTable("branches", (string)null);
                 });
@@ -336,6 +341,17 @@ namespace api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("ReceiptFooter")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReceiptPaperWidth")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasDefaultValue("Mm80");
+
                     b.Property<string>("Region")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -344,6 +360,13 @@ namespace api.Migrations
                     b.Property<string>("SecondaryPhoneNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("Asia/Baghdad");
 
                     b.Property<string>("Website")
                         .HasMaxLength(2048)
@@ -428,15 +451,25 @@ namespace api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.HasKey("Id");
+                    b.Property<string>("SystemRole")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
-                    b.HasIndex("CatalogBranchId");
+                    b.HasKey("Id");
 
                     b.HasIndex("Name");
 
                     b.HasIndex("PrimaryPhoneNormalized");
 
                     b.HasIndex("SecondaryPhoneNormalized");
+
+                    b.HasIndex("SystemRole")
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NULL AND \"SystemRole\" IS NOT NULL");
+
+                    b.HasIndex("CatalogBranchId", "SystemRole")
+                        .IsUnique()
+                        .HasFilter("\"CatalogBranchId\" IS NOT NULL AND \"SystemRole\" IS NOT NULL");
 
                     b.HasIndex("IsCustomer", "IsSupplier", "IsActive");
 
@@ -489,6 +522,12 @@ namespace api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("AfterState")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("BeforeState")
+                        .HasColumnType("jsonb");
+
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uuid");
 
@@ -508,6 +547,10 @@ namespace api.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<DateTime>("TimestampUtc")
                         .HasColumnType("timestamp with time zone");
@@ -708,7 +751,7 @@ namespace api.Migrations
                     b.ToTable("expense_lines", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptAllocationEntity", b =>
+            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptDraftAllocationEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -735,7 +778,7 @@ namespace api.Migrations
                     b.HasIndex("CustomerReceiptId", "SalesInvoiceId")
                         .IsUnique();
 
-                    b.ToTable("customer_receipt_allocations", (string)null);
+                    b.ToTable("customer_receipt_draft_allocations", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptEntity", b =>
@@ -763,6 +806,16 @@ namespace api.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DeleteReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("DocumentNumber")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -772,8 +825,8 @@ namespace api.Migrations
                         .HasPrecision(19, 6)
                         .HasColumnType("numeric(19,6)");
 
-                    b.Property<Guid?>("JournalEntryId")
-                        .HasColumnType("uuid");
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("MoneyAccountId")
                         .HasColumnType("uuid");
@@ -781,6 +834,9 @@ namespace api.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("PostedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -811,18 +867,23 @@ namespace api.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("DeletedByUserId");
+
                     b.HasIndex("DocumentNumber")
                         .IsUnique();
 
-                    b.HasIndex("JournalEntryId")
-                        .IsUnique()
-                        .HasFilter("\"JournalEntryId\" IS NOT NULL");
-
                     b.HasIndex("MoneyAccountId");
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique()
+                        .HasFilter("\"PaymentId\" IS NOT NULL");
 
                     b.HasIndex("ReceiptDate", "Status");
 
-                    b.ToTable("customer_receipts", (string)null);
+                    b.ToTable("customer_receipts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_customer_receipts_posting_state", "(\"Status\" = 'Draft' AND \"PaymentId\" IS NULL) OR (\"Status\" = 'Posted' AND \"PaymentId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.ExchangeRateEntity", b =>
@@ -944,6 +1005,8 @@ namespace api.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasAlternateKey("Id", "BranchId", "CurrencyId");
 
                     b.HasIndex("AccountingAccountId")
                         .IsUnique();
@@ -1116,6 +1179,233 @@ namespace api.Migrations
                     b.HasIndex("TransferDate", "Status");
 
                     b.ToTable("money_transfers", (string)null);
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentAllocationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SalesInvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalesInvoiceId");
+
+                    b.HasIndex("PaymentId", "SalesInvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("payment_allocations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_payment_allocations_amounts", "\"Amount\" > 0 AND \"BaseAmount\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentDocumentCounterEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("NextValue")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("payment_document_counters", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            NextValue = 1L
+                        });
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
+
+                    b.Property<Guid>("BaseCurrencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CurrencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeleteReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateOnly>("PaymentDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("SourceSalesInvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaseCurrencyId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CurrencyId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("JournalEntryId")
+                        .IsUnique()
+                        .HasFilter("\"JournalEntryId\" IS NOT NULL");
+
+                    b.HasIndex("SourceSalesInvoiceId")
+                        .HasFilter("\"SourceSalesInvoiceId\" IS NOT NULL");
+
+                    b.HasIndex("BranchId", "PaymentDate");
+
+                    b.HasIndex("SourceSalesInvoiceId", "Origin")
+                        .IsUnique()
+                        .HasDatabaseName("IX_payments_active_pos_source_invoice")
+                        .HasFilter("\"Origin\" = 'Pos' AND \"SourceSalesInvoiceId\" IS NOT NULL AND \"IsDeleted\" = false");
+
+                    b.ToTable("payments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_payments_amounts", "\"Amount\" > 0 AND \"BaseAmount\" > 0");
+
+                            t.HasCheckConstraint("CK_payments_delete_metadata", "(\"IsDeleted\" = false AND \"DeletedAtUtc\" IS NULL AND \"DeletedByUserId\" IS NULL AND \"DeleteReason\" IS NULL) OR (\"IsDeleted\" = true AND \"DeletedAtUtc\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL AND \"DeleteReason\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_payments_journal_state", "(\"IsDeleted\" = false AND \"JournalEntryId\" IS NOT NULL) OR (\"IsDeleted\" = true AND \"JournalEntryId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_payments_origin_source", "(\"Origin\" = 'CustomerReceipt' AND \"SourceSalesInvoiceId\" IS NULL) OR (\"Origin\" IN ('SalesInvoice', 'Pos') AND \"SourceSalesInvoiceId\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentMoneyLineEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)");
+
+                    b.Property<Guid>("CurrencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(19, 6)
+                        .HasColumnType("numeric(19,6)");
+
+                    b.Property<Guid>("MoneyAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MoneyLedgerEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrencyId");
+
+                    b.HasIndex("MoneyAccountId");
+
+                    b.HasIndex("MoneyLedgerEntryId")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("payment_money_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_payment_money_lines_amounts", "\"Amount\" > 0 AND \"ExchangeRate\" > 0 AND \"BaseAmount\" > 0");
+
+                            t.HasCheckConstraint("CK_payment_money_lines_sequence", "\"Sequence\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.SupplierPaymentAllocationEntity", b =>
@@ -1893,44 +2183,35 @@ namespace api.Migrations
                     b.ToTable("warehouse_transfer_lines", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosChangeEntity", b =>
+            modelBuilder.Entity("Api.Modules.Pos.PosContextEntity", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<Guid>("SalesInvoiceId")
                         .HasColumnType("uuid");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("BaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
-
-                    b.Property<Guid>("MoneyAccountId")
+                    b.Property<Guid?>("ClientRequestId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("MoneyLedgerEntryId")
+                    b.Property<DateTime>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OperatorUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("PosSaleId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
-                    b.HasKey("Id");
+                    b.HasKey("SalesInvoiceId");
 
-                    b.HasIndex("MoneyAccountId");
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("\"ClientRequestId\" IS NOT NULL");
 
-                    b.HasIndex("MoneyLedgerEntryId")
-                        .IsUnique();
+                    b.HasIndex("CompletedAtUtc");
 
-                    b.HasIndex("PosSaleId")
-                        .IsUnique();
+                    b.HasIndex("OperatorUserId");
 
-                    b.ToTable("pos_sale_changes", (string)null);
+                    b.ToTable("pos_contexts", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.Pos.PosRefundEntity", b =>
@@ -1948,6 +2229,9 @@ namespace api.Migrations
                     b.Property<decimal>("CashRefundBase")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)");
+
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1973,12 +2257,6 @@ namespace api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<Guid>("PosSaleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PosSessionId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime>("PostedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1990,6 +2268,10 @@ namespace api.Migrations
                     b.Property<decimal>("ReceivableReversalBase")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("SalesInvoiceId")
                         .HasColumnType("uuid");
@@ -2010,6 +2292,10 @@ namespace api.Migrations
 
                     b.HasIndex("BranchId");
 
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("\"ClientRequestId\" IS NOT NULL");
+
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("CustomerId");
@@ -2020,11 +2306,7 @@ namespace api.Migrations
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
 
-                    b.HasIndex("SalesInvoiceId");
-
-                    b.HasIndex("PosSaleId", "PostedAtUtc");
-
-                    b.HasIndex("PosSessionId", "PostedAtUtc");
+                    b.HasIndex("SalesInvoiceId", "PostedAtUtc");
 
                     b.ToTable("pos_refunds", (string)null);
                 });
@@ -2068,12 +2350,12 @@ namespace api.Migrations
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ProfessionalUserId")
+                    b.Property<Guid?>("ProfessionalId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ProfessionalUsername")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<string>("ProfessionalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<decimal>("Quantity")
                         .HasPrecision(19, 4)
@@ -2109,7 +2391,7 @@ namespace api.Migrations
                     b.ToTable("pos_refund_lines", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosRefundTenderEntity", b =>
+            modelBuilder.Entity("Api.Modules.Pos.PosRefundPayoutEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2149,10 +2431,10 @@ namespace api.Migrations
                     b.HasIndex("PosRefundId", "Sequence")
                         .IsUnique();
 
-                    b.ToTable("pos_refund_tenders", (string)null);
+                    b.ToTable("pos_refund_payouts", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosRegisterEntity", b =>
+            modelBuilder.Entity("Api.Modules.Professional.ProfessionalBranchAssignmentEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2161,549 +2443,58 @@ namespace api.Migrations
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                    b.Property<Guid>("ProfessionalId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ProfessionalId", "BranchId")
+                        .IsUnique();
+
+                    b.ToTable("professional_branch_assignments", (string)null);
+                });
+
+            modelBuilder.Entity("Api.Modules.Professional.ProfessionalEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.HasIndex("BranchId", "IsActive");
-
-                    b.ToTable("pos_registers", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSaleEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CashierUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DocumentNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid?>("PosSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SalesInvoiceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CashierUserId");
-
-                    b.HasIndex("DocumentNumber")
-                        .IsUnique();
-
-                    b.HasIndex("PosSessionId");
-
-                    b.HasIndex("SalesInvoiceId")
-                        .IsUnique();
-
-                    b.HasIndex("CompletedAtUtc", "Status");
-
-                    b.ToTable("pos_sales", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionClosingCountEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("CountedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("CountedBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("CurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
-
-                    b.Property<decimal>("ExpectedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ExpectedBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("PosSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("VarianceAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("VarianceBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CurrencyId");
-
-                    b.HasIndex("PosSessionId", "CurrencyId")
-                        .IsUnique();
-
-                    b.ToTable("pos_session_closing_counts", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BranchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CashierUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ClosedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ClosedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ClosingNotes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("OpenedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("OpeningNotes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("RegisterId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SessionNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<DateTimeOffset>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CashierUserId");
-
-                    b.HasIndex("ClosedByUserId");
-
-                    b.HasIndex("RegisterId")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'Open'");
-
-                    b.HasIndex("SessionNumber")
-                        .IsUnique();
-
-                    b.HasIndex("BranchId", "CashierUserId")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'Open'");
-
-                    b.HasIndex("BranchId", "OpenedAtUtc");
-
-                    b.ToTable("pos_sessions", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionOpeningCountEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("BaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("CurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
-
-                    b.Property<Guid>("PosSessionId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CurrencyId");
-
-                    b.HasIndex("PosSessionId", "CurrencyId")
-                        .IsUnique();
-
-                    b.ToTable("pos_session_opening_counts", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosTenderEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("BaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
-
-                    b.Property<Guid>("MoneyAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("MoneyLedgerEntryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PosSaleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("TenderedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MoneyAccountId");
-
-                    b.HasIndex("MoneyLedgerEntryId")
-                        .IsUnique();
-
-                    b.HasIndex("PosSaleId", "Sequence")
-                        .IsUnique();
-
-                    b.ToTable("pos_sale_tenders", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosZDrawerSummaryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ChangeAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ChangeBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("CountedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("CountedBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<Guid>("CurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(19, 6)
-                        .HasColumnType("numeric(19,6)");
-
-                    b.Property<decimal>("ExpectedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ExpectedBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("OpeningAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("OpeningBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("PosZReportId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("RefundAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("RefundBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("TenderedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("TenderedBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("VarianceAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("VarianceBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PosZReportId", "CurrencyId")
-                        .IsUnique();
-
-                    b.ToTable("pos_z_drawer_summaries", (string)null);
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosZPaymentSummaryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ChangeAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ChangeBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<Guid>("CurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("MoneyAccountCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<Guid>("MoneyAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("MoneyAccountName")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("MoneyAccountType")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
-                    b.Property<decimal>("NetAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
+                    b.Property<string>("PhoneNormalized")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
-                    b.Property<decimal>("NetBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<Guid>("PosZReportId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("RefundAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("RefundBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("TenderedAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("TenderedBaseAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PosZReportId", "MoneyAccountId")
-                        .IsUnique();
+                    b.HasIndex("Name");
 
-                    b.ToTable("pos_z_payment_summaries", (string)null);
-                });
+                    b.HasIndex("PhoneNormalized");
 
-            modelBuilder.Entity("Api.Modules.Pos.PosZReportEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                    b.HasIndex("IsActive", "Name");
 
-                    b.Property<string>("BaseCurrencyCode")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<Guid>("BaseCurrencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BranchCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<Guid>("BranchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BranchName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("CashierUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CashierUsername")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset>("ClosedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ClosedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ClosedByUsername")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset>("GeneratedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("GrossSalesBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal?>("NetSalesBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<DateTimeOffset>("OpenedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PosSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ProductRefundsBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ProductSalesBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<int>("RefundCount")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("RefundTotalBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<string>("RegisterCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<Guid>("RegisterId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RegisterName")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("ReportNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<int>("SaleCount")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("ServiceRefundsBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.Property<decimal>("ServiceSalesBase")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PosSessionId")
-                        .IsUnique();
-
-                    b.HasIndex("ReportNumber")
-                        .IsUnique();
-
-                    b.HasIndex("BranchId", "ClosedAtUtc");
-
-                    b.ToTable("pos_z_reports", (string)null);
+                    b.ToTable("professionals", (string)null);
                 });
 
             modelBuilder.Entity("Api.Modules.Purchase.PurchaseInvoiceEntity", b =>
@@ -2900,7 +2691,17 @@ namespace api.Migrations
                     b.Property<Guid>("CurrencyId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("CustomerId")
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeleteReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("DocumentNumber")
@@ -2914,6 +2715,9 @@ namespace api.Migrations
 
                     b.Property<DateOnly>("InvoiceDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("uuid");
@@ -2940,6 +2744,7 @@ namespace api.Migrations
                         .HasColumnType("numeric(19,4)");
 
                     b.Property<DateTime>("UpdatedAtUtc")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("WarehouseId")
@@ -2958,6 +2763,8 @@ namespace api.Migrations
                     b.HasIndex("CurrencyId");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("DocumentNumber")
                         .IsUnique();
@@ -3032,7 +2839,7 @@ namespace api.Migrations
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ProfessionalUserId")
+                    b.Property<Guid?>("ProfessionalId")
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Quantity")
@@ -3059,7 +2866,7 @@ namespace api.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.HasIndex("ProfessionalUserId");
+                    b.HasIndex("ProfessionalId");
 
                     b.HasIndex("RevenueAccountId");
 
@@ -3194,6 +3001,10 @@ namespace api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LinkedProfessionalId")
+                        .IsUnique()
+                        .HasFilter("\"LinkedProfessionalId\" IS NOT NULL");
+
                     b.HasIndex("Username")
                         .IsUnique();
 
@@ -3262,6 +3073,17 @@ namespace api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Api.Modules.Branch.BranchEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Contact.ContactEntity", "WalkInCustomer")
+                        .WithMany()
+                        .HasForeignKey("WalkInCustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("WalkInCustomer");
                 });
 
             modelBuilder.Entity("Api.Modules.Branch.UserBranchAccessEntity", b =>
@@ -3422,16 +3244,16 @@ namespace api.Migrations
                     b.Navigation("ExpenseDocument");
                 });
 
-            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptAllocationEntity", b =>
+            modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptDraftAllocationEntity", b =>
                 {
                     b.HasOne("Api.Modules.Finance.CustomerReceiptEntity", "CustomerReceipt")
-                        .WithMany("Allocations")
+                        .WithMany("DraftAllocations")
                         .HasForeignKey("CustomerReceiptId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
-                        .WithMany("ReceiptAllocations")
+                        .WithMany("ReceiptDraftAllocations")
                         .HasForeignKey("SalesInvoiceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -3467,9 +3289,9 @@ namespace api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Api.Modules.Accounting.JournalEntryEntity", "JournalEntry")
-                        .WithOne("SourceCustomerReceipt")
-                        .HasForeignKey("Api.Modules.Finance.CustomerReceiptEntity", "JournalEntryId")
+                    b.HasOne("Api.Modules.User.UserEntity", "DeletedByUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Api.Modules.Finance.MoneyAccountEntity", "MoneyAccount")
@@ -3477,6 +3299,11 @@ namespace api.Migrations
                         .HasForeignKey("MoneyAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Api.Modules.Finance.PaymentEntity", "Payment")
+                        .WithOne("SourceCustomerReceipt")
+                        .HasForeignKey("Api.Modules.Finance.CustomerReceiptEntity", "PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("BaseCurrency");
 
@@ -3486,9 +3313,11 @@ namespace api.Migrations
 
                     b.Navigation("Customer");
 
-                    b.Navigation("JournalEntry");
+                    b.Navigation("DeletedByUser");
 
                     b.Navigation("MoneyAccount");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.ExchangeRateEntity", b =>
@@ -3655,6 +3484,124 @@ namespace api.Migrations
                     b.Navigation("JournalEntry");
 
                     b.Navigation("SourceMoneyAccount");
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentAllocationEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Finance.PaymentEntity", "Payment")
+                        .WithMany("Allocations")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
+                        .WithMany("PaymentAllocations")
+                        .HasForeignKey("SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("SalesInvoice");
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "BaseCurrency")
+                        .WithMany()
+                        .HasForeignKey("BaseCurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.User.UserEntity", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "Currency")
+                        .WithMany()
+                        .HasForeignKey("CurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Contact.ContactEntity", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.User.UserEntity", "DeletedByUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Api.Modules.Accounting.JournalEntryEntity", "JournalEntry")
+                        .WithOne("SourcePayment")
+                        .HasForeignKey("Api.Modules.Finance.PaymentEntity", "JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SourceSalesInvoice")
+                        .WithMany()
+                        .HasForeignKey("SourceSalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("BaseCurrency");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Currency");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DeletedByUser");
+
+                    b.Navigation("JournalEntry");
+
+                    b.Navigation("SourceSalesInvoice");
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentMoneyLineEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "Currency")
+                        .WithMany()
+                        .HasForeignKey("CurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Finance.MoneyAccountEntity", "MoneyAccount")
+                        .WithMany()
+                        .HasForeignKey("MoneyAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Finance.MoneyLedgerEntryEntity", "MoneyLedgerEntry")
+                        .WithMany()
+                        .HasForeignKey("MoneyLedgerEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Finance.PaymentEntity", "Payment")
+                        .WithMany("MoneyLines")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Currency");
+
+                    b.Navigation("MoneyAccount");
+
+                    b.Navigation("MoneyLedgerEntry");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.SupplierPaymentAllocationEntity", b =>
@@ -4082,31 +4029,23 @@ namespace api.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosChangeEntity", b =>
+            modelBuilder.Entity("Api.Modules.Pos.PosContextEntity", b =>
                 {
-                    b.HasOne("Api.Modules.Finance.MoneyAccountEntity", "MoneyAccount")
+                    b.HasOne("Api.Modules.User.UserEntity", "OperatorUser")
                         .WithMany()
-                        .HasForeignKey("MoneyAccountId")
+                        .HasForeignKey("OperatorUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Api.Modules.Finance.MoneyLedgerEntryEntity", "MoneyLedgerEntry")
-                        .WithMany()
-                        .HasForeignKey("MoneyLedgerEntryId")
+                    b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
+                        .WithOne("PosContext")
+                        .HasForeignKey("Api.Modules.Pos.PosContextEntity", "SalesInvoiceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Api.Modules.Pos.PosSaleEntity", "PosSale")
-                        .WithOne("Change")
-                        .HasForeignKey("Api.Modules.Pos.PosChangeEntity", "PosSaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("OperatorUser");
 
-                    b.Navigation("MoneyAccount");
-
-                    b.Navigation("MoneyLedgerEntry");
-
-                    b.Navigation("PosSale");
+                    b.Navigation("SalesInvoice");
                 });
 
             modelBuilder.Entity("Api.Modules.Pos.PosRefundEntity", b =>
@@ -4140,20 +4079,14 @@ namespace api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Api.Modules.Pos.PosSaleEntity", "PosSale")
-                        .WithMany("Refunds")
-                        .HasForeignKey("PosSaleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Pos.PosSessionEntity", "PosSession")
-                        .WithMany("Refunds")
-                        .HasForeignKey("PosSessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
                         .WithMany("PosRefunds")
+                        .HasForeignKey("SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.Pos.PosContextEntity", "PosContext")
+                        .WithMany("Refunds")
                         .HasForeignKey("SalesInvoiceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -4168,9 +4101,7 @@ namespace api.Migrations
 
                     b.Navigation("JournalEntry");
 
-                    b.Navigation("PosSale");
-
-                    b.Navigation("PosSession");
+                    b.Navigation("PosContext");
 
                     b.Navigation("SalesInvoice");
                 });
@@ -4194,7 +4125,7 @@ namespace api.Migrations
                     b.Navigation("PosRefund");
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosRefundTenderEntity", b =>
+            modelBuilder.Entity("Api.Modules.Pos.PosRefundPayoutEntity", b =>
                 {
                     b.HasOne("Api.Modules.Finance.MoneyAccountEntity", "MoneyAccount")
                         .WithMany()
@@ -4209,7 +4140,7 @@ namespace api.Migrations
                         .IsRequired();
 
                     b.HasOne("Api.Modules.Pos.PosRefundEntity", "PosRefund")
-                        .WithMany("Tenders")
+                        .WithMany("RefundPayouts")
                         .HasForeignKey("PosRefundId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -4221,7 +4152,7 @@ namespace api.Migrations
                     b.Navigation("PosRefund");
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosRegisterEntity", b =>
+            modelBuilder.Entity("Api.Modules.Professional.ProfessionalBranchAssignmentEntity", b =>
                 {
                     b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
                         .WithMany()
@@ -4229,165 +4160,15 @@ namespace api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Branch");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSaleEntity", b =>
-                {
-                    b.HasOne("Api.Modules.User.UserEntity", "CashierUser")
-                        .WithMany()
-                        .HasForeignKey("CashierUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Pos.PosSessionEntity", "PosSession")
-                        .WithMany("Sales")
-                        .HasForeignKey("PosSessionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
-                        .WithOne("PosSale")
-                        .HasForeignKey("Api.Modules.Pos.PosSaleEntity", "SalesInvoiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CashierUser");
-
-                    b.Navigation("PosSession");
-
-                    b.Navigation("SalesInvoice");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionClosingCountEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "Currency")
-                        .WithMany()
-                        .HasForeignKey("CurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Pos.PosSessionEntity", "PosSession")
-                        .WithMany("ClosingCounts")
-                        .HasForeignKey("PosSessionId")
+                    b.HasOne("Api.Modules.Professional.ProfessionalEntity", "Professional")
+                        .WithMany("BranchAssignments")
+                        .HasForeignKey("ProfessionalId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Currency");
-
-                    b.Navigation("PosSession");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Branch.BranchEntity", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.User.UserEntity", "CashierUser")
-                        .WithMany()
-                        .HasForeignKey("CashierUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.User.UserEntity", "ClosedByUser")
-                        .WithMany()
-                        .HasForeignKey("ClosedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Api.Modules.Pos.PosRegisterEntity", "Register")
-                        .WithMany("Sessions")
-                        .HasForeignKey("RegisterId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Branch");
 
-                    b.Navigation("CashierUser");
-
-                    b.Navigation("ClosedByUser");
-
-                    b.Navigation("Register");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionOpeningCountEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Currency.CurrencyEntity", "Currency")
-                        .WithMany()
-                        .HasForeignKey("CurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Pos.PosSessionEntity", "PosSession")
-                        .WithMany("OpeningCounts")
-                        .HasForeignKey("PosSessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Currency");
-
-                    b.Navigation("PosSession");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosTenderEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Finance.MoneyAccountEntity", "MoneyAccount")
-                        .WithMany()
-                        .HasForeignKey("MoneyAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Finance.MoneyLedgerEntryEntity", "MoneyLedgerEntry")
-                        .WithMany()
-                        .HasForeignKey("MoneyLedgerEntryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Api.Modules.Pos.PosSaleEntity", "PosSale")
-                        .WithMany("Tenders")
-                        .HasForeignKey("PosSaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("MoneyAccount");
-
-                    b.Navigation("MoneyLedgerEntry");
-
-                    b.Navigation("PosSale");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosZDrawerSummaryEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Pos.PosZReportEntity", "PosZReport")
-                        .WithMany("DrawerSummaries")
-                        .HasForeignKey("PosZReportId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PosZReport");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosZPaymentSummaryEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Pos.PosZReportEntity", "PosZReport")
-                        .WithMany("PaymentSummaries")
-                        .HasForeignKey("PosZReportId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PosZReport");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosZReportEntity", b =>
-                {
-                    b.HasOne("Api.Modules.Pos.PosSessionEntity", "PosSession")
-                        .WithOne("ZReport")
-                        .HasForeignKey("Api.Modules.Pos.PosZReportEntity", "PosSessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("PosSession");
+                    b.Navigation("Professional");
                 });
 
             modelBuilder.Entity("Api.Modules.Purchase.PurchaseInvoiceEntity", b =>
@@ -4504,6 +4285,12 @@ namespace api.Migrations
                     b.HasOne("Api.Modules.Contact.ContactEntity", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Api.Modules.User.UserEntity", "DeletedByUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Api.Modules.Accounting.JournalEntryEntity", "JournalEntry")
@@ -4526,6 +4313,8 @@ namespace api.Migrations
 
                     b.Navigation("Customer");
 
+                    b.Navigation("DeletedByUser");
+
                     b.Navigation("JournalEntry");
 
                     b.Navigation("Warehouse");
@@ -4538,9 +4327,9 @@ namespace api.Migrations
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Modules.User.UserEntity", "ProfessionalUser")
+                    b.HasOne("Api.Modules.Professional.ProfessionalEntity", "Professional")
                         .WithMany()
-                        .HasForeignKey("ProfessionalUserId")
+                        .HasForeignKey("ProfessionalId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Api.Modules.Sales.SalesInvoiceEntity", "SalesInvoice")
@@ -4561,7 +4350,7 @@ namespace api.Migrations
 
                     b.Navigation("Product");
 
-                    b.Navigation("ProfessionalUser");
+                    b.Navigation("Professional");
 
                     b.Navigation("SalesInvoice");
 
@@ -4602,6 +4391,16 @@ namespace api.Migrations
                     b.Navigation("RevenueAccount");
                 });
 
+            modelBuilder.Entity("Api.Modules.User.UserEntity", b =>
+                {
+                    b.HasOne("Api.Modules.Professional.ProfessionalEntity", "LinkedProfessional")
+                        .WithOne("LinkedUser")
+                        .HasForeignKey("Api.Modules.User.UserEntity", "LinkedProfessionalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("LinkedProfessional");
+                });
+
             modelBuilder.Entity("Api.Modules.Accounting.AccountEntity", b =>
                 {
                     b.Navigation("ChildAccounts");
@@ -4615,11 +4414,11 @@ namespace api.Migrations
 
                     b.Navigation("ReversalJournals");
 
-                    b.Navigation("SourceCustomerReceipt");
-
                     b.Navigation("SourceExpenseDocument");
 
                     b.Navigation("SourceMoneyTransfer");
+
+                    b.Navigation("SourcePayment");
 
                     b.Navigation("SourcePosRefund");
 
@@ -4642,7 +4441,7 @@ namespace api.Migrations
 
             modelBuilder.Entity("Api.Modules.Finance.CustomerReceiptEntity", b =>
                 {
-                    b.Navigation("Allocations");
+                    b.Navigation("DraftAllocations");
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.MoneyAccountEntity", b =>
@@ -4650,6 +4449,15 @@ namespace api.Migrations
                     b.Navigation("AccessAssignments");
 
                     b.Navigation("LedgerEntries");
+                });
+
+            modelBuilder.Entity("Api.Modules.Finance.PaymentEntity", b =>
+                {
+                    b.Navigation("Allocations");
+
+                    b.Navigation("MoneyLines");
+
+                    b.Navigation("SourceCustomerReceipt");
                 });
 
             modelBuilder.Entity("Api.Modules.Finance.SupplierPaymentEntity", b =>
@@ -4724,11 +4532,16 @@ namespace api.Migrations
                     b.Navigation("Movements");
                 });
 
+            modelBuilder.Entity("Api.Modules.Pos.PosContextEntity", b =>
+                {
+                    b.Navigation("Refunds");
+                });
+
             modelBuilder.Entity("Api.Modules.Pos.PosRefundEntity", b =>
                 {
                     b.Navigation("Lines");
 
-                    b.Navigation("Tenders");
+                    b.Navigation("RefundPayouts");
                 });
 
             modelBuilder.Entity("Api.Modules.Pos.PosRefundLineEntity", b =>
@@ -4736,38 +4549,11 @@ namespace api.Migrations
                     b.Navigation("StockMovements");
                 });
 
-            modelBuilder.Entity("Api.Modules.Pos.PosRegisterEntity", b =>
+            modelBuilder.Entity("Api.Modules.Professional.ProfessionalEntity", b =>
                 {
-                    b.Navigation("Sessions");
-                });
+                    b.Navigation("BranchAssignments");
 
-            modelBuilder.Entity("Api.Modules.Pos.PosSaleEntity", b =>
-                {
-                    b.Navigation("Change");
-
-                    b.Navigation("Refunds");
-
-                    b.Navigation("Tenders");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosSessionEntity", b =>
-                {
-                    b.Navigation("ClosingCounts");
-
-                    b.Navigation("OpeningCounts");
-
-                    b.Navigation("Refunds");
-
-                    b.Navigation("Sales");
-
-                    b.Navigation("ZReport");
-                });
-
-            modelBuilder.Entity("Api.Modules.Pos.PosZReportEntity", b =>
-                {
-                    b.Navigation("DrawerSummaries");
-
-                    b.Navigation("PaymentSummaries");
+                    b.Navigation("LinkedUser");
                 });
 
             modelBuilder.Entity("Api.Modules.Purchase.PurchaseInvoiceEntity", b =>
@@ -4788,11 +4574,13 @@ namespace api.Migrations
 
                     b.Navigation("Movements");
 
+                    b.Navigation("PaymentAllocations");
+
+                    b.Navigation("PosContext");
+
                     b.Navigation("PosRefunds");
 
-                    b.Navigation("PosSale");
-
-                    b.Navigation("ReceiptAllocations");
+                    b.Navigation("ReceiptDraftAllocations");
                 });
 
             modelBuilder.Entity("Api.Modules.Sales.SalesInvoiceLineEntity", b =>

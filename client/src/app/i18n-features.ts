@@ -1,0 +1,13 @@
+// Bootstrap all feature-owned translation bundles into i18next
+import '@/features/sales'
+import '@/features/inventory'
+import '@/features/finance'
+import '@/features/accounting'
+import '@/features/purchases'
+import '@/features/pos'
+import '@/features/settings'
+import '@/features/contacts'
+import '@/features/auth'
+import '@/features/users'
+import '@/features/business'
+import '@/features/professionals'

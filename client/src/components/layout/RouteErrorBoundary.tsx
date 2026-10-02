@@ -60,7 +60,7 @@ export function RouteErrorBoundary() {
           </Button>
           <Button
             onClick={() => navigate('/dashboard')}
-            className="w-full sm:w-auto gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
+            className="w-full sm:w-auto gap-2"
           >
             <Home className="size-4" />
             <span>Go to Dashboard</span>

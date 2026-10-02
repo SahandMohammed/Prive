@@ -26,7 +26,7 @@ public sealed class JournalEntryEntity
   public SalesInvoiceEntity? SourceSalesInvoice { get; set; }
   public MoneyTransferEntity? SourceMoneyTransfer { get; set; }
   public SupplierPaymentEntity? SourceSupplierPayment { get; set; }
-  public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
+  public PaymentEntity? SourcePayment { get; set; }
   public ExpenseDocumentEntity? SourceExpenseDocument { get; set; }
   public PosRefundEntity? SourcePosRefund { get; set; }
 }

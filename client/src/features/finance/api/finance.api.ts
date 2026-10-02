@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient'
-import type { CustomerReceipt, CustomerReceiptInput, CustomerReceiptSummary, EffectiveExchangeRate, ExchangeRate, ExchangeRateInput, FinanceCustomer, FinanceSupplier, MoneyAccount, MoneyAccountAccess, MoneyAccountAccessInput, MoneyAccountInput, MoneyLedgerEntry, MoneyTransfer, MoneyTransferInput, OpeningBalanceInput, OutstandingPurchaseInvoice, OutstandingSalesInvoice, PageFilters, SupplierPayment, SupplierPaymentInput } from '../types/finance.types'
+import type { CustomerAccountStatement, CustomerAccountSummary, CustomerReceipt, CustomerReceiptInput, CustomerReceiptSummary, CustomerStatementFilters, DollarRate, EffectiveExchangeRate, ExchangeRate, ExchangeRateInput, FinanceCustomer, FinanceSupplier, MoneyAccount, MoneyAccountAccess, MoneyAccountAccessInput, MoneyAccountInput, MoneyLedgerEntry, MoneyTransfer, MoneyTransferInput, OpeningBalanceInput, OutstandingPurchaseInvoice, OutstandingSalesInvoice, PageFilters, Payment, SetDollarRateInput, SupplierPayment, SupplierPaymentInput } from '../types/finance.types'
 
 function qs(filters: Record<string, string | number | boolean | undefined>) { const query = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) }); return query.toString() }
 
@@ -15,6 +15,8 @@ export const financeApi = {
   ledger: (filters: PageFilters) => apiClient.getPaginated<MoneyLedgerEntry>(`/finance/money-ledger?${qs(filters)}`),
   exchangeRates: (filters: PageFilters) => apiClient.getPaginated<ExchangeRate>(`/finance/exchange-rates?${qs(filters)}`),
   effectiveExchangeRate: (currencyId: string, date: string) => apiClient.get<EffectiveExchangeRate>(`/finance/exchange-rates/effective?${qs({ currencyId, date })}`),
+  currentDollarRate: () => apiClient.get<DollarRate>('/finance/exchange-rates/dollar/current'),
+  setDollarRate: (body: SetDollarRateInput) => apiClient.post<DollarRate>('/finance/exchange-rates/dollar', body),
   createExchangeRate: (body: ExchangeRateInput) => apiClient.post<ExchangeRate>('/finance/exchange-rates', body),
   deactivateExchangeRate: (id: string) => apiClient.put<ExchangeRate>(`/finance/exchange-rates/${id}/deactivate`),
   transfers: (filters: PageFilters) => apiClient.getPaginated<MoneyTransfer>(`/finance/transfers?${qs(filters)}`),
@@ -39,4 +41,7 @@ export const financeApi = {
   updateCustomerReceipt: (id: string, body: CustomerReceiptInput) => apiClient.put<CustomerReceipt>(`/finance/customer-receipts/${id}`, body),
   deleteCustomerReceipt: (id: string) => apiClient.delete<void>(`/finance/customer-receipts/${id}`),
   postCustomerReceipt: (id: string) => apiClient.post<CustomerReceipt>(`/finance/customer-receipts/${id}/post`),
+  payment: (id: string) => apiClient.get<Payment>(`/finance/payments/${id}`),
+  customerAccountSummary: (customerId: string) => apiClient.get<CustomerAccountSummary>(`/finance/customers/${customerId}/account-summary`),
+  customerStatement: (customerId: string, filters: CustomerStatementFilters) => apiClient.get<CustomerAccountStatement>(`/finance/customers/${customerId}/statement?${qs({ ...filters })}`),
 }

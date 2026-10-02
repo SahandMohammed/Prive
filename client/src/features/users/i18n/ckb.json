@@ -1,0 +1,39 @@
+{
+  "title": "بەکارهێنەران",
+  "description": "بەڕێوەبردنی دەسەڵاتی گەیشتن بە لقەکان. سوپەرئەدمین و خاوەنەکان دەسەڵاتیان لەسەر هەموو لقە چالاکەکان هەیە.",
+  "searchPlaceholder": "گەڕان لە بەکارهێنەران",
+  "loading": "بارکردنی بەکارهێنەران…",
+  "failedToLoad": "بارکردنی بەکارهێنەران سەرکەوتوو نەبوو.",
+  "noUsers": "هیچ بەکارهێنەرێک نەدۆزرایەوە.",
+  "th": {
+    "username": "ناوی بەکارهێنەر",
+    "role": "ڕۆڵ",
+    "status": "دۆخ",
+    "branchAccess": "دەسەڵاتی لق"
+  },
+  "roles": {
+    "Manager": "بەڕێوەبەر",
+    "Owner": "خاوەن",
+    "Professional": "پڕۆفیشناڵ",
+    "Cashier": "کاشێر",
+    "SuperAdmin": "سوپەرئەدمین",
+    "Unassigned": "دیارینەکراو"
+  },
+  "status": {
+    "active": "چالاک",
+    "inactive": "ناچالاک"
+  },
+  "branchAccess": {
+    "allActiveBranches": "هەموو لقە چالاکەکان",
+    "manageBranches": "بەڕێوەبردنی لقەکان",
+    "managedByOwner": "لەلایەن خاوەن یان سوپەرئەدمین بەڕێوەدەبردرێت"
+  },
+  "createDialog": {
+    "title": "دروستکردنی بەکارهێنەر",
+    "usernamePlaceholder": "ناوی بەکارهێنەر",
+    "tempPasswordPlaceholder": "وشەی نهێنیی کاتی",
+    "selectRole": "ڕۆڵ هەڵبژێرە…",
+    "creating": "دروستکردن…",
+    "submit": "دروستکردنی بەکارهێنەر"
+  }
+}

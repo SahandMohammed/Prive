@@ -14,6 +14,9 @@ export const businessSchema = z.object({
   region: z.string().trim().min(1, 'Region is required').max(100),
   country: z.string().trim().min(1, 'Country is required').max(100),
   logoReference: optionalText,
+  timeZoneId: z.string().trim().min(1, 'Time zone is required').max(100),
+  receiptFooter: z.string().trim().max(500).or(z.literal('')).transform((value) => value || null),
+  receiptPaperWidth: z.enum(['Mm58', 'Mm80']),
   baseCurrencyId: z.string().uuid('Choose a base currency'),
   isSetupCompleted: z.boolean(),
 })

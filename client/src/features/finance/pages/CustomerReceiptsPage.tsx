@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Landmark, Loader2, Plus, RotateCcw, Search, Send, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatDate, formatNumber } from '@/lib/i18n'
 import { useBranches, useCurrencies } from '@/features/business'
 import {
   useCustomerReceiptActions,
@@ -23,6 +25,7 @@ import {
 import { FinanceDocumentStatus } from '../types/finance.types'
 
 export function CustomerReceiptsPage() {
+  const { t } = useTranslation(['finance', 'common'])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [search, setSearch] = useState('')
@@ -84,17 +87,16 @@ export function CustomerReceiptsPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Customer Receipts
+            {t('finance:customerReceipts.title')}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Accounts Receivable settlements. Draft receipts hold allocations against customer sales
-            invoices until posted to create Money Account inflows and General Ledger entries.
+            {t('finance:customerReceipts.description')}
           </p>
         </div>
         <Link to="/finance/customer-receipts/new">
-          <Button className="gap-1.5 bg-primary font-medium text-white shadow-xs hover:bg-primary/90">
+          <Button className="gap-1.5">
             <Plus className="size-4 stroke-[2.5]" />
-            New Customer Receipt
+            {t('finance:customerReceipts.newReceipt')}
           </Button>
         </Link>
       </div>
@@ -102,15 +104,15 @@ export function CustomerReceiptsPage() {
       {/* FILTER CONTROLS TOOLBAR */}
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-xs dark:border-slate-800 md:grid-cols-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <Input
-            placeholder="Receipt # or customer..."
+            placeholder={t('finance:customerReceipts.searchPlaceholder')}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
               resetPage()
             }}
-            className="h-9 pl-9 text-xs"
+            className="h-9 ps-9 text-xs"
           />
         </div>
 
@@ -122,7 +124,7 @@ export function CustomerReceiptsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Customers</option>
+          <option value="">{t('finance:customerReceipts.allCustomers')}</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -138,7 +140,7 @@ export function CustomerReceiptsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">Current branch</option>
+          <option value="">{t('finance:customerReceipts.allBranches')}</option>
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
@@ -154,7 +156,7 @@ export function CustomerReceiptsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Money Accounts</option>
+          <option value="">{t('finance:customerReceipts.allAccounts')}</option>
           {moneyAccounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.code} — {account.name}
@@ -170,7 +172,7 @@ export function CustomerReceiptsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Currencies</option>
+          <option value="">{t('finance:customerReceipts.allCurrencies')}</option>
           {currencies.map((c) => (
             <option key={c.id} value={c.id}>
               {c.code}
@@ -186,14 +188,14 @@ export function CustomerReceiptsPage() {
           }}
           className="h-9 rounded-md border border-input bg-background px-3 text-xs"
         >
-          <option value="">All Statuses</option>
-          <option value="0">Draft</option>
-          <option value="1">Posted</option>
+          <option value="">{t('finance:customerReceipts.allStatuses')}</option>
+          <option value="0">{t('finance:transfersPage.draft')}</option>
+          <option value="1">{t('finance:transfersPage.posted')}</option>
         </select>
 
         <Input
           type="date"
-          aria-label="From Date"
+          aria-label={t('finance:transfersPage.fromDate')}
           value={fromDate}
           onChange={(e) => {
             setFromDate(e.target.value)
@@ -204,7 +206,7 @@ export function CustomerReceiptsPage() {
 
         <Input
           type="date"
-          aria-label="To Date"
+          aria-label={t('finance:transfersPage.toDate')}
           value={toDate}
           onChange={(e) => {
             setToDate(e.target.value)
@@ -222,7 +224,7 @@ export function CustomerReceiptsPage() {
               onClick={handleClearFilters}
             >
               <RotateCcw className="size-3.5" />
-              Reset Filters
+              {t('finance:customerReceipts.clearFilters')}
             </Button>
           )}
         </div>
@@ -234,15 +236,15 @@ export function CustomerReceiptsPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                <TableHead className="px-4 py-3">Receipt #</TableHead>
-                <TableHead className="px-4 py-3">Date</TableHead>
-                <TableHead className="px-4 py-3">Customer</TableHead>
-                <TableHead className="px-4 py-3">Money Account</TableHead>
-                <TableHead className="px-4 py-3">Currency</TableHead>
-                <TableHead className="px-4 py-3 text-right">Receipt Amount</TableHead>
-                <TableHead className="px-4 py-3">Status</TableHead>
-                <TableHead className="px-4 py-3">Created By</TableHead>
-                <TableHead className="px-4 py-3 text-right">Actions</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:customerReceipts.th.document')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:customerReceipts.th.date')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:customerReceipts.th.customer')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:customerReceipts.th.account')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:moneyAccountsPage.th.currency')}</TableHead>
+                <TableHead className="px-4 py-3 text-end">{t('finance:customerReceipts.th.amount')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:customerReceipts.th.status')}</TableHead>
+                <TableHead className="px-4 py-3 text-start">{t('finance:exchangeRatesPage.th.createdBy')}</TableHead>
+                <TableHead className="px-4 py-3 text-end">{t('finance:customerReceipts.th.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -250,7 +252,7 @@ export function CustomerReceiptsPage() {
                 <TableRow>
                   <TableCell colSpan={9} className="h-48 text-center text-sm text-slate-500">
                     <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
-                    Loading customer receipts...
+                    {t('finance:customerReceipts.loading')}
                   </TableCell>
                 </TableRow>
               ) : query.isError ? (
@@ -265,14 +267,11 @@ export function CustomerReceiptsPage() {
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Landmark className="size-8 text-slate-300 dark:text-slate-600" />
                       <p className="font-medium text-slate-700 dark:text-slate-300">
-                        No customer receipts found
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        Record a new receipt to settle customer sales invoices.
+                        {t('finance:customerReceipts.empty')}
                       </p>
                       <Link to="/finance/customer-receipts/new">
                         <Button size="xs" className="mt-1 gap-1">
-                          <Plus className="size-3.5" /> Record Receipt
+                          <Plus className="size-3.5" /> {t('finance:customerReceipts.newReceipt')}
                         </Button>
                       </Link>
                     </div>
@@ -284,7 +283,7 @@ export function CustomerReceiptsPage() {
                     key={receipt.id}
                     className="hover:bg-slate-50/80 transition-colors dark:hover:bg-slate-800/40"
                   >
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <Link
                         className="font-mono text-xs font-bold text-primary hover:underline"
                         to={`/finance/customer-receipts/${receipt.id}`}
@@ -292,50 +291,43 @@ export function CustomerReceiptsPage() {
                         {receipt.documentNumber}
                       </Link>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
-                      {receipt.receiptDate}
+                    <TableCell className="px-4 py-3.5 text-start text-xs text-slate-700 dark:text-slate-300">
+                      {formatDate(receipt.receiptDate)}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs font-medium text-slate-900 dark:text-slate-100">
+                    <TableCell className="px-4 py-3.5 text-start text-xs font-medium text-slate-900 dark:text-slate-100">
                       {receipt.customerName}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs">
+                    <TableCell className="px-4 py-3.5 text-start text-xs">
                       <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
                         {receipt.moneyAccountCode}
                       </span>
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-400">
+                    <TableCell className="px-4 py-3.5 text-start font-mono text-xs text-slate-600 dark:text-slate-400">
                       {receipt.currencyCode}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
-                      {receipt.totalAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 4,
-                      })}
+                    <TableCell className="px-4 py-3.5 text-end font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      {formatNumber(receipt.totalAmount, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5">
+                    <TableCell className="px-4 py-3.5 text-start">
                       <ReceiptStatus status={receipt.status} />
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-xs text-slate-500">
+                    <TableCell className="px-4 py-3.5 text-start text-xs text-slate-500">
                       {receipt.createdByUsername}
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
+                    <TableCell className="px-4 py-3.5 text-end">
                       {receipt.status === FinanceDocumentStatus.Draft && (
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             size="xs"
-                            className="gap-1 bg-primarytext-primary-foregroundhover:bg-primary/90"
+                            className="gap-1"
                             disabled={actions.post.isPending}
                             onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Post customer receipt ${receipt.documentNumber}? This will settle AR and deposit funds into ${receipt.moneyAccountCode}.`
-                                )
-                              ) {
+                              if (window.confirm(t('finance:customerReceipts.postConfirm'))) {
                                 actions.post.mutate(receipt.id)
                               }
                             }}
                           >
-                            <Send className="size-3" /> Post
+                            <Send className="size-3 rtl:rotate-180" /> {t('finance:transfersPage.form.postTransfer')}
                           </Button>
                           <Button
                             size="xs"
@@ -343,11 +335,7 @@ export function CustomerReceiptsPage() {
                             className="text-red-600 hover:bg-red-50 hover:border-red-200"
                             disabled={actions.remove.isPending}
                             onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Delete draft customer receipt ${receipt.documentNumber}?`
-                                )
-                              ) {
+                              if (window.confirm(t('finance:customerReceipts.deleteConfirm'))) {
                                 actions.remove.mutate(receipt.id)
                               }
                             }}
@@ -381,6 +369,7 @@ export function CustomerReceiptsPage() {
 }
 
 export function ReceiptStatus({ status }: { status: FinanceDocumentStatus }) {
+  const { t } = useTranslation('finance')
   return (
     <span
       className={`inline-flex rounded px-2 py-0.5 text-[11px] font-semibold ${
@@ -389,7 +378,7 @@ export function ReceiptStatus({ status }: { status: FinanceDocumentStatus }) {
           : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
       }`}
     >
-      {status === FinanceDocumentStatus.Posted ? 'Posted' : 'Draft'}
+      {status === FinanceDocumentStatus.Posted ? t('finance:transfersPage.posted') : t('finance:transfersPage.draft')}
     </span>
   )
 }

@@ -1,0 +1,78 @@
+{
+  "title": "المحترفون",
+  "description": "إدارة أعضاء الفريق المتاحين للخدمات ومبيعات نقاط البيع.",
+  "addProfessional": "إضافة محترف",
+  "searchPlaceholder": "البحث بالاسم أو الهاتف أو البريد",
+  "searchLabel": "البحث عن المحترفين",
+  "statusFilter": "حالة المحترف",
+  "allStatuses": "جميع الحالات",
+  "branchFilter": "فرع المحترف",
+  "allBranches": "جميع الفروع",
+  "count_one": "{{count}} محترف",
+  "count_other": "{{count}} محترفين",
+  "th": {
+    "professional": "المحترف",
+    "contact": "الاتصال",
+    "branches": "الفروع",
+    "linkedAccount": "الحساب المرتبط",
+    "status": "الحالة",
+    "actions": "الإجراءات"
+  },
+  "status": {
+    "active": "نشط",
+    "inactive": "غير نشط"
+  },
+  "unassigned": "غير مخصص",
+  "inactiveSuffix": "(غير نشط)",
+  "noProfessionals": "لم يتم العثور على محترفين.",
+  "actions": {
+    "edit": "تعديل {{name}}",
+    "activate": "تفعيل {{name}}",
+    "deactivate": "تعطيل {{name}}",
+    "delete": "حذف {{name}}",
+    "confirmDelete": "هل تريد بالتأكيد حذف {{name}} نهائياً؟ لا يمكن التراجع عن هذا الإجراء."
+  },
+  "dialog": {
+    "titleAdd": "إضافة محترف",
+    "titleEdit": "تعديل {{name}}",
+    "description": "تتحكم الملفات الشخصية في توفر الخدمة. تتم إدارة الوصول لحساب تسجيل الدخول بشكل منفصل.",
+    "fields": {
+      "name": "الاسم",
+      "phone": "الهاتف",
+      "email": "البريد الإلكتروني",
+      "notes": "ملاحظات",
+      "linkedAccount": "حساب تسجيل الدخول المرتبط",
+      "noLinkedAccount": "لا يوجد حساب مرتبط",
+      "posBranches": "فروع نقاط البيع",
+      "loadingBranches": "جارٍ تحميل الفروع…",
+      "noActiveBranches": "لا توجد فروع نشطة متاحة.",
+      "activeInPos": "نشط ومتاح في نقاط البيع"
+    },
+    "cancel": "إلغاء",
+    "save": "حفظ التغييرات",
+    "saving": "جارٍ الحفظ…",
+    "create": "إضافة محترف"
+  },
+  "performance": {
+    "title": "أداء المحترفين",
+    "description": "نشاط الخدمات والمبالغ المستردة المنشورة في الفرع المحدد وبالعملة الأساسية.",
+    "period": "الفترة",
+    "periods": { "today": "اليوم", "thisWeek": "هذا الأسبوع", "thisMonth": "هذا الشهر", "custom": "مخصص" },
+    "professional": "المحترف",
+    "allProfessionals": "كل المحترفين",
+    "service": "الخدمة",
+    "allServices": "كل الخدمات",
+    "source": "المصدر",
+    "sources": { "all": "الكل", "pos": "نقطة البيع", "manual": "يدوي" },
+    "fromDate": "من تاريخ",
+    "toDate": "إلى تاريخ",
+    "branchHint": "يستخدم اختيار الفرع العام",
+    "serviceQuantity": "كمية الخدمات",
+    "visitsServed": "الزيارات المخدومة",
+    "gross": "القيمة الإجمالية",
+    "refunds": "قيمة الاسترداد",
+    "net": "القيمة الصافية",
+    "empty": "لا يوجد نشاط مبيعات أو استرداد يطابق هذه المرشحات.",
+    "invalidDates": "اختر نطاقًا زمنيًا مخصصًا صالحًا."
+  }
+}

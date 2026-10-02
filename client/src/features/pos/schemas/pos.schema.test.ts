@@ -2,54 +2,35 @@ import { describe, expect, it } from 'vitest'
 import { posCheckoutSchema, posRefundSchema } from './pos.schema'
 import { PosPaymentMode, PosRefundReason } from '../types/pos.types'
 
-const tender = {
-  moneyAccountId: '11111111-1111-4111-8111-111111111111',
-  amount: 10_000,
-}
+const accountId = '11111111-1111-4111-8111-111111111111'
+const payout = { moneyAccountId: accountId, amount: 10_000 }
 
 describe('posCheckoutSchema', () => {
-  it('requires at least one tender for a paid checkout', () => {
+  it('requires at least one positive collection amount for a paid checkout', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Paid,
-      tenders: [],
-      changeMoneyAccountId: '',
-      changeAmount: 0,
+      collectionAmounts: { [accountId]: 0 },
     })
 
     expect(result.success).toBe(false)
   })
 
-  it('accepts one or more tenders for a partial checkout', () => {
+  it('accepts a credit checkout without collection details', () => {
+    const result = posCheckoutSchema.safeParse({
+      paymentMode: PosPaymentMode.Credit,
+      collectionAmounts: {},
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts Partial as a checkout mode with a collection', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Partial,
-      tenders: [tender],
-      changeMoneyAccountId: '',
-      changeAmount: 0,
+      collectionAmounts: { [accountId]: 1 },
     })
 
     expect(result.success).toBe(true)
-  })
-
-  it('accepts credit checkout with no tender', () => {
-    const result = posCheckoutSchema.safeParse({
-      paymentMode: PosPaymentMode.Credit,
-      tenders: [],
-      changeMoneyAccountId: '',
-      changeAmount: 0,
-    })
-
-    expect(result.success).toBe(true)
-  })
-
-  it('rejects tender or change on a credit checkout', () => {
-    const result = posCheckoutSchema.safeParse({
-      paymentMode: PosPaymentMode.Credit,
-      tenders: [tender],
-      changeMoneyAccountId: tender.moneyAccountId,
-      changeAmount: 1,
-    })
-
-    expect(result.success).toBe(false)
   })
 })
 
@@ -66,7 +47,7 @@ describe('posRefundSchema', () => {
       reason: PosRefundReason.CustomerComplaint,
       notes: '',
       lines: [{ ...line, selected: false, quantity: 0 }],
-      refundTenders: [],
+      refundPayouts: [],
     }).success).toBe(false)
   })
 
@@ -75,7 +56,7 @@ describe('posRefundSchema', () => {
       reason: PosRefundReason.Other,
       notes: '',
       lines: [line],
-      refundTenders: [],
+      refundPayouts: [],
     }
     expect(posRefundSchema.safeParse(input).success).toBe(false)
     expect(posRefundSchema.safeParse({ ...input, notes: 'Approved exception' }).success).toBe(true)
@@ -86,7 +67,7 @@ describe('posRefundSchema', () => {
       reason: PosRefundReason.ProductReturned,
       notes: 'Product inspected',
       lines: [{ ...line, restockProduct: true }],
-      refundTenders: [tender, { ...tender, moneyAccountId: '33333333-3333-4333-8333-333333333333' }],
+      refundPayouts: [payout, { ...payout, moneyAccountId: '33333333-3333-4333-8333-333333333333' }],
     }).success).toBe(true)
   })
 })

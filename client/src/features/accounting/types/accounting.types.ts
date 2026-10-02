@@ -64,8 +64,7 @@ export interface JournalEntry {
   sourceSalesInvoiceId: string | null
   sourceMoneyTransferId: string | null
   sourceSupplierPaymentId: string | null
-  sourceCustomerReceiptId: string | null
-  sourcePosSaleId: string | null
+  sourcePaymentId: string | null
   sourceExpenseDocumentId: string | null
   sourcePosRefundId: string | null
   totalDebitBaseAmount: number

@@ -2,6 +2,7 @@ using Api.Modules.User;
 using Api.Modules.Currency;
 using Api.Modules.Accounting;
 using Api.Modules.Inventory;
+using Api.Modules.Contact;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,7 @@ public static class DbSeeder
     await SeedCurrenciesAsync(db);
     await AccountingChartSeeder.SeedAsync(db);
     await InventorySeeder.SeedAsync(db);
+    await scope.ServiceProvider.GetRequiredService<WalkInCustomerProvisioner>().EnsureSharedAsync();
 
     if (await db.Users.AnyAsync(u => u.Role == UserRole.SuperAdmin))
     {

@@ -16,6 +16,7 @@ Read only the material needed for the task:
 | --- | --- |
 | Backend work | `docs/architecture/backend.md` |
 | Frontend work | `docs/architecture/frontend.md` |
+| UI design & color system | `docs/design/color-system.md` |
 | Flutter customer app work | `docs/architecture/mobile.md` |
 | Error/API contract work | `docs/architecture/error-handling.md`, `docs/decisions/001-api-envelope.md` |
 | Authentication | `docs/architecture/authentication.md`, `docs/decisions/002-authentication.md` |

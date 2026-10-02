@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useIsMutating } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { useCurrentUser } from '@/features/auth'
@@ -11,6 +12,7 @@ import {
 } from '../stores/branch-selection.store'
 
 export function BranchWorkspace({ children }: { children: ReactNode }) {
+  const { t } = useTranslation(['business'])
   const { pathname } = useLocation()
   const { data: user } = useCurrentUser()
   const branches = useBranchAccess()
@@ -51,8 +53,8 @@ export function BranchWorkspace({ children }: { children: ReactNode }) {
     return (
       <p role="status" className="py-8 text-sm text-muted-foreground">
         {branches.isPending || switching
-          ? 'Loading branch workspace…'
-          : 'Choose an accessible branch in the sidebar to continue.'}
+          ? t('business:workspace.loading')
+          : t('business:workspace.chooseBranch')}
       </p>
     )
   }
