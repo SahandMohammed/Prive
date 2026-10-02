@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
 using Api.Modules.Branch;
@@ -5,12 +6,15 @@ using Api.Modules.Business;
 using Api.Modules.Contact;
 using Api.Modules.Currency;
 using Api.Modules.Finance;
+using Api.Modules.Inventory;
 using Api.Modules.Pos;
 using Api.Modules.Professional;
 using Api.Modules.Sales;
 using Api.Modules.User;
 using Api.Shared.Persistence;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 
 namespace Api.Tests;
@@ -30,8 +34,20 @@ public sealed class SessionlessPosWorkflowTests
     Assert.Equal(5_000, sale.ChangeBaseAmount);
     Assert.Equal(25_000, sale.CollectedBaseAmount);
     Assert.Equal(data.OperatorId, sale.OperatorUserId);
+    Assert.Equal("operator", sale.OperatorUsername);
+    Assert.Equal("Walk-in Customer", sale.CustomerName);
+    Assert.Equal("MAIN", sale.BranchCode);
+    Assert.Equal("Main", sale.BranchName);
+    Assert.Equal("IQD", sale.BaseCurrencyCode);
     Assert.Single(sale.Collections);
     Assert.NotNull(sale.Change);
+    Assert.Equal("CASH-IQD", sale.Collections.Single().MoneyAccountCode);
+    Assert.Equal("Reception Cash", sale.Collections.Single().MoneyAccountName);
+    Assert.Equal("IQD", sale.Collections.Single().CurrencyCode);
+    Assert.Empty(sale.Refunds);
+    var receiptLine = Assert.Single(sale.Lines);
+    Assert.Equal("Haircut", receiptLine.ServiceName);
+    Assert.Equal("Sara", receiptLine.ProfessionalName);
 
     var payment = await db.Payments.Include(item => item.Allocations).Include(item => item.MoneyLines)
       .SingleAsync(item => item.Origin == PaymentOrigin.Pos && item.SourceSalesInvoiceId == sale.Id);
@@ -42,6 +58,88 @@ public sealed class SessionlessPosWorkflowTests
     Assert.Single(payment.MoneyLines, line => line.Direction == PaymentMoneyDirection.Collection);
     Assert.Single(payment.MoneyLines, line => line.Direction == PaymentMoneyDirection.Change);
     Assert.Equal(6, (int)MoneyLedgerSourceType.Payment);
+  }
+
+  [Fact]
+  public async Task Product_checkout_returns_receipt_details_from_the_prepared_sale()
+  {
+    await using var db = CreateDb();
+    var data = await SeedAsync(db);
+    var branch = await db.Branches.SingleAsync(item => item.Id == data.BranchId);
+    var unit = new UnitOfMeasureEntity { Name = "Piece", Code = "pc" };
+    var category = new ProductCategoryEntity { Name = "Retail" };
+    var product = new ProductEntity
+    {
+      Name = "Shampoo",
+      SKU = "SHP-1",
+      Category = category,
+      UnitOfMeasure = unit,
+      Purpose = ProductPurpose.Resale,
+      PurchasePriceBase = 4_000,
+      SellingPriceBase = 10_000,
+      TrackInventory = true
+    };
+    var warehouse = new WarehouseEntity { Code = "MAIN-WH", Name = "Main Warehouse", Branch = branch };
+    db.AddRange(
+      unit,
+      category,
+      product,
+      warehouse,
+      new AccountEntity { Code = "4211", Name = "Product Revenue", Classification = AccountClassification.Revenue },
+      new AccountEntity { Code = "3641", Name = "Cost of Goods", Classification = AccountClassification.Expense },
+      new AccountEntity { Code = "1317", Name = "Inventory", Classification = AccountClassification.Asset });
+    db.StockMovements.Add(new StockMovementEntity
+    {
+      Product = product,
+      Warehouse = warehouse,
+      Type = StockMovementType.OpeningStock,
+      MovementDate = DateOnly.FromDateTime(DateTime.UtcNow),
+      QuantityIn = 5,
+      UnitCostBase = 4_000,
+      PerformedByUserId = data.OperatorId
+    });
+    await db.SaveChangesAsync();
+
+    var sale = await CreatePosService(db).CompleteSaleAsync(new CompletePosSaleRequest(
+      data.BranchId,
+      warehouse.Id,
+      data.CustomerId,
+      [new PosSaleLineRequest(SalesLineType.Product, null, product.Id, unit.Id, 1, null)],
+      [new CollectionMoneyLineRequest(data.MoneyAccountId, 10_000)],
+      null,
+      PosPaymentMode.Paid,
+      Guid.NewGuid()), data.OperatorId, default);
+
+    Assert.Equal("MAIN-WH", sale.WarehouseCode);
+    Assert.Equal("Main Warehouse", sale.WarehouseName);
+    Assert.Single(sale.StockMovementIds);
+    var receiptLine = Assert.Single(sale.Lines);
+    Assert.Equal("Shampoo", receiptLine.ProductName);
+    Assert.Equal("SHP-1", receiptLine.SKU);
+    Assert.Equal("pc", receiptLine.UnitCode);
+    Assert.Null(receiptLine.ProfessionalId);
+  }
+
+  [Fact]
+  public async Task Paid_checkout_stays_within_the_read_query_budget()
+  {
+    await using var connection = new SqliteConnection("Data Source=:memory:");
+    await connection.OpenAsync();
+    var reads = new SelectCommandCounter();
+    var branchContext = new BranchContext { BranchId = Guid.NewGuid() };
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+      .UseSqlite(connection)
+      .AddInterceptors(reads)
+      .Options;
+    await using var db = new AppDbContext(options, branchContext);
+    await db.Database.EnsureCreatedAsync();
+    var data = await SeedAsync(db);
+    reads.Reset();
+
+    await CreatePosService(db).CompleteSaleAsync(
+      Checkout(data, customerId: null, collection: 25_000), data.OperatorId, default);
+
+    Assert.InRange(reads.Count, 1, 17);
   }
 
   [Fact]
@@ -500,4 +598,36 @@ public sealed class SessionlessPosWorkflowTests
     Guid ServiceId,
     Guid MoneyAccountId,
     Guid SecondMoneyAccountId);
+
+  private sealed class SelectCommandCounter : DbCommandInterceptor
+  {
+    public int Count { get; private set; }
+
+    public void Reset() => Count = 0;
+
+    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+      DbCommand command,
+      CommandEventData eventData,
+      InterceptionResult<DbDataReader> result,
+      CancellationToken cancellationToken = default)
+    {
+      CountSelect(command);
+      return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+    }
+
+    public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+      DbCommand command,
+      CommandEventData eventData,
+      InterceptionResult<object> result,
+      CancellationToken cancellationToken = default)
+    {
+      CountSelect(command);
+      return base.ScalarExecutingAsync(command, eventData, result, cancellationToken);
+    }
+
+    private void CountSelect(DbCommand command)
+    {
+      if (command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)) Count++;
+    }
+  }
 }

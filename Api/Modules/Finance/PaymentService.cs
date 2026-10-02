@@ -151,7 +151,8 @@ public sealed class PaymentService
   internal async Task<PaymentEntity> CreateAsync(
     CreatePaymentCommand command,
     Guid userId,
-    CancellationToken ct)
+    CancellationToken ct,
+    IReadOnlyDictionary<Guid, MoneyAccountEntity>? prevalidatedMoneyAccounts = null)
   {
     var payment = new PaymentEntity
     {
@@ -165,7 +166,14 @@ public sealed class PaymentService
       Notes = Trim(command.Notes),
       CreatedByUserId = userId
     };
-    await PopulateEffectsAsync(payment, command.Allocations, command.MoneyLines, userId, ct, false);
+    await PopulateEffectsAsync(
+      payment,
+      command.Allocations,
+      command.MoneyLines,
+      userId,
+      ct,
+      allowExistingOverpayment: false,
+      prevalidatedMoneyAccounts: prevalidatedMoneyAccounts);
     _db.Payments.Add(payment);
     return payment;
   }
@@ -209,7 +217,8 @@ public sealed class PaymentService
     IReadOnlyList<PaymentMoneyLineCommand> moneyLines,
     string reason,
     Guid userId,
-    CancellationToken ct)
+    CancellationToken ct,
+    IReadOnlyDictionary<Guid, MoneyAccountEntity>? prevalidatedMoneyAccounts = null)
   {
     await EnsureNoRefundDependencyAsync(payment, ct);
     var before = Snapshot(payment);
@@ -217,7 +226,14 @@ public sealed class PaymentService
     payment.PaymentDate = paymentDate;
     payment.Notes = Trim(notes);
     payment.UpdatedAtUtc = DateTime.UtcNow;
-    await PopulateEffectsAsync(payment, allocations, moneyLines, userId, ct, allowExistingOverpayment: true);
+    await PopulateEffectsAsync(
+      payment,
+      allocations,
+      moneyLines,
+      userId,
+      ct,
+      allowExistingOverpayment: true,
+      prevalidatedMoneyAccounts: prevalidatedMoneyAccounts);
     AddAudit(payment, userId, "edited", reason, before, Snapshot(payment));
   }
 
@@ -227,7 +243,8 @@ public sealed class PaymentService
     IReadOnlyList<PaymentMoneyLineCommand> moneyLineCommands,
     Guid userId,
     CancellationToken ct,
-    bool allowExistingOverpayment)
+    bool allowExistingOverpayment,
+    IReadOnlyDictionary<Guid, MoneyAccountEntity>? prevalidatedMoneyAccounts = null)
   {
     if (allocationCommands.Count == 0 || allocationCommands.Any(item => item.Amount <= 0))
       throw new BadRequestException(ErrorCodes.Finance.PaymentAllocationsRequired,
@@ -247,10 +264,13 @@ public sealed class PaymentService
       .Select(entry => entry.Entity)
       .ToDictionary(invoice => invoice.Id);
     var persistedInvoiceIds = invoiceIds.Where(id => !invoices.ContainsKey(id)).ToArray();
-    var persistedInvoices = await _db.SalesInvoices
-      .Where(invoice => persistedInvoiceIds.Contains(invoice.Id) && invoice.Status == SalesInvoiceStatus.Posted)
-      .ToListAsync(ct);
-    foreach (var invoice in persistedInvoices) invoices[invoice.Id] = invoice;
+    if (persistedInvoiceIds.Length > 0)
+    {
+      var persistedInvoices = await _db.SalesInvoices
+        .Where(invoice => persistedInvoiceIds.Contains(invoice.Id) && invoice.Status == SalesInvoiceStatus.Posted)
+        .ToListAsync(ct);
+      foreach (var invoice in persistedInvoices) invoices[invoice.Id] = invoice;
+    }
     if (invoices.Count != invoiceIds.Length)
       throw new BadRequestException(ErrorCodes.Finance.SalesInvoiceInvalid,
         "Every allocation must reference an active Sales Invoice.");
@@ -269,10 +289,19 @@ public sealed class PaymentService
         "This Payment must allocate exactly once to its source Sales Invoice.");
 
     var accountIds = moneyLineCommands.Select(item => item.MoneyAccountId).Distinct().ToArray();
-    foreach (var accountId in accountIds)
-      await EnsureMoneyAccountAccessAsync(accountId, userId, ct);
-    var accounts = await _db.MoneyAccounts.Include(account => account.AccountingAccount)
-      .Where(account => accountIds.Contains(account.Id)).ToDictionaryAsync(account => account.Id, ct);
+    IReadOnlyDictionary<Guid, MoneyAccountEntity> accounts;
+    if (prevalidatedMoneyAccounts is null)
+    {
+      await EnsureMoneyAccountAccessAsync(accountIds, userId, ct);
+      accounts = await _db.MoneyAccounts.Include(account => account.AccountingAccount)
+        .Where(account => accountIds.Contains(account.Id)).ToDictionaryAsync(account => account.Id, ct);
+    }
+    else
+    {
+      accounts = accountIds
+        .Where(prevalidatedMoneyAccounts.ContainsKey)
+        .ToDictionary(accountId => accountId, accountId => prevalidatedMoneyAccounts[accountId]);
+    }
     if (accounts.Count != accountIds.Length)
       throw new BadRequestException(ErrorCodes.Finance.MoneyAccountInvalid, "Select existing Money Accounts.");
     foreach (var account in accounts.Values)
@@ -299,12 +328,17 @@ public sealed class PaymentService
       foreach (var allocation in allocations)
       {
         var invoice = invoices[allocation.SalesInvoiceId];
-        var alreadyCollected = await _db.PaymentAllocations.AsNoTracking()
-          .Where(item => item.SalesInvoiceId == invoice.Id && !item.Payment.IsDeleted)
-          .SumAsync(item => (decimal?)item.Amount, ct) ?? 0m;
-        var refundReductionBase = await _db.PosRefunds.AsNoTracking()
-          .Where(refund => refund.SalesInvoiceId == invoice.Id && refund.Status == PosRefundStatus.Posted)
-          .SumAsync(refund => (decimal?)refund.ReceivableReversalBase, ct) ?? 0m;
+        var invoiceIsNew = _db.Entry(invoice).State == EntityState.Added;
+        var alreadyCollected = invoiceIsNew
+          ? 0m
+          : await _db.PaymentAllocations.AsNoTracking()
+            .Where(item => item.SalesInvoiceId == invoice.Id && !item.Payment.IsDeleted)
+            .SumAsync(item => (decimal?)item.Amount, ct) ?? 0m;
+        var refundReductionBase = invoiceIsNew
+          ? 0m
+          : await _db.PosRefunds.AsNoTracking()
+            .Where(refund => refund.SalesInvoiceId == invoice.Id && refund.Status == PosRefundStatus.Posted)
+            .SumAsync(refund => (decimal?)refund.ReceivableReversalBase, ct) ?? 0m;
         var refundReduction = invoice.ExchangeRate > 0 ? Money(refundReductionBase / invoice.ExchangeRate) : 0m;
         var outstanding = Math.Max(Money(invoice.Total - refundReduction - alreadyCollected), 0m);
         if (allocation.Amount > outstanding)
@@ -462,14 +496,21 @@ public sealed class PaymentService
     return expectedRate;
   }
 
-  private async Task EnsureMoneyAccountAccessAsync(Guid accountId, Guid userId, CancellationToken ct)
+  private async Task EnsureMoneyAccountAccessAsync(
+    IReadOnlyCollection<Guid> accountIds,
+    Guid userId,
+    CancellationToken ct)
   {
-    var hasAccess = await _db.MoneyAccountAccess.AsNoTracking().AnyAsync(access =>
-      access.MoneyAccountId == accountId && access.UserId == userId
-      && access.AccessLevel == MoneyAccountAccessLevel.Operate, ct);
-    if (!hasAccess)
+    var accessibleCount = await _db.MoneyAccountAccess.AsNoTracking()
+      .Where(access => accountIds.Contains(access.MoneyAccountId)
+        && access.UserId == userId
+        && access.AccessLevel == MoneyAccountAccessLevel.Operate)
+      .Select(access => access.MoneyAccountId)
+      .Distinct()
+      .CountAsync(ct);
+    if (accessibleCount != accountIds.Count)
       throw new ForbiddenException(ErrorCodes.Finance.MoneyAccountAccessDenied,
-        "You do not have operating access to this Money Account.");
+        "You do not have operating access to every selected Money Account.");
   }
 
   private async Task<string> NextDocumentNumberAsync(CancellationToken ct)

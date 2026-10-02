@@ -40,13 +40,26 @@ public sealed class PosSettlementService
     var accountIds = request.Collections.Select(line => line.MoneyAccountId)
       .Append(request.Change?.MoneyAccountId ?? Guid.Empty)
       .Where(id => id != Guid.Empty).Distinct().ToList();
-    foreach (var accountId in accountIds)
-      await _finance.EnsureAccessAsync(accountId, userId, MoneyAccountAccessLevel.Operate, ct);
+    if (accountIds.Count > 0)
+    {
+      var accessibleCount = await _db.MoneyAccountAccess.AsNoTracking()
+        .Where(access => accountIds.Contains(access.MoneyAccountId)
+          && access.UserId == userId
+          && access.AccessLevel == MoneyAccountAccessLevel.Operate)
+        .Select(access => access.MoneyAccountId)
+        .Distinct()
+        .CountAsync(ct);
+      if (accessibleCount != accountIds.Count)
+        throw new ForbiddenException(ErrorCodes.Finance.MoneyAccountAccessDenied,
+          "You do not have the required access to every selected Money Account.");
+    }
 
-    var accounts = await _db.MoneyAccounts.Include(account => account.AccountingAccount)
-      .Include(account => account.Currency)
-      .Where(account => accountIds.Contains(account.Id))
-      .ToDictionaryAsync(account => account.Id, ct);
+    var accounts = accountIds.Count == 0
+      ? new Dictionary<Guid, MoneyAccountEntity>()
+      : await _db.MoneyAccounts.Include(account => account.AccountingAccount)
+        .Include(account => account.Currency)
+        .Where(account => accountIds.Contains(account.Id))
+        .ToDictionaryAsync(account => account.Id, ct);
     if (accounts.Count != accountIds.Count)
       throw new BadRequestException(ErrorCodes.Pos.MoneyAccountInvalid,
         "Every collection and change line must use an existing Money Account.");
@@ -129,7 +142,7 @@ public sealed class PosSettlementService
       change = new ChangeMoneyLinePosting(request.Change, account, rate, baseAmount);
     }
 
-    return new PosSettlementPreparation(business, collections, change);
+    return new PosSettlementPreparation(business, accounts, collections, change);
   }
 
   private static void ValidateShape(PosSettlementRequest request)
@@ -164,6 +177,7 @@ internal sealed record PosSettlementRequest(
 
 internal sealed record PosSettlementPreparation(
   BusinessEntity Business,
+  IReadOnlyDictionary<Guid, MoneyAccountEntity> Accounts,
   List<PosCollectionPosting> Collections,
   ChangeMoneyLinePosting? Change);
 

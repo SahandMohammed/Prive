@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
+using Api.Modules.Business;
 using Api.Modules.Dashboard;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
@@ -387,67 +388,19 @@ public sealed class PosService
     var date = BusinessTime.DateAt(business, DateTime.UtcNow);
     var rateAtUtc = DateTime.UtcNow;
 
-    var serviceIds = request.Lines.Where(line => line.LineType == SalesLineType.Service)
-      .Select(line => line.ServiceId!.Value).ToList();
-    var productIds = request.Lines.Where(line => line.LineType == SalesLineType.Product)
-      .Select(line => line.ProductId!.Value).ToList();
-    var services = await _db.Services.AsNoTracking().Where(service => serviceIds.Contains(service.Id))
-      .ToDictionaryAsync(service => service.Id, ct);
-    var products = await _db.Products.AsNoTracking()
-      .Include(product => product.UnitOfMeasure)
-      .Include(product => product.UnitConversions).ThenInclude(item => item.UnitOfMeasure)
-      .Where(product => productIds.Contains(product.Id))
-      .ToDictionaryAsync(product => product.Id, ct);
-    if (services.Count != serviceIds.Count || products.Count != productIds.Count)
-      throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "Every POS line must reference an existing Service or Product.");
-    if (request.Lines.Any(line => line.LineType == SalesLineType.Service
-      && (line.ProfessionalId is null || line.ProfessionalId == Guid.Empty)))
-      throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
-        "Every POS Service line requires a Professional.");
-    var professionalIds = request.Lines.Where(line => line.ProfessionalId is not null)
-      .Select(line => line.ProfessionalId!.Value).Distinct().ToList();
-    if (professionalIds.Count > 0)
-    {
-      var validProfessionals = await _db.Professionals.AsNoTracking().CountAsync(professional =>
-        professionalIds.Contains(professional.Id) && professional.IsActive
-        && professional.BranchAssignments.Any(assignment => assignment.BranchId == request.BranchId), ct);
-      if (validProfessionals != professionalIds.Count)
-        throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
-          "Every selected Professional must be active and assigned to the selected branch.");
-    }
-
-    var salesLines = request.Lines.Select(line => line.LineType == SalesLineType.Service
-      ? new SalesInvoiceLineRequest(
-        SalesLineType.Service,
-        line.ServiceId,
-        null,
-        null,
-        services[line.ServiceId!.Value].Name,
-        line.Quantity,
-        services[line.ServiceId.Value].SellingPriceBase,
-        line.ProfessionalId)
-      : new SalesInvoiceLineRequest(
-        SalesLineType.Product,
-        null,
-        line.ProductId,
-        line.UnitOfMeasureId,
-        products[line.ProductId!.Value].Name,
-        line.Quantity,
-        SelectedProductPrice(products[line.ProductId!.Value], line.UnitOfMeasureId)))
-      .ToList();
-    var saleTotal = salesLines.Sum(line => Money(line.Quantity * line.UnitPrice));
-
-    var settlement = await _settlements.PrepareAsync(new PosSettlementRequest(
-      request.BranchId,
-      request.CustomerId,
-      saleTotal,
-      request.PaymentMode,
-      request.Collections,
-      request.Change), userId, ct, business, rateAtUtc);
-
     var branch = await _db.Branches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.BranchId, ct)
       ?? throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
     var customerId = request.CustomerId ?? branch.WalkInCustomerId;
+    var salesLines = request.Lines.Select(line => new SalesInvoiceLineRequest(
+      line.LineType,
+      line.ServiceId,
+      line.ProductId,
+      line.UnitOfMeasureId,
+      null,
+      line.Quantity,
+      0m,
+      line.ProfessionalId,
+      UseMasterPrice: true)).ToList();
     var invoiceRequest = new SalesInvoiceDraftRequest(
       customerId,
       date,
@@ -457,7 +410,20 @@ public sealed class PosService
       null,
       "Immediate POS sale",
       salesLines);
-    var invoice = await _sales.PrepareImmediateSaleAsync(invoiceRequest, userId, ct);
+    var commercial = await _sales.PrepareImmediateSaleAsync(
+      invoiceRequest,
+      userId,
+      ct,
+      business,
+      branch);
+    var invoice = commercial.Invoice;
+    var settlement = await _settlements.PrepareAsync(new PosSettlementRequest(
+      request.BranchId,
+      request.CustomerId,
+      invoice.BaseTotal,
+      request.PaymentMode,
+      request.Collections,
+      request.Change), userId, ct, business, rateAtUtc);
     var completedAt = invoice.PostedAtUtc!.Value;
     var sale = new PosContextEntity
     {
@@ -473,6 +439,7 @@ public sealed class PosService
 
     var settledBase = Money(settlement.Collections.Sum(line => line.BaseAmount)
       - (settlement.Change?.BaseAmount ?? 0m));
+    PaymentEntity? payment = null;
     if (settledBase > 0)
     {
       var moneyLines = settlement.Collections.Select(line => new PaymentMoneyLineCommand(
@@ -480,7 +447,7 @@ public sealed class PosService
       if (settlement.Change is not null)
         moneyLines.Add(new PaymentMoneyLineCommand(settlement.Change.Account.Id,
           settlement.Change.Request.Amount, settlement.Change.ExchangeRate, PaymentMoneyDirection.Change));
-      var payment = await _payments.CreateAsync(new CreatePaymentCommand(
+      payment = await _payments.CreateAsync(new CreatePaymentCommand(
         invoice.BranchId,
         invoice.CustomerId,
         date,
@@ -489,12 +456,22 @@ public sealed class PosService
         invoice.Id,
         "POS checkout settlement",
         [new PaymentAllocationCommand(invoice.Id, settledBase)],
-        moneyLines), userId, ct);
+        moneyLines), userId, ct, settlement.Accounts);
     }
+    var operatorUsername = await _db.Users.AsNoTracking()
+      .Where(user => user.Id == userId)
+      .Select(user => user.Username)
+      .SingleAsync(ct);
     await _db.SaveChangesAsync(ct);
     if (transaction is not null) await transaction.CommitAsync(ct);
 
-    return await GetSaleAsync(sale.SalesInvoiceId, ct);
+    return ToCompletedSaleResponse(
+      sale,
+      commercial.Validation,
+      business,
+      settlement,
+      payment,
+      operatorUsername);
   }
 
   public async Task<PosSaleResponse> CorrectSettlementAsync(
@@ -585,7 +562,7 @@ public sealed class PosService
             invoice.Id,
             "POS checkout settlement",
             [new PaymentAllocationCommand(invoice.Id, settledBase)],
-            moneyLines), userId, ct);
+            moneyLines), userId, ct, preparation.Accounts);
         else
           await _payments.ReplaceOwnedPaymentAsync(
             payment,
@@ -595,7 +572,8 @@ public sealed class PosService
             moneyLines,
             reason,
             userId,
-            ct);
+            ct,
+            preparation.Accounts);
 
       }
       else if (payment is not null)
@@ -694,6 +672,116 @@ public sealed class PosService
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Professional)
     .Include(sale => sale.Refunds).ThenInclude(refund => refund.ApprovedByUser);
 
+  private static PosSaleResponse ToCompletedSaleResponse(
+    PosContextEntity sale,
+    SalesService.InvoiceValidation validation,
+    BusinessEntity business,
+    PosSettlementPreparation settlement,
+    PaymentEntity? payment,
+    string operatorUsername)
+  {
+    var invoice = sale.SalesInvoice;
+    var moneyLines = payment?.MoneyLines.OrderBy(line => line.Sequence)
+      .Select(line => ToMoneyLineResponse(line, settlement.Accounts[line.MoneyAccountId]))
+      .ToList() ?? [];
+    var collections = moneyLines.Where(line => line.Direction == PaymentMoneyDirection.Collection).ToList();
+    var change = moneyLines.SingleOrDefault(line => line.Direction == PaymentMoneyDirection.Change);
+    var collectedBase = Money(payment?.BaseAmount ?? 0m);
+    var outstandingBase = Math.Max(Money(invoice.BaseTotal - collectedBase), 0m);
+    var overpaidBase = Math.Max(Money(collectedBase - invoice.BaseTotal), 0m);
+    var settlementSnapshot = new InvoiceSettlement(
+      invoice.Id,
+      collectedBase,
+      collectedBase,
+      0m,
+      0m,
+      invoice.Total,
+      invoice.BaseTotal,
+      outstandingBase,
+      outstandingBase,
+      overpaidBase,
+      overpaidBase);
+
+    return new PosSaleResponse(
+      sale.SalesInvoiceId,
+      invoice.DocumentNumber,
+      invoice.CustomerId,
+      validation.Customer.Name,
+      invoice.BranchId,
+      validation.Branch.Code,
+      validation.Branch.Name,
+      invoice.WarehouseId,
+      validation.Warehouse?.Code,
+      validation.Warehouse?.Name,
+      invoice.BaseCurrencyId,
+      business.BaseCurrency.Code,
+      invoice.Subtotal,
+      invoice.Total,
+      Money(collections.Sum(line => line.BaseAmount)),
+      change?.BaseAmount ?? 0m,
+      collectedBase,
+      outstandingBase,
+      overpaidBase,
+      0m,
+      invoice.BaseTotal,
+      invoice.BaseTotal,
+      PosRefundState.NotRefunded,
+      PaymentStatus(settlementSnapshot),
+      payment?.Id,
+      payment?.DocumentNumber,
+      sale.OperatorUserId,
+      operatorUsername,
+      sale.CompletedAtUtc,
+      invoice.UpdatedAtUtc,
+      invoice.JournalEntryId!.Value,
+      invoice.Movements.OrderBy(movement => movement.Id).Select(movement => movement.Id).ToList(),
+      invoice.Lines.OrderBy(line => line.LineType).ThenBy(line => line.Id)
+        .Select(line => ToCompletedSaleLineResponse(line, validation)).ToList(),
+      collections,
+      change,
+      []);
+  }
+
+  private static PosSaleLineResponse ToCompletedSaleLineResponse(
+    SalesInvoiceLineEntity line,
+    SalesService.InvoiceValidation validation)
+  {
+    var service = line.ServiceId is Guid serviceId
+      ? validation.Services.GetValueOrDefault(serviceId)
+      : null;
+    var product = line.ProductId is Guid productId
+      ? validation.Products.GetValueOrDefault(productId)
+      : null;
+    var unit = product is null || line.UnitOfMeasureId is not Guid unitId
+      ? null
+      : product.UnitOfMeasureId == unitId
+        ? product.UnitOfMeasure
+        : product.UnitConversions.SingleOrDefault(item => item.UnitOfMeasureId == unitId)?.UnitOfMeasure;
+    var professional = line.ProfessionalId is Guid professionalId
+      ? validation.Professionals.GetValueOrDefault(professionalId)
+      : null;
+
+    return new PosSaleLineResponse(
+      line.Id,
+      line.LineType,
+      line.ServiceId,
+      service?.Name,
+      line.ProductId,
+      product?.Name,
+      product?.SKU,
+      line.UnitOfMeasureId,
+      unit?.Code,
+      line.ProfessionalId,
+      professional?.Name,
+      line.Quantity,
+      line.ConversionOperation,
+      line.ConversionFactor,
+      line.BaseQuantity,
+      line.UnitPrice,
+      line.BaseUnitPrice,
+      line.LineAmount);
+  }
+
   private static PosSaleResponse ToResponse(PosContextEntity sale, InvoiceSettlement settlement)
   {
     var invoice = sale.SalesInvoice;
@@ -786,6 +874,22 @@ public sealed class PosService
     line.MoneyAccount.Name,
     line.MoneyAccount.CurrencyId,
     line.MoneyAccount.Currency.Code,
+    line.Amount,
+    line.ExchangeRate,
+    line.BaseAmount,
+    line.MoneyLedgerEntryId);
+
+  private static PosPaymentMoneyLineResponse ToMoneyLineResponse(
+    PaymentMoneyLineEntity line,
+    MoneyAccountEntity account) => new(
+    line.Id,
+    line.Sequence,
+    line.Direction,
+    line.MoneyAccountId,
+    account.Code,
+    account.Name,
+    account.CurrencyId,
+    account.Currency.Code,
     line.Amount,
     line.ExchangeRate,
     line.BaseAmount,
@@ -885,22 +989,6 @@ public sealed class PosService
 
   private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(
     Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
-
-  private static decimal SelectedProductPrice(ProductEntity product, Guid? unitOfMeasureId)
-  {
-    var selection = unitOfMeasureId is null
-      ? null
-      : UnitConversionCalculator.Resolve(product, unitOfMeasureId.Value);
-    if (selection is null || !selection.Value.IsActive || !selection.Value.IsValid)
-      throw new BadRequestException(
-        ErrorCodes.Pos.LineInvalid,
-        "Each Product line must use an active base unit or configured conversion unit.");
-
-    return Money(UnitConversionCalculator.ConvertBasePriceToUnitPrice(
-      product.SellingPriceBase,
-      selection.Value.Operation,
-      selection.Value.Factor));
-  }
 
   private static BadRequestException BusinessNotConfigured() => new(
     ErrorCodes.Pos.BusinessNotConfigured,

@@ -1,5 +1,8 @@
 using Api.Infrastructure.Http;
 using Api.Modules.Accounting;
+using Api.Modules.Branch;
+using Api.Modules.Business;
+using Api.Modules.Contact;
 using Api.Modules.Finance;
 using Api.Modules.Inventory;
 using Api.Modules.Pos;
@@ -463,12 +466,19 @@ public sealed class SalesService
     return await GetInvoiceAsync(id, ct);
   }
 
-  internal async Task<SalesInvoiceEntity> PrepareImmediateSaleAsync(
+  internal async Task<ImmediateSalePreparation> PrepareImmediateSaleAsync(
     SalesInvoiceDraftRequest request,
     Guid userId,
-    CancellationToken ct)
+    CancellationToken ct,
+    BusinessEntity? existingBusiness = null,
+    BranchEntity? existingBranch = null)
   {
-    var validation = await ValidateInvoiceAsync(request, false, ct);
+    var validation = await ValidateInvoiceAsync(
+      request,
+      requireCustomer: false,
+      ct: ct,
+      existingBusiness: existingBusiness,
+      existingBranch: existingBranch);
     var invoice = new SalesInvoiceEntity
     {
       DocumentNumber = await NextDocumentNumberAsync(ct),
@@ -480,7 +490,7 @@ public sealed class SalesService
     _db.SalesInvoices.Add(invoice);
 
     await PreparePostingEffectsAsync(invoice, validation, userId, "POS sale", ct);
-    return invoice;
+    return new ImmediateSalePreparation(invoice, validation);
   }
 
   internal async Task PreparePostingEffectsAsync(
@@ -672,20 +682,32 @@ public sealed class SalesService
     var lineList = lines.ToList();
     if (lineList.Count == 0) return lineList;
 
-    var candidateIds = lineList
+    var unresolvedIds = lineList
+      .Where(line => line.LineType is null)
       .Select(line => line.ItemId ?? line.ServiceId ?? line.ProductId)
       .Where(id => id.HasValue && id != Guid.Empty)
       .Select(id => id!.Value)
       .Distinct()
       .ToList();
 
-    var knownServices = await _db.Services.AsNoTracking()
-      .Where(s => candidateIds.Contains(s.Id))
-      .ToDictionaryAsync(s => s.Id, ct);
+    var productIdsNeedingDefaultUnit = lineList
+      .Where(line => line.LineType == SalesLineType.Product
+        && (line.UnitOfMeasureId is null || line.UnitOfMeasureId == Guid.Empty))
+      .Select(line => line.ItemId ?? line.ProductId)
+      .Where(id => id.HasValue && id != Guid.Empty)
+      .Select(id => id!.Value);
 
-    var knownProducts = await _db.Products.AsNoTracking()
-      .Where(p => candidateIds.Contains(p.Id))
-      .ToDictionaryAsync(p => p.Id, ct);
+    var knownServices = unresolvedIds.Count == 0
+      ? new Dictionary<Guid, ServiceEntity>()
+      : await _db.Services.AsNoTracking()
+        .Where(service => unresolvedIds.Contains(service.Id))
+        .ToDictionaryAsync(service => service.Id, ct);
+    var productLookupIds = unresolvedIds.Concat(productIdsNeedingDefaultUnit).Distinct().ToList();
+    var knownProducts = productLookupIds.Count == 0
+      ? new Dictionary<Guid, ProductEntity>()
+      : await _db.Products.AsNoTracking()
+        .Where(product => productLookupIds.Contains(product.Id))
+        .ToDictionaryAsync(product => product.Id, ct);
 
     var normalized = new List<SalesInvoiceLineRequest>(lineList.Count);
     foreach (var line in lineList)
@@ -747,7 +769,9 @@ public sealed class SalesService
     SalesInvoiceDraftRequest request,
     bool requireCustomer,
     CancellationToken ct,
-    bool validateUnits = true)
+    bool validateUnits = true,
+    BusinessEntity? existingBusiness = null,
+    BranchEntity? existingBranch = null)
   {
     var normalizedLines = await NormalizeLinesAsync(request.Lines, ct);
     request.Lines.Clear();
@@ -788,16 +812,17 @@ public sealed class SalesService
       throw new BadRequestException(ErrorCodes.Sales.CustomerInvalid,
         requireCustomer ? "Select an active non-system customer contact." : "Select an active customer contact.");
 
-    var validBranch = await _db.Branches.AsNoTracking()
-      .AnyAsync(branch => branch.Id == request.BranchId && branch.IsActive, ct);
-    if (!validBranch)
+    var branch = existingBranch ?? await _db.Branches.AsNoTracking()
+      .SingleOrDefaultAsync(item => item.Id == request.BranchId, ct);
+    if (branch is null || branch.Id != request.BranchId || !branch.IsActive)
       throw new BadRequestException(ErrorCodes.Sales.BranchInvalid, "Select an active branch.");
 
     if (productIds.Count > 0 && request.WarehouseId is null)
       throw new BadRequestException(ErrorCodes.Sales.WarehouseRequired, "Select a warehouse for product sales.");
+    WarehouseEntity? warehouse = null;
     if (request.WarehouseId is not null)
     {
-      var warehouse = await _db.Warehouses.AsNoTracking()
+      warehouse = await _db.Warehouses.AsNoTracking()
         .SingleOrDefaultAsync(item => item.Id == request.WarehouseId && item.IsActive, ct)
         ?? throw new BadRequestException(ErrorCodes.Sales.WarehouseInvalid, "Select an active warehouse.");
       if (warehouse.BranchId != request.BranchId)
@@ -809,9 +834,10 @@ public sealed class SalesService
     if (!validCurrency)
       throw new BadRequestException(ErrorCodes.Sales.CurrencyInvalid, "Select an active currency.");
 
-    var business = await _db.Businesses.AsNoTracking()
-      .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
-      ?? throw new BadRequestException(ErrorCodes.Sales.BusinessNotConfigured, "Complete Business Setup before recording sales.");
+    var business = existingBusiness ?? await _db.Businesses.AsNoTracking()
+      .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct);
+    if (business is null || !business.IsActive || !business.IsSetupCompleted)
+      throw new BadRequestException(ErrorCodes.Sales.BusinessNotConfigured, "Complete Business Setup before recording sales.");
     var exchangeRate = request.CurrencyId == business.BaseCurrencyId
       ? 1m
       : request.ExchangeRate ?? await ExchangeRateResolver.FindAsync(
@@ -823,9 +849,11 @@ public sealed class SalesService
     if (exchangeRate is null || exchangeRate <= 0)
       throw new BadRequestException(ErrorCodes.Sales.ExchangeRateRequired, "Enter a positive exchange rate for a foreign-currency sale.");
 
-    var services = await _db.Services.AsNoTracking().Include(service => service.RevenueAccount)
-      .Where(service => serviceIds.Contains(service.Id) && service.IsActive)
-      .ToDictionaryAsync(service => service.Id, ct);
+    var services = serviceIds.Count == 0
+      ? new Dictionary<Guid, ServiceEntity>()
+      : await _db.Services.AsNoTracking().Include(service => service.RevenueAccount)
+        .Where(service => serviceIds.Contains(service.Id) && service.IsActive)
+        .ToDictionaryAsync(service => service.Id, ct);
     if (services.Count != serviceIds.Count)
       throw new BadRequestException(ErrorCodes.Sales.ServiceInvalid, "Every Service line must use an active Service.");
     if (services.Values.Any(service => !service.RevenueAccount.IsActive
@@ -835,24 +863,26 @@ public sealed class SalesService
 
     var professionalIds = request.Lines.Where(line => line.ProfessionalId is not null)
       .Select(line => line.ProfessionalId!.Value).Distinct().ToList();
-    if (professionalIds.Count > 0)
-    {
-      var validProfessionals = await _db.Professionals.AsNoTracking().CountAsync(professional =>
+    var professionals = professionalIds.Count == 0
+      ? new Dictionary<Guid, ProfessionalEntity>()
+      : await _db.Professionals.AsNoTracking().Where(professional =>
         professionalIds.Contains(professional.Id) && professional.IsActive
-        && professional.BranchAssignments.Any(assignment => assignment.BranchId == request.BranchId), ct);
-      if (validProfessionals != professionalIds.Count)
-        throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
-          "Every assigned Professional must be active and assigned to the sales branch.");
-    }
+        && professional.BranchAssignments.Any(assignment => assignment.BranchId == request.BranchId))
+        .ToDictionaryAsync(professional => professional.Id, ct);
+    if (professionals.Count != professionalIds.Count)
+      throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
+        "Every assigned Professional must be active and assigned to the sales branch.");
 
-    var products = await _db.Products.AsNoTracking()
-      .Include(product => product.UnitOfMeasure)
-      .Include(product => product.UnitConversions).ThenInclude(item => item.UnitOfMeasure)
-      .Where(product => productIds.Contains(product.Id)
-        && product.IsActive
-        && product.TrackInventory
-        && (product.Purpose == ProductPurpose.Resale || product.Purpose == ProductPurpose.Both))
-      .ToDictionaryAsync(product => product.Id, ct);
+    var products = productIds.Count == 0
+      ? new Dictionary<Guid, ProductEntity>()
+      : await _db.Products.AsNoTracking()
+        .Include(product => product.UnitOfMeasure)
+        .Include(product => product.UnitConversions).ThenInclude(item => item.UnitOfMeasure)
+        .Where(product => productIds.Contains(product.Id)
+          && product.IsActive
+          && product.TrackInventory
+          && (product.Purpose == ProductPurpose.Resale || product.Purpose == ProductPurpose.Both))
+        .ToDictionaryAsync(product => product.Id, ct);
     if (products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Sales.ProductInvalid, "Every Product line must use an active resale inventory Product.");
     var productUnits = new Dictionary<Guid, ProductUnitSelection>();
@@ -882,10 +912,14 @@ public sealed class SalesService
     }
 
     return new InvoiceValidation(
+      customer,
+      branch,
+      warehouse,
       business.BaseCurrencyId,
       exchangeRate.Value,
       services,
       products,
+      professionals,
       productUnits);
   }
 
@@ -1212,11 +1246,19 @@ public sealed class SalesService
   private static NotFoundException InvoiceNotFound() =>
     new(ErrorCodes.Sales.InvoiceNotFound, "Sales Invoice not found.");
 
+  internal sealed record ImmediateSalePreparation(
+    SalesInvoiceEntity Invoice,
+    InvoiceValidation Validation);
+
   internal sealed record InvoiceValidation(
+    ContactEntity Customer,
+    BranchEntity Branch,
+    WarehouseEntity? Warehouse,
     Guid BaseCurrencyId,
     decimal ExchangeRate,
     Dictionary<Guid, ServiceEntity> Services,
     Dictionary<Guid, ProductEntity> Products,
+    Dictionary<Guid, ProfessionalEntity> Professionals,
     IReadOnlyDictionary<Guid, ProductUnitSelection> ProductUnits);
 
   private sealed record ProductBalance(decimal Quantity, decimal Value);
