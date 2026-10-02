@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertCircle, Building2, Loader2, Mail, MapPin, Pencil, Phone, Plus, Power, Search } from 'lucide-react'
@@ -15,6 +16,7 @@ import type { Branch, BranchInput } from '../types/business.types'
 const defaults: BranchFormValues = { code: '', name: '', phoneNumber: '', email: '', address: '', city: '', region: '', country: '', isMainBranch: false, isActive: true, catalogMode: 'Shared' }
 
 export function BranchesPage() {
+  const { t } = useTranslation(['business', 'common'])
   const branchesQuery = useAllBranches()
   const [editing, setEditing] = useState<Branch | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -67,26 +69,26 @@ export function BranchesPage() {
     <div className="flex h-full w-full flex-col space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Branches</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage the locations where business operations take place.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{t('business:branches.title')}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t('business:branches.description')}</p>
         </div>
         <Button className="gap-1.5" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 stroke-[2.5]" />
-          Add branch
+          {t('business:branches.addBranch')}
         </Button>
       </div>
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
             onChange={(event) => { setSearch(event.target.value); setPage(1) }}
-            placeholder="Search branches"
-            className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+            placeholder={t('business:branches.searchPlaceholder')}
+            className="h-10 rounded-lg border-slate-200 bg-white ps-9 shadow-xs dark:border-slate-800 dark:bg-slate-900 text-start"
           />
         </div>
-        <p className="text-sm text-slate-500">{totalBranches} branch{totalBranches === 1 ? '' : 'es'}</p>
+        <p className="text-sm text-slate-500">{t('business:branches.count', { count: totalBranches })}</p>
       </div>
 
       <DataTableShell>
@@ -94,12 +96,12 @@ export function BranchesPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Code</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Branch</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Location</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Contact</TableHead>
-                <TableHead className="px-4 font-semibold text-slate-600 dark:text-slate-300">Status</TableHead>
-                <TableHead className="w-24 px-4 text-right font-semibold text-slate-600 dark:text-slate-300">Actions</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:branches.th.code')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:branches.th.branch')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:branches.th.location')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:branches.th.contact')}</TableHead>
+                <TableHead className="px-4 text-start font-semibold text-slate-600 dark:text-slate-300">{t('business:branches.th.status')}</TableHead>
+                <TableHead className="w-24 px-4 text-end font-semibold text-slate-600 dark:text-slate-300">{t('business:branches.th.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -113,7 +115,9 @@ export function BranchesPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800 dark:text-slate-200">{branch.name}</span>
                       {branch.isMainBranch && (
-                        <span className="inline-flex items-center rounded bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-primary dark:bg-orange-950/40">Main</span>
+                        <span className="inline-flex items-center rounded bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-primary dark:bg-orange-950/40">
+                          {t('business:branches.badges.main')}
+                        </span>
                       )}
                     </div>
                   </TableCell>
@@ -134,16 +138,16 @@ export function BranchesPage() {
                   </TableCell>
                   <TableCell className="px-4 py-3.5">
                     <span className={branch.isActive ? 'inline-flex rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600' : 'inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500'}>
-                      {branch.isActive ? 'Active' : 'Inactive'}
+                      {branch.isActive ? t('business:branches.badges.active') : t('business:branches.badges.inactive')}
                     </span>
                   </TableCell>
-                  <TableCell className="px-4 py-3.5 text-right">
+                  <TableCell className="px-4 py-3.5 text-end">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(branch)} aria-label={`Edit ${branch.name}`}>
+                      <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(branch)} aria-label={t('business:branches.actions.edit', { name: branch.name })}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       {branch.isActive && !branch.isMainBranch && (
-                        <Button variant="ghost" size="icon-sm" onClick={() => deactivateBranch.mutate(branch.id)} disabled={deactivateBranch.isPending} aria-label={`Deactivate ${branch.name}`}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => deactivateBranch.mutate(branch.id)} disabled={deactivateBranch.isPending} aria-label={t('business:branches.actions.deactivate', { name: branch.name })}>
                           <Power className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
@@ -167,29 +171,80 @@ export function BranchesPage() {
       <Dialog open={isDialogOpen} onOpenChange={(open) => open ? setIsDialogOpen(true) : closeDialog()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editing ? `Edit ${editing.code}` : 'Add branch'}</DialogTitle>
-            <DialogDescription>Enter the branch details used by operational modules.</DialogDescription>
+            <DialogTitle>{editing ? t('business:branches.dialog.titleEdit', { code: editing.code }) : t('business:branches.dialog.titleAdd')}</DialogTitle>
+            <DialogDescription>{t('business:branches.dialog.description')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={form.handleSubmit((values) => saveBranch.mutate(values, { onSuccess: closeDialog }))} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2"><Field label="Code" error={form.formState.errors.code?.message}><Input maxLength={20} className="uppercase" {...form.register('code')} /></Field><Field label="Name" error={form.formState.errors.name?.message}><Input {...form.register('name')} /></Field></div>
-            <div className="grid gap-4 sm:grid-cols-2"><Field label="Phone" error={form.formState.errors.phoneNumber?.message}><Input {...form.register('phoneNumber')} /></Field><Field label="Email" error={form.formState.errors.email?.message}><Input type="email" {...form.register('email')} /></Field></div>
-            <Field label="Address" error={form.formState.errors.address?.message}><Input {...form.register('address')} /></Field>
-            <div className="grid gap-4 sm:grid-cols-2"><Field label="City" error={form.formState.errors.city?.message}><Input {...form.register('city')} /></Field><Field label="Region / governorate" error={form.formState.errors.region?.message}><Input {...form.register('region')} /></Field></div>
-            <Field label="Country" error={form.formState.errors.country?.message}><Input {...form.register('country')} /></Field>
-            <fieldset className="space-y-2 rounded-md border border-border p-4">
-              <legend className="px-1 text-sm font-medium">Customers, suppliers, and item definitions</legend>
-              {editing ? <p className="text-sm">{editing.catalogMode === 'Shared' ? 'Shared business catalog' : 'Separate branch catalog'}</p> : <>
-              <label className="flex items-center gap-2 text-sm"><input type="radio" value="Shared" {...form.register('catalogMode')} /> Share the business catalog</label>
-              <label className="flex items-center gap-2 text-sm"><input type="radio" value="Separate" {...form.register('catalogMode')} /> Separate catalog for this branch</label>
-              </>}
-              <p className="text-xs text-muted-foreground">Shared branches use the same contacts, products, services, categories, and units. Separate branches start with an empty catalog. This choice is fixed after creation.</p>
-              <p className="text-xs text-muted-foreground">The chart of accounts and currencies are always shared. Transactions and balances belong to the selected branch.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t('business:branches.dialog.fields.code')} error={form.formState.errors.code?.message}>
+                <Input maxLength={20} className="uppercase text-start" {...form.register('code')} />
+              </Field>
+              <Field label={t('business:branches.dialog.fields.name')} error={form.formState.errors.name?.message}>
+                <Input className="text-start" {...form.register('name')} />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t('business:branches.dialog.fields.phone')} error={form.formState.errors.phoneNumber?.message}>
+                <Input className="text-start" {...form.register('phoneNumber')} />
+              </Field>
+              <Field label={t('business:branches.dialog.fields.email')} error={form.formState.errors.email?.message}>
+                <Input type="email" className="text-start" {...form.register('email')} />
+              </Field>
+            </div>
+            <Field label={t('business:branches.dialog.fields.address')} error={form.formState.errors.address?.message}>
+              <Input className="text-start" {...form.register('address')} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t('business:branches.dialog.fields.city')} error={form.formState.errors.city?.message}>
+                <Input className="text-start" {...form.register('city')} />
+              </Field>
+              <Field label={t('business:branches.dialog.fields.region')} error={form.formState.errors.region?.message}>
+                <Input className="text-start" {...form.register('region')} />
+              </Field>
+            </div>
+            <Field label={t('business:branches.dialog.fields.country')} error={form.formState.errors.country?.message}>
+              <Input className="text-start" {...form.register('country')} />
+            </Field>
+            <fieldset className="space-y-2 rounded-md border border-border p-4 text-start">
+              <legend className="px-1 text-sm font-medium">{t('business:branches.dialog.catalog.legend')}</legend>
+              {editing ? (
+                <p className="text-sm">
+                  {editing.catalogMode === 'Shared'
+                    ? t('business:branches.dialog.catalog.sharedLabel')
+                    : t('business:branches.dialog.catalog.separateLabel')}
+                </p>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="radio" value="Shared" {...form.register('catalogMode')} />
+                    {t('business:branches.dialog.catalog.shareOption')}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="radio" value="Separate" {...form.register('catalogMode')} />
+                    {t('business:branches.dialog.catalog.separateOption')}
+                  </label>
+                </>
+              )}
+              <p className="text-xs text-muted-foreground">{t('business:branches.dialog.catalog.help1')}</p>
+              <p className="text-xs text-muted-foreground">{t('business:branches.dialog.catalog.help2')}</p>
             </fieldset>
-            <div className="flex flex-wrap gap-4"><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isMainBranch')} /> Main branch</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isActive')} /> Active</label></div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...form.register('isMainBranch')} /> {t('business:branches.dialog.fields.isMainBranch')}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...form.register('isActive')} /> {t('business:branches.dialog.fields.isActive')}
+              </label>
+            </div>
             {saveBranch.isError && <p className="text-sm text-destructive">{saveBranch.error.message}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeDialog} disabled={saveBranch.isPending}>Cancel</Button>
-              <Button type="submit" disabled={saveBranch.isPending}>{saveBranch.isPending && <Loader2 className="size-4 animate-spin" />}{editing ? 'Save changes' : 'Add branch'}</Button>
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={saveBranch.isPending}>
+                {t('business:branches.dialog.cancel')}
+              </Button>
+              <Button type="submit" disabled={saveBranch.isPending}>
+                {saveBranch.isPending && <Loader2 className="size-4 animate-spin" />}
+                {editing ? t('business:branches.dialog.save') : t('business:branches.dialog.create')}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -203,12 +258,13 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 function LoadingRow() {
+  const { t } = useTranslation(['business'])
   return (
     <TableRow>
       <TableCell colSpan={6} className="h-48 text-center text-sm text-slate-500">
         <div className="flex flex-col items-center justify-center gap-2">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span>Loading branches...</span>
+          <span>{t('business:branches.loading')}</span>
         </div>
       </TableCell>
     </TableRow>
@@ -216,12 +272,13 @@ function LoadingRow() {
 }
 
 function ErrorRow() {
+  const { t } = useTranslation(['business'])
   return (
     <TableRow>
       <TableCell colSpan={6} className="h-48 text-center">
         <div className="flex flex-col items-center text-red-500">
           <AlertCircle className="mb-2 h-8 w-8" />
-          <p className="text-sm font-medium">Failed to load branches</p>
+          <p className="text-sm font-medium">{t('business:branches.loadError')}</p>
         </div>
       </TableCell>
     </TableRow>
@@ -229,6 +286,7 @@ function ErrorRow() {
 }
 
 function EmptyRow({ onAdd }: { onAdd: () => void }) {
+  const { t } = useTranslation(['business'])
   return (
     <TableRow>
       <TableCell colSpan={6} className="h-56 text-center">
@@ -237,11 +295,11 @@ function EmptyRow({ onAdd }: { onAdd: () => void }) {
             <Building2 className="h-6 w-6 text-slate-400" />
           </div>
           <div>
-            <p className="font-medium text-slate-800 dark:text-slate-200">No branches found</p>
-            <p className="mt-1 text-sm text-slate-500">Create your main branch to get started.</p>
+            <p className="font-medium text-slate-800 dark:text-slate-200">{t('business:branches.emptyTitle')}</p>
+            <p className="mt-1 text-sm text-slate-500">{t('business:branches.emptyDesc')}</p>
           </div>
           <Button size="sm" onClick={onAdd}>
-            <Plus className="h-4 w-4" /> Add branch
+            <Plus className="h-4 w-4" /> {t('business:branches.addBranch')}
           </Button>
         </div>
       </TableCell>

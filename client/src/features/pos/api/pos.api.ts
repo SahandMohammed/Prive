@@ -1,30 +1,18 @@
 import { apiClient } from '@/lib/apiClient'
 import type {
-  ClosePosSessionInput,
   CompletePosSaleInput,
   CorrectPosSettlementInput,
-  CreatePosDrawerMovementInput,
   CreatePosRefundInput,
-  OpenPosSessionInput,
   PosCatalogFilters,
   PosCatalogItem,
   PosCustomer,
   PosCustomerFilters,
-  PosDrawerMovement,
-  PosRegister,
   PosRefund,
   PosRefundability,
   PosRefundSummary,
   PosSale,
   PosSaleFilters,
   PosSaleSummary,
-  PosSession,
-  PosSessionFilters,
-  PosSessionSummary,
-  PosXReport,
-  PosZReport,
-  PosZReportFilters,
-  PosZReportSummary,
   PosSetup,
   VoidPosSaleInput,
 } from '../types/pos.types'
@@ -46,7 +34,8 @@ export const posApi = {
   sales: (filters: PosSaleFilters) =>
     apiClient.getPaginated<PosSaleSummary>(`/pos/sales?${queryString(filters)}`),
   sale: (id: string) => apiClient.get<PosSale>(`/pos/sales/${id}`),
-  complete: (body: CompletePosSaleInput) => apiClient.post<PosSale>('/pos/sales', { ...body, clientRequestId: body.clientRequestId ?? crypto.randomUUID() }),
+  complete: (body: CompletePosSaleInput) =>
+    apiClient.post<PosSale>('/pos/sales', { ...body, clientRequestId: body.clientRequestId ?? crypto.randomUUID() }),
   correctSettlement: (salesInvoiceId: string, body: CorrectPosSettlementInput) =>
     apiClient.put<PosSale>(`/pos/sales/${salesInvoiceId}/settlement`, body),
   refundability: (saleId: string) =>
@@ -58,36 +47,4 @@ export const posApi = {
     apiClient.post<PosRefund>(`/pos/sales/${saleId}/refunds`, { ...body, clientRequestId: body.clientRequestId ?? crypto.randomUUID() }),
   voidSale: (saleId: string, body: VoidPosSaleInput) =>
     apiClient.post<PosRefund>(`/pos/sales/${saleId}/void`, { ...body, clientRequestId: body.clientRequestId ?? crypto.randomUUID() }),
-
-  registers: async (includeInactive = false): Promise<PosRegister[]> => {
-    const registers: PosRegister[] = []
-    // The opening selector needs every register; the API keeps each response bounded.
-    for (let page = 1; ; page += 1) {
-      const result = await apiClient.getPaginated<PosRegister>(
-        `/pos/registers?includeInactive=${includeInactive}&page=${page}&pageSize=100`
-      )
-      registers.push(...result.data)
-      if (!result.meta.hasNextPage) return registers
-    }
-  },
-  createRegister: (body: { code: string; name: string; cashboxMoneyAccountIds: string[] }) =>
-    apiClient.post<PosRegister>('/pos/registers', body),
-  updateRegister: (id: string, body: { code: string; name: string; isActive: boolean; cashboxMoneyAccountIds: string[] }) =>
-    apiClient.put<PosRegister>(`/pos/registers/${id}`, body),
-
-  activeSession: async (): Promise<PosSession | null> =>
-    (await apiClient.get<PosSession | null>('/pos/sessions/active')) ?? null,
-  openSession: (body: OpenPosSessionInput) => apiClient.post<PosSession>('/pos/sessions/open', body),
-  session: (id: string) => apiClient.get<PosSession>(`/pos/sessions/${id}`),
-  sessions: (filters: PosSessionFilters) =>
-    apiClient.getPaginated<PosSessionSummary>(`/pos/sessions?${queryString(filters)}`),
-  xReport: (id: string) => apiClient.get<PosXReport>(`/pos/sessions/${id}/x-report`),
-  drawerMovements: (id: string) => apiClient.getPaginated<PosDrawerMovement>(`/pos/sessions/${id}/drawer-movements?page=1&pageSize=100`),
-  createDrawerMovement: (id: string, body: CreatePosDrawerMovementInput) =>
-    apiClient.post<PosDrawerMovement>(`/pos/sessions/${id}/drawer-movements`, body),
-  closeSession: (id: string, body: ClosePosSessionInput) =>
-    apiClient.post<PosZReport>(`/pos/sessions/${id}/close`, body),
-  zReports: (filters: PosZReportFilters) =>
-    apiClient.getPaginated<PosZReportSummary>(`/pos/z-reports?${queryString(filters)}`),
-  zReport: (id: string) => apiClient.get<PosZReport>(`/pos/z-reports/${id}`),
 }

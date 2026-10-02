@@ -1,0 +1,170 @@
+{
+  "settings": {
+    "titleProfile": "Business profile",
+    "titleSetup": "Business setup",
+    "descProfile": "Manage the Prive Lounge business profile and base currency.",
+    "descSetup": "Create the single Prive Lounge business profile.",
+    "sections": {
+      "identityAndContact": "Identity and contact",
+      "address": "Address",
+      "timeZoneAndReceipts": "Time zone and receipts",
+      "baseCurrency": "Base currency"
+    },
+    "fields": {
+      "businessName": "Business name",
+      "legalName": "Legal name",
+      "primaryPhone": "Primary phone",
+      "secondaryPhone": "Secondary phone",
+      "email": "Email",
+      "website": "Website",
+      "logoReference": "Logo reference",
+      "address": "Address",
+      "city": "City",
+      "region": "Region / governorate",
+      "country": "Country",
+      "timeZone": "IANA time zone",
+      "receiptPaperWidth": "Receipt paper width",
+      "receiptFooter": "Receipt footer",
+      "baseCurrency": "Base currency",
+      "selectCurrency": "Select a currency",
+      "initialSetupCompleted": "Initial setup completed"
+    },
+    "paperWidth": {
+      "mm80": "80 mm",
+      "mm58": "58 mm"
+    },
+    "saveButton": "Save business profile",
+    "saving": "Saving…",
+    "saveError": "Could not save the business profile. Review the fields and try again."
+  },
+  "branches": {
+    "title": "Branches",
+    "description": "Manage the locations where business operations take place.",
+    "addBranch": "Add branch",
+    "searchPlaceholder": "Search branches",
+    "count_one": "{{count}} branch",
+    "count_other": "{{count}} branches",
+    "th": {
+      "code": "Code",
+      "branch": "Branch",
+      "location": "Location",
+      "contact": "Contact",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "badges": {
+      "main": "Main",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "edit": "Edit {{name}}",
+      "deactivate": "Deactivate {{name}}"
+    },
+    "loading": "Loading branches...",
+    "loadError": "Failed to load branches",
+    "emptyTitle": "No branches found",
+    "emptyDesc": "Create your main branch to get started.",
+    "dialog": {
+      "titleAdd": "Add branch",
+      "titleEdit": "Edit {{code}}",
+      "description": "Enter the branch details used by operational modules.",
+      "fields": {
+        "code": "Code",
+        "name": "Name",
+        "phone": "Phone",
+        "email": "Email",
+        "address": "Address",
+        "city": "City",
+        "region": "Region / governorate",
+        "country": "Country",
+        "isMainBranch": "Main branch",
+        "isActive": "Active"
+      },
+      "catalog": {
+        "legend": "Customers, suppliers, and item definitions",
+        "sharedLabel": "Shared business catalog",
+        "separateLabel": "Separate branch catalog",
+        "shareOption": "Share the business catalog",
+        "separateOption": "Separate catalog for this branch",
+        "help1": "Shared branches use the same contacts, products, services, categories, and units. Separate branches start with an empty catalog. This choice is fixed after creation.",
+        "help2": "The chart of accounts and currencies are always shared. Transactions and balances belong to the selected branch."
+      },
+      "cancel": "Cancel",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "create": "Add branch"
+    }
+  },
+  "currencies": {
+    "title": "Currencies",
+    "description": "Manage currencies available to the business. Exchange rates are configured separately.",
+    "addCurrency": "Add currency",
+    "searchPlaceholder": "Search currencies",
+    "count_one": "{{count}} currency",
+    "count_other": "{{count}} currencies",
+    "th": {
+      "code": "Code",
+      "name": "Name",
+      "symbol": "Symbol",
+      "decimals": "Decimals",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "badges": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "edit": "Edit {{code}}"
+    },
+    "loading": "Loading currencies...",
+    "loadError": "Failed to load currencies",
+    "emptyTitle": "No currencies found",
+    "emptyDesc": "Create your first currency to get started.",
+    "dialog": {
+      "titleAdd": "Add currency",
+      "titleEdit": "Edit {{code}}",
+      "description": "Set the code, display details, precision, and availability for this currency.",
+      "fields": {
+        "code": "Code",
+        "name": "Name",
+        "symbol": "Symbol",
+        "decimalPlaces": "Decimal places",
+        "isActive": "Active"
+      },
+      "cancel": "Cancel",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "create": "Add currency"
+    }
+  },
+  "accessDialog": {
+    "title": "Branch access — {{username}}",
+    "description": "Choose the active branches this user can work in. No selections means no branch access.",
+    "loading": "Loading branch access…",
+    "loadError": "Could not load branch access.",
+    "retry": "Retry",
+    "noActiveBranches": "Create an active branch first.",
+    "cancel": "Cancel",
+    "save": "Save access",
+    "saving": "Saving…"
+  },
+  "selector": {
+    "currentBranch": "Current branch",
+    "selectBranch": "Select a branch",
+    "loading": "Loading branches…",
+    "retry": "Retry",
+    "noActiveBranches": "No active branches assigned. Ask an administrator for access.",
+    "finishSaving": "Finish saving before switching branches.",
+    "tooltips": {
+      "couldNotLoad": "Could not load branch access",
+      "noActive": "No active branches assigned",
+      "finishSaving": "Finish saving before switching branches"
+    }
+  },
+  "workspace": {
+    "loading": "Loading branch workspace…",
+    "chooseBranch": "Choose an accessible branch in the sidebar to continue."
+  }
+}

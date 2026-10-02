@@ -15,6 +15,7 @@ import {
   Send,
   Trash2,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/table'
 import { useBranches, useCurrencies, useCurrentBusiness } from '@/features/business'
 import { financeApi } from '@/features/finance'
+import { formatNumber } from '@/lib/i18n'
 import { AccountCombobox } from '../components/AccountCombobox'
 import {
   useAccountTree,
@@ -51,6 +53,7 @@ const blankLine = (defaultCurrencyId: string = '') => ({
 })
 
 export function CreateJournalEntryPage() {
+  const { t } = useTranslation(['accounting', 'common'])
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const editId = searchParams.get('id')
@@ -314,16 +317,16 @@ export function CreateJournalEntryPage() {
         <div className="flex items-center gap-3">
           <Link to="/accounting/journal">
             <Button variant="outline" size="icon-sm" className="h-9 w-9">
-              <ArrowLeft className="h-4 w-4" />
-              <span className="sr-only">Back to Journal entries</span>
+              <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+              <span className="sr-only">{t('accounting:createJournal.backToJournals')}</span>
             </Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              {editId ? 'Edit Journal Entry' : 'Create Journal Entry'}
+              {editId ? t('accounting:createJournal.editTitle') : t('accounting:createJournal.createTitle')}
             </h1>
             <p className="text-xs text-slate-500">
-              Double-entry financial voucher with automated base currency exchange rate validation.
+              {t('accounting:createJournal.description')}
             </p>
           </div>
         </div>
@@ -331,7 +334,7 @@ export function CreateJournalEntryPage() {
         <div className="flex items-center gap-2">
           <Link to="/accounting/journal">
             <Button variant="outline" size="sm" className="h-9" disabled={isPending}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
           </Link>
           <Button
@@ -346,7 +349,7 @@ export function CreateJournalEntryPage() {
             ) : (
               <Save className="h-4 w-4" />
             )}
-            Save Draft
+            {t('accounting:createJournal.saveDraft')}
           </Button>
           <Button
             size="sm"
@@ -355,8 +358,8 @@ export function CreateJournalEntryPage() {
             onClick={() => handleSave(true)}
             title={
               !isBalanced
-                ? 'Journal must have at least 2 balanced lines before posting'
-                : 'Save and post to general ledger'
+                ? t('accounting:createJournal.unbalancedTooltip')
+                : t('accounting:createJournal.postTooltip')
             }
           >
             {isPending && isPostingDirectly ? (
@@ -364,7 +367,7 @@ export function CreateJournalEntryPage() {
             ) : (
               <Send className="h-4 w-4" />
             )}
-            Post Journal
+            {t('accounting:createJournal.postJournal')}
           </Button>
         </div>
       </div>
@@ -373,24 +376,24 @@ export function CreateJournalEntryPage() {
       <Card className="border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
         <CardHeader className="pb-4">
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            Entry Details
+            {t('accounting:createJournal.entryDetails')}
           </CardTitle>
           <CardDescription>
-            Specify the posting date, branch ledger, and business justification for this transaction.
+            {t('accounting:createJournal.entryDetailsDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <FormField label="Entry Date" error={form.formState.errors.entryDate?.message}>
+            <FormField label={t('accounting:createJournal.entryDate')} error={form.formState.errors.entryDate?.message}>
               <Input type="date" className="h-9 text-sm" {...form.register('entryDate')} />
             </FormField>
 
-            <FormField label="Branch" error={form.formState.errors.branchId?.message}>
+            <FormField label={t('accounting:createJournal.branch')} error={form.formState.errors.branchId?.message}>
               <select
                 className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
                 {...form.register('branchId')}
               >
-                <option value="">Select Branch</option>
+                <option value="">{t('accounting:createJournal.selectBranch')}</option>
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>
                     {branch.code} — {branch.name}
@@ -399,28 +402,28 @@ export function CreateJournalEntryPage() {
               </select>
             </FormField>
 
-            <FormField label="Reference / Voucher #" error={form.formState.errors.reference?.message}>
+            <FormField label={t('accounting:createJournal.reference')} error={form.formState.errors.reference?.message}>
               <Input
-                placeholder="e.g. JV-2026-001"
+                placeholder={t('accounting:createJournal.referencePlaceholder')}
                 className="h-9 text-sm font-mono uppercase"
                 {...form.register('reference')}
               />
             </FormField>
 
-            <FormField label="Journal Type">
+            <FormField label={t('accounting:createJournal.journalType')}>
               <select
                 className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
                 {...form.register('type', { valueAsNumber: true })}
               >
-                <option value={0}>Standard Journal</option>
-                <option value={1}>Opening Balance</option>
+                <option value={0}>{t('accounting:createJournal.standardJournal')}</option>
+                <option value={1}>{t('accounting:createJournal.openingBalance')}</option>
               </select>
             </FormField>
           </div>
 
-          <FormField label="Description / Memo" error={form.formState.errors.description?.message}>
+          <FormField label={t('accounting:createJournal.memo')} error={form.formState.errors.description?.message}>
             <Input
-              placeholder="e.g. Monthly salon rent payment or revenue recognition"
+              placeholder={t('accounting:createJournal.memoPlaceholder')}
               className="h-9 text-sm"
               {...form.register('description')}
             />
@@ -433,10 +436,10 @@ export function CreateJournalEntryPage() {
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Journal Lines
+              {t('accounting:createJournal.journalLines')}
             </CardTitle>
             <CardDescription>
-              Double-entry posting: Total debits must equal total credits in base currency ({currencyCode}).
+              {t('accounting:createJournal.journalLinesDesc', { currency: currencyCode })}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -449,7 +452,9 @@ export function CreateJournalEntryPage() {
                 onClick={handleAutoBalance}
               >
                 <Scale className="size-3.5" />
-                Auto-Balance ({difference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})
+                {t('accounting:createJournal.autoBalance', {
+                  amount: formatNumber(difference, { minimumFractionDigits: 2, maximumFractionDigits: 4 }),
+                })}
               </Button>
             )}
             <Button
@@ -460,7 +465,7 @@ export function CreateJournalEntryPage() {
               onClick={() => lines.append(blankLine(baseCurrencyId))}
             >
               <Plus className="size-3.5" />
-              Add Line
+              {t('accounting:createJournal.addLine')}
             </Button>
           </div>
         </CardHeader>
@@ -469,32 +474,32 @@ export function CreateJournalEntryPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60">
-                  <TableHead className="w-10 px-2 text-center">#</TableHead>
-                  <TableHead className="min-w-64 px-3 font-semibold text-slate-600 dark:text-slate-300">
-                    Account (ComboBox)
+                  <TableHead className="w-10 px-2 text-center">{t('accounting:createJournal.th.num')}</TableHead>
+                  <TableHead className="min-w-64 px-3 text-start font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.account')}
                   </TableHead>
-                  <TableHead className="min-w-44 px-3 font-semibold text-slate-600 dark:text-slate-300">
-                    Description / Note
+                  <TableHead className="min-w-44 px-3 text-start font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.description')}
                   </TableHead>
-                  <TableHead className="w-32 px-3 font-semibold text-slate-600 dark:text-slate-300">
-                    Currency
+                  <TableHead className="w-32 px-3 text-start font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.currency')}
                   </TableHead>
-                  <TableHead className="w-36 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
-                    Rate (1 Curr in {currencyCode})
+                  <TableHead className="w-36 px-3 text-end font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.rate', { currency: currencyCode })}
                   </TableHead>
-                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
-                    Debit (Tx)
+                  <TableHead className="w-32 px-3 text-end font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.debitTx')}
                   </TableHead>
-                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
-                    Credit (Tx)
+                  <TableHead className="w-32 px-3 text-end font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.creditTx')}
                   </TableHead>
-                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
-                    Debit ({currencyCode})
+                  <TableHead className="w-32 px-3 text-end font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.debitBase', { currency: currencyCode })}
                   </TableHead>
-                  <TableHead className="w-32 px-3 text-right font-semibold text-slate-600 dark:text-slate-300">
-                    Credit ({currencyCode})
+                  <TableHead className="w-32 px-3 text-end font-semibold text-slate-600 dark:text-slate-300">
+                    {t('accounting:createJournal.th.creditBase', { currency: currencyCode })}
                   </TableHead>
-                  <TableHead className="w-16 px-2 text-center">Actions</TableHead>
+                  <TableHead className="w-16 px-2 text-center">{t('accounting:createJournal.th.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -522,14 +527,14 @@ export function CreateJournalEntryPage() {
                           onChange={(val) =>
                             form.setValue(`lines.${index}.accountId`, val, { shouldValidate: true })
                           }
-                          placeholder="Select posting account..."
+                          placeholder={t('accounting:createJournal.selectAccountPlaceholder')}
                         />
                       </TableCell>
 
                       {/* Line Memo */}
                       <TableCell className="px-3 py-2">
                         <Input
-                          placeholder="Line description"
+                          placeholder={t('accounting:createJournal.lineDescPlaceholder')}
                           className="h-9 text-xs"
                           {...form.register(`lines.${index}.description`)}
                         />
@@ -558,20 +563,24 @@ export function CreateJournalEntryPage() {
                               type="number"
                               min="0.000001"
                               step="0.000001"
-                              className="h-9 text-right font-mono text-xs"
+                              className="h-9 text-end font-mono text-xs"
                               {...form.register(`lines.${index}.exchangeRate`, {
                                 valueAsNumber: true,
                               })}
                             />
                             {currObj && (
-                              <p className="text-[10px] text-right font-mono text-slate-400">
-                                1 {currObj.code} = {exRate.toLocaleString()} {currencyCode}
+                              <p className="text-[10px] text-end font-mono text-slate-400">
+                                {t('accounting:createJournal.rateDisplay', {
+                                  code: currObj.code,
+                                  rate: formatNumber(exRate),
+                                  currency: currencyCode,
+                                })}
                               </p>
                             )}
                           </div>
                         ) : (
                           <div className="flex h-9 items-center justify-end rounded-md border border-slate-100 bg-slate-50/80 px-2.5 font-mono text-xs text-slate-400 dark:border-slate-800 dark:bg-slate-800/40">
-                            1.000000 <span className="ml-1 text-[10px] text-slate-400">(Base)</span>
+                            1.000000 <span className="ms-1 text-[10px] text-slate-400">{t('accounting:createJournal.baseIndicator')}</span>
                           </div>
                         )}
                       </TableCell>
@@ -583,7 +592,7 @@ export function CreateJournalEntryPage() {
                           step="0.0001"
                           min="0"
                           placeholder="0.00"
-                          className="h-9 text-right font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
+                          className="h-9 text-end font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
                           value={line.originalDebitAmount ?? 0}
                           onChange={(e) => handleDebitChange(index, Number(e.target.value))}
                         />
@@ -596,16 +605,16 @@ export function CreateJournalEntryPage() {
                           step="0.0001"
                           min="0"
                           placeholder="0.00"
-                          className="h-9 text-right font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
+                          className="h-9 text-end font-mono text-xs font-medium text-slate-900 dark:text-slate-100"
                           value={line.originalCreditAmount ?? 0}
                           onChange={(e) => handleCreditChange(index, Number(e.target.value))}
                         />
                       </TableCell>
 
                       {/* Debit Base */}
-                      <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <TableCell className="px-3 py-2 text-end font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                         {baseDebit > 0
-                          ? baseDebit.toLocaleString(undefined, {
+                          ? formatNumber(baseDebit, {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 4,
                             })
@@ -613,9 +622,9 @@ export function CreateJournalEntryPage() {
                       </TableCell>
 
                       {/* Credit Base */}
-                      <TableCell className="px-3 py-2 text-right font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      <TableCell className="px-3 py-2 text-end font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                         {baseCredit > 0
-                          ? baseCredit.toLocaleString(undefined, {
+                          ? formatNumber(baseCredit, {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 4,
                             })
@@ -630,7 +639,7 @@ export function CreateJournalEntryPage() {
                             variant="ghost"
                             size="icon-xs"
                             className="text-slate-400 hover:text-slate-600"
-                            title="Duplicate line"
+                            title={t('accounting:createJournal.duplicateLine')}
                             onClick={() => handleDuplicateLine(index)}
                           >
                             <Copy className="size-3.5" />
@@ -640,7 +649,7 @@ export function CreateJournalEntryPage() {
                             variant="ghost"
                             size="icon-xs"
                             className="text-slate-400 hover:text-red-600"
-                            title="Delete line"
+                            title={t('accounting:createJournal.deleteLine')}
                             onClick={() => lines.remove(index)}
                           >
                             <Trash2 className="size-3.5" />
@@ -666,49 +675,50 @@ export function CreateJournalEntryPage() {
               {isBalanced ? (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                   <CheckCircle2 className="size-4 text-emerald-600" />
-                  Journal Balanced ({watchedLines.length} lines)
+                  {t('accounting:createJournal.journalBalanced', { count: watchedLines.length })}
                 </div>
               ) : debitTotal === 0 && creditTotal === 0 ? (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                   <Info className="size-4" />
-                  Enter debit and credit amounts (minimum 2 lines required)
+                  {t('accounting:createJournal.enterDebitsCreditsPrompt')}
                 </div>
               ) : (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
                   <AlertCircle className="size-4 text-rose-600" />
-                  Out of Balance: Difference{' '}
-                  {difference.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 4,
-                  })}{' '}
-                  {currencyCode}
+                  {t('accounting:createJournal.outOfBalance', {
+                    difference: formatNumber(difference, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 4,
+                    }),
+                    currency: currencyCode,
+                  })}
                 </div>
               )}
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-6 text-sm">
-              <div className="text-right">
-                <p className="text-xs text-slate-500">Total Debit ({currencyCode})</p>
+              <div className="text-end">
+                <p className="text-xs text-slate-500">{t('accounting:createJournal.totalDebit', { currency: currencyCode })}</p>
                 <p className="font-mono text-base font-bold text-emerald-600 dark:text-emerald-400">
-                  {debitTotal.toLocaleString(undefined, {
+                  {formatNumber(debitTotal, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 4,
                   })}
                 </p>
               </div>
 
-              <div className="text-right">
-                <p className="text-xs text-slate-500">Total Credit ({currencyCode})</p>
+              <div className="text-end">
+                <p className="text-xs text-slate-500">{t('accounting:createJournal.totalCredit', { currency: currencyCode })}</p>
                 <p className="font-mono text-base font-bold text-blue-600 dark:text-blue-400">
-                  {creditTotal.toLocaleString(undefined, {
+                  {formatNumber(creditTotal, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 4,
                   })}
                 </p>
               </div>
 
-              <div className="border-l border-slate-200 pl-6 text-right dark:border-slate-700">
-                <p className="text-xs text-slate-500">Difference</p>
+              <div className="border-s border-slate-200 ps-6 text-end dark:border-slate-700">
+                <p className="text-xs text-slate-500">{t('accounting:createJournal.difference')}</p>
                 <p
                   className={`font-mono text-base font-bold ${
                     difference === 0
@@ -716,7 +726,7 @@ export function CreateJournalEntryPage() {
                       : 'text-rose-600 dark:text-rose-400'
                   }`}
                 >
-                  {difference.toLocaleString(undefined, {
+                  {formatNumber(difference, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 4,
                   })}
@@ -729,7 +739,7 @@ export function CreateJournalEntryPage() {
 
       {saveJournal.isError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-900 dark:bg-red-950/30">
-          <p className="font-semibold">Failed to save journal entry:</p>
+          <p className="font-semibold">{t('accounting:createJournal.saveFailed')}</p>
           <p className="mt-0.5">{saveJournal.error.message}</p>
         </div>
       )}

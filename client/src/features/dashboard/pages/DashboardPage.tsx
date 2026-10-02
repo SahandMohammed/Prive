@@ -15,9 +15,11 @@ import { SalesMixChart } from '../components/SalesMixChart'
 import { RecentTransactionsTable } from '../components/RecentTransactionsTable'
 import { RecentActivityList } from '../components/RecentActivityList'
 import { NeedsAttentionPanel } from '../components/NeedsAttentionPanel'
+import { useTranslation } from 'react-i18next'
 import { AlertCircle, RotateCw } from 'lucide-react'
 
 export function DashboardPage() {
+  const { t } = useTranslation(['dashboard', 'common'])
   const queryClient = useQueryClient()
   const [selectedDays, setSelectedDays] = useState(14)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -47,7 +49,7 @@ export function DashboardPage() {
     salesMixQuery.error?.message ||
     transactionsQuery.error?.message ||
     activityQuery.error?.message ||
-    'Failed to load dashboard data.'
+    t('dashboard:errorLoadingDashboard')
 
   if (hasError) {
     return (
@@ -55,7 +57,7 @@ export function DashboardPage() {
         <DashboardHeader onRefresh={handleRefresh} isRefreshing={isRefreshing} />
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
           <AlertCircle className="size-8 text-destructive mx-auto mb-2" />
-          <h3 className="text-sm font-semibold text-destructive">Error Loading Dashboard</h3>
+          <h3 className="text-sm font-semibold text-destructive">{t('dashboard:errorLoadingDashboard')}</h3>
           <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">{errorMessage}</p>
           <button
             type="button"
@@ -63,12 +65,13 @@ export function DashboardPage() {
             className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors cursor-pointer"
           >
             <RotateCw className="size-3.5" />
-            Try Again
+            {t('common:actions.tryAgain', 'Try Again')}
           </button>
         </div>
       </div>
     )
   }
+
 
   return (
     <div className="space-y-6 pb-12">

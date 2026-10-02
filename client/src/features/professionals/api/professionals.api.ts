@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient'
-import type { Professional, ProfessionalInput, ProfessionalListParams, ProfessionalUserOption } from '../types/professionals.types'
+import type { Professional, ProfessionalInput, ProfessionalListParams, ProfessionalPerformance, ProfessionalPerformanceParams, ProfessionalUserOption } from '../types/professionals.types'
 
 function queryString(params: Record<string, string | number | boolean | undefined>) {
   const query = new URLSearchParams()
@@ -25,4 +25,6 @@ export const professionalsApi = {
   delete: (id: string) => apiClient.delete<void>(`/professionals/${id}`),
   userOptions: (professionalId: string | null, search?: string) => apiClient.getPaginated<ProfessionalUserOption>(
     `/professionals/user-options?${queryString({ page: 1, pageSize: 100, professionalId: professionalId ?? undefined, search })}`),
+  performance: (params: ProfessionalPerformanceParams) => apiClient.get<ProfessionalPerformance>(
+    `/professionals/performance?${queryString({ ...params })}`),
 }

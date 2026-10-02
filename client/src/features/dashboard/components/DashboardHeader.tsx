@@ -1,5 +1,6 @@
 import { useBranchAccess, useBranchSelectionStore } from '@/features/business'
 import { useCurrentUser } from '@/features/auth'
+import { useTranslation } from 'react-i18next'
 import { RotateCw } from 'lucide-react'
 
 interface DashboardHeaderProps {
@@ -11,6 +12,7 @@ export function DashboardHeader({ onRefresh, isRefreshing }: DashboardHeaderProp
   const { branchId } = useBranchSelectionStore()
   const { data: branches } = useBranchAccess()
   const { data: user } = useCurrentUser()
+  const { t } = useTranslation(['dashboard', 'common'])
   const currentBranch = branches?.find((b) => b.id === branchId)
 
   const userName = user?.username ? user.username.split(' ')[0] : 'there'
@@ -20,10 +22,10 @@ export function DashboardHeader({ onRefresh, isRefreshing }: DashboardHeaderProp
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold font-heading text-foreground tracking-tight">
-          Business Overview
+          {t('dashboard:businessOverview')}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Welcome back, {userName}. Here's what's happening with your business today • {branchName}.
+          {t('dashboard:welcomeBack')}, {userName}. {t('dashboard:whatsHappening')} • {branchName}.
         </p>
       </div>
 
@@ -36,7 +38,7 @@ export function DashboardHeader({ onRefresh, isRefreshing }: DashboardHeaderProp
           title="Refresh dashboard data"
         >
           <RotateCw className={`size-3.5 ${isRefreshing ? 'animate-spin text-foreground' : 'text-muted-foreground'}`} />
-          <span>Refresh</span>
+          <span>{t('common:actions.refresh')}</span>
         </button>
       )}
     </div>

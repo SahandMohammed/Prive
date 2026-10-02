@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { BriefcaseBusiness, Package, PackageSearch, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { FieldArrayWithId, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import {
   productUnitOptions,
 } from '@/features/inventory'
 import type { Product, StockBalance } from '@/features/inventory'
+import { formatNumber } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { AddSalesItemModal } from './AddSalesItemModal'
 import { SalesItemCombobox } from './SalesItemCombobox'
@@ -91,6 +93,7 @@ export function SalesInvoiceItemsTable({
   subtotal = 0,
   baseTotal = 0,
 }: SalesInvoiceItemsTableProps) {
+  const { t } = useTranslation(['sales', 'common'])
   const [internalAddModalOpen, setInternalAddModalOpen] = useState(false)
   const isAddModalOpen = externalIsAddModalOpen ?? internalAddModalOpen
   const setAddModalOpen = externalOnAddModalOpenChange ?? setInternalAddModalOpen
@@ -103,9 +106,13 @@ export function SalesInvoiceItemsTable({
         {/* CARD HEADER - Crisp, compact padding without excessive vertical whitespace */}
         <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 py-3 px-5 [.border-b]:pb-3">
           <div className="flex items-center gap-2.5">
-            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">Invoice Items</CardTitle>
+            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+              {t('sales:itemsTable.invoiceItems')}
+            </CardTitle>
             <Badge variant="secondary" className="font-mono text-xs">
-              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+              {itemCount === 1
+                ? t('sales:itemsTable.item_one', { count: itemCount })
+                : t('sales:itemsTable.item_other', { count: itemCount })}
             </Badge>
           </div>
 
@@ -119,7 +126,7 @@ export function SalesInvoiceItemsTable({
                 className="gap-1.5 text-xs font-medium"
               >
                 <PackageSearch className="size-3.5 text-primary" />
-                Add items
+                {t('sales:itemsTable.addItems')}
               </Button>
               {onAddLine ? (
                 <Button
@@ -130,7 +137,7 @@ export function SalesInvoiceItemsTable({
                   className="gap-1.5 text-xs font-medium"
                 >
                   <Plus className="size-3.5 text-primary" />
-                  Add line
+                  {t('sales:itemsTable.addLine')}
                 </Button>
               ) : (
                 <>
@@ -142,7 +149,7 @@ export function SalesInvoiceItemsTable({
                     className="gap-1.5 text-xs font-medium"
                   >
                     <BriefcaseBusiness className="size-3.5 text-primary" />
-                    Add service
+                    {t('sales:itemsTable.addService')}
                   </Button>
                   <Button
                     type="button"
@@ -152,7 +159,7 @@ export function SalesInvoiceItemsTable({
                     className="gap-1.5 text-xs font-medium"
                   >
                     <Package className="size-3.5 text-primary" />
-                    Add product
+                    {t('sales:itemsTable.addProduct')}
                   </Button>
                 </>
               )}
@@ -167,12 +174,12 @@ export function SalesInvoiceItemsTable({
             <TableHeader>
               <TableRow className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/40">
                 <TableHead className="w-12 px-3 py-2.5 text-center">#</TableHead>
-                <TableHead className="min-w-[240px] px-3 py-2.5 text-left">Item</TableHead>
-                <TableHead className="min-w-[180px] px-3 py-2.5 text-left">Description</TableHead>
-                <TableHead className="w-28 px-3 py-2.5 text-left">Unit</TableHead>
-                <TableHead className="w-24 px-3 py-2.5 text-right">Qty</TableHead>
-                <TableHead className="w-32 px-3 py-2.5 text-right">Unit Price</TableHead>
-                <TableHead className="w-32 px-3 py-2.5 text-right">Total</TableHead>
+                <TableHead className="min-w-[240px] px-3 py-2.5 text-start">{t('sales:itemsTable.item')}</TableHead>
+                <TableHead className="min-w-[180px] px-3 py-2.5 text-start">{t('sales:itemsTable.description')}</TableHead>
+                <TableHead className="w-28 px-3 py-2.5 text-start">{t('sales:itemsTable.unit')}</TableHead>
+                <TableHead className="w-24 px-3 py-2.5 text-end">{t('sales:itemsTable.qty')}</TableHead>
+                <TableHead className="w-32 px-3 py-2.5 text-end">{t('sales:itemsTable.unitPrice')}</TableHead>
+                <TableHead className="w-32 px-3 py-2.5 text-end">{t('sales:itemsTable.total')}</TableHead>
                 {!isReadOnly && <TableHead className="w-12 px-3 py-2.5 text-center" />}
               </TableRow>
             </TableHeader>
@@ -183,7 +190,7 @@ export function SalesInvoiceItemsTable({
                 (invoice?.lines ?? []).length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
-                      No items recorded on this invoice.
+                      {t('sales:itemsTable.noItemsRecorded')}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -202,44 +209,52 @@ export function SalesInvoiceItemsTable({
                         </TableCell>
 
                         {/* Item */}
-                        <TableCell className="px-3 py-2 text-left">
+                        <TableCell className="px-3 py-2 text-start">
                           <div className="flex h-9 items-center font-medium text-foreground text-xs">
                             {displayName}
                           </div>
                         </TableCell>
 
                         {/* Description */}
-                        <TableCell className="px-3 py-2 text-left">
+                        <TableCell className="px-3 py-2 text-start">
                           <div className="flex h-9 items-center text-xs text-muted-foreground truncate">
                             {line.description || '—'}
                           </div>
                         </TableCell>
 
                         {/* Unit */}
-                        <TableCell className="px-3 py-2 text-left">
+                        <TableCell className="px-3 py-2 text-start">
                           <div className="flex h-9 items-center text-xs font-mono text-muted-foreground">
                             {line.unitCode ?? '—'}
                           </div>
                         </TableCell>
 
                         {/* Qty */}
-                        <TableCell className="px-3 py-2 text-right">
+                        <TableCell className="px-3 py-2 text-end">
                           <div className="flex h-9 items-center justify-end font-mono text-xs font-medium text-foreground">
-                            {formatAmount(line.quantity)}
+                            {formatNumber(line.quantity, { maximumFractionDigits: 4 })}
                           </div>
                         </TableCell>
 
                         {/* Unit Price */}
-                        <TableCell className="px-3 py-2 text-right">
+                        <TableCell className="px-3 py-2 text-end">
                           <div className="flex h-9 items-center justify-end font-mono text-xs text-foreground">
-                            {formatMoney(line.unitPrice, selectedCurrency?.decimalPlaces)} {invoice.currencyCode}
+                            {formatNumber(line.unitPrice, {
+                              minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                              maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                            })}{' '}
+                            {invoice.currencyCode}
                           </div>
                         </TableCell>
 
                         {/* Total */}
-                        <TableCell className="px-3 py-2 text-right">
+                        <TableCell className="px-3 py-2 text-end">
                           <div className="flex h-9 items-center justify-end font-mono text-xs font-bold text-foreground">
-                            {formatMoney(line.lineAmount, selectedCurrency?.decimalPlaces)} {invoice.currencyCode}
+                            {formatNumber(line.lineAmount, {
+                              minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                              maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                            })}{' '}
+                            {invoice.currencyCode}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -256,9 +271,9 @@ export function SalesInvoiceItemsTable({
                           <ReceiptText className="size-5" />
                         </div>
                         <div className="space-y-1">
-                          <p className="font-semibold text-foreground text-sm">No items added yet</p>
+                          <p className="font-semibold text-foreground text-sm">{t('sales:itemsTable.noItemsAdded')}</p>
                           <p className="text-xs text-muted-foreground">
-                            Click 'Add line' above to start building this invoice.
+                            {t('sales:itemsTable.noItemsDesc')}
                           </p>
                         </div>
                         <div className="flex gap-2 pt-1">
@@ -270,7 +285,7 @@ export function SalesInvoiceItemsTable({
                             onClick={() => setAddModalOpen(true)}
                           >
                             <PackageSearch className="size-3.5" />
-                            Add items
+                            {t('sales:itemsTable.addItems')}
                           </Button>
                           {onAddLine ? (
                             <Button
@@ -281,7 +296,7 @@ export function SalesInvoiceItemsTable({
                               onClick={onAddLine}
                             >
                               <Plus className="size-3.5" />
-                              Add line
+                              {t('sales:itemsTable.addLine')}
                             </Button>
                           ) : (
                             <>
@@ -293,7 +308,7 @@ export function SalesInvoiceItemsTable({
                                 onClick={onAddService}
                               >
                                 <BriefcaseBusiness className="size-3.5" />
-                                Add Service
+                                {t('sales:itemsTable.addService')}
                               </Button>
                               <Button
                                 type="button"
@@ -303,7 +318,7 @@ export function SalesInvoiceItemsTable({
                                 onClick={onAddProduct}
                               >
                                 <Package className="size-3.5" />
-                                Add Product
+                                {t('sales:itemsTable.addProduct')}
                               </Button>
                             </>
                           )}
@@ -323,7 +338,7 @@ export function SalesInvoiceItemsTable({
                     if (line?.unitOfMeasureId && !unitOptions.some((unit) => unit.id === line.unitOfMeasureId)) {
                       unitOptions.push({
                         id: line.unitOfMeasureId,
-                        name: invoiceLine?.unitCode ?? 'Unavailable unit',
+                        name: invoiceLine?.unitCode ?? t('sales:itemsTable.unavailableUnit'),
                         code: invoiceLine?.unitCode ?? '—',
                         operation: invoiceLine?.conversionOperation ?? null,
                         factor: invoiceLine?.conversionFactor ?? 1,
@@ -359,7 +374,7 @@ export function SalesInvoiceItemsTable({
                         </TableCell>
 
                         {/* Item Combobox Auto-Suggestion */}
-                        <TableCell className="px-3 py-2 text-left">
+                        <TableCell className="px-3 py-2 text-start">
                           <SalesItemCombobox
                             value={selectedItemId}
                             displayName={itemDisplayName}
@@ -371,7 +386,7 @@ export function SalesInvoiceItemsTable({
                             currencyCode={selectedCurrency?.code ?? ''}
                             currencyDecimals={selectedCurrency?.decimalPlaces ?? 2}
                             error={itemError}
-                            aria-label={isService ? `Service for line ${index + 1}` : `Product for line ${index + 1}`}
+                            aria-label={t('sales:itemsTable.itemLineAria', { line: index + 1 })}
                             onSelect={(item: SalesItemOption) => {
                               if (!setValue) return
                               setValue(`lines.${index}.itemId`, item.id, { shouldDirty: true })
@@ -394,7 +409,8 @@ export function SalesInvoiceItemsTable({
                                 setValue(`lines.${index}.unitOfMeasureId`, item.unitOfMeasureId ?? '', {
                                   shouldDirty: true,
                                   shouldValidate: true,
-                                })
+                                daylight: true,
+                                } as unknown as { shouldDirty: boolean; shouldValidate: boolean })
                                 setValue(`lines.${index}.unitPriceBase`, item.basePrice, { shouldDirty: true })
                                 setValue(`lines.${index}.useMasterPrice`, true, { shouldDirty: true })
                                 setValue(
@@ -417,23 +433,23 @@ export function SalesInvoiceItemsTable({
                         </TableCell>
 
                         {/* Description */}
-                        <TableCell className="px-3 py-2 text-left">
+                        <TableCell className="px-3 py-2 text-start">
                           <Input
-                            placeholder="Optional description"
+                            placeholder={t('sales:itemsTable.descriptionPlaceholder')}
                             {...register?.(`lines.${index}.description`)}
                             className="h-9 text-xs"
                           />
                         </TableCell>
 
                         {/* Unit */}
-                        <TableCell className="px-3 py-2 text-left">
+                        <TableCell className="px-3 py-2 text-start">
                           {isService ? (
                             <div className="flex h-9 items-center px-2 text-xs text-muted-foreground font-mono select-none">
                               —
                             </div>
                           ) : (
                             <Select
-                              aria-label={`Unit for line ${index + 1}`}
+                              aria-label={t('sales:itemsTable.unitLineAria', { line: index + 1 })}
                               {...unitRegistration}
                               disabled={!selectedProduct}
                               onChange={(event) => {
@@ -468,7 +484,7 @@ export function SalesInvoiceItemsTable({
                               }}
                               className="h-9 text-xs"
                             >
-                              <option value="">Select unit</option>
+                              <option value="">{t('sales:itemsTable.selectUnit')}</option>
                               {unitOptions.map((unit) => (
                                 <option key={unit.id} value={unit.id}>
                                   {unit.code} — {unit.name}
@@ -479,12 +495,12 @@ export function SalesInvoiceItemsTable({
                         </TableCell>
 
                         {/* Quantity */}
-                        <TableCell className="px-3 py-2 text-right">
+                        <TableCell className="px-3 py-2 text-end">
                           <Input
-                            aria-label={`Quantity for line ${index + 1}`}
+                            aria-label={t('sales:itemsTable.qtyLineAria', { line: index + 1 })}
                             title={qtyError}
                             className={cn(
-                              'h-9 text-right font-mono text-xs',
+                              'h-9 text-end font-mono text-xs',
                               qtyError && 'border-destructive focus:border-destructive'
                             )}
                             type="number"
@@ -495,12 +511,12 @@ export function SalesInvoiceItemsTable({
                         </TableCell>
 
                         {/* Unit Price */}
-                        <TableCell className="px-3 py-2 text-right">
+                        <TableCell className="px-3 py-2 text-end">
                           <Input
-                            aria-label={`Unit price for line ${index + 1}`}
+                            aria-label={t('sales:itemsTable.priceLineAria', { line: index + 1 })}
                             title={priceError}
                             className={cn(
-                              'h-9 text-right font-mono text-xs',
+                              'h-9 text-end font-mono text-xs',
                               priceError && 'border-destructive focus:border-destructive'
                             )}
                             type="number"
@@ -521,9 +537,12 @@ export function SalesInvoiceItemsTable({
                         </TableCell>
 
                         {/* Total */}
-                        <TableCell className="px-3 py-2 text-right">
+                        <TableCell className="px-3 py-2 text-end">
                           <div className="flex h-9 items-center justify-end font-mono text-xs font-bold text-foreground">
-                            {formatMoney(lineTotal, selectedCurrency?.decimalPlaces)}{' '}
+                            {formatNumber(lineTotal, {
+                              minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                              maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                            })}{' '}
                             {selectedCurrency?.code ?? ''}
                           </div>
                         </TableCell>
@@ -535,7 +554,7 @@ export function SalesInvoiceItemsTable({
                               type="button"
                               variant="ghost"
                               size="icon-xs"
-                              aria-label={`Remove line ${index + 1}`}
+                              aria-label={t('sales:itemsTable.removeLineAria', { line: index + 1 })}
                               onClick={() => onRemoveLine?.(index)}
                               className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             >
@@ -564,18 +583,22 @@ export function SalesInvoiceItemsTable({
           <div className="text-xs text-muted-foreground">
             {isReadOnly ? (
               <span>
-                Document currency:{' '}
+                {t('sales:itemsTable.docCurrency')}{' '}
                 <strong className="font-mono text-foreground font-semibold">{invoice?.currencyCode}</strong>
               </span>
             ) : (
               <span>
-                Active currency:{' '}
+                {t('sales:itemsTable.activeCurrency')}{' '}
                 <strong className="font-mono text-foreground font-semibold">
                   {selectedCurrency?.code ?? '—'}
                 </strong>
                 {isForeign && rate > 0 && (
-                  <span className="ml-2 font-mono text-[11px]">
-                    (1 {selectedCurrency?.code} = {formatAmount(rate)} {business?.baseCurrencyCode})
+                  <span className="ms-2 font-mono text-[11px]">
+                    {t('sales:itemsTable.exchangeRateNote', {
+                      from: selectedCurrency?.code,
+                      rate: formatNumber(rate, { maximumFractionDigits: 4 }),
+                      to: business?.baseCurrencyCode,
+                    })}
                   </span>
                 )}
               </span>
@@ -584,29 +607,47 @@ export function SalesInvoiceItemsTable({
 
           <div className="w-full sm:w-72 space-y-1.5">
             <SummaryRow
-              label="Subtotal"
+              label={t('sales:itemsTable.subtotal')}
               value={
                 isReadOnly
-                  ? `${formatMoney(invoice?.subtotal, selectedCurrency?.decimalPlaces)} ${invoice?.currencyCode ?? ''}`
-                  : `${formatMoney(subtotal, selectedCurrency?.decimalPlaces)} ${selectedCurrency?.code ?? ''}`
+                  ? `${formatNumber(invoice?.subtotal ?? 0, {
+                      minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                      maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                    })} ${invoice?.currencyCode ?? ''}`
+                  : `${formatNumber(subtotal, {
+                      minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                      maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                    })} ${selectedCurrency?.code ?? ''}`
               }
             />
             {isForeign && (
               <SummaryRow
-                label={`Base Total (${business?.baseCurrencyCode})`}
+                label={t('sales:itemsTable.baseTotal', { currency: business?.baseCurrencyCode })}
                 value={
                   isReadOnly
-                    ? `${formatMoney(invoice?.baseTotal, business?.baseCurrencyDecimalPlaces)} ${business?.baseCurrencyCode ?? ''}`
-                    : `${formatMoney(baseTotal, business?.baseCurrencyDecimalPlaces)} ${business?.baseCurrencyCode ?? ''}`
+                    ? `${formatNumber(invoice?.baseTotal ?? 0, {
+                        minimumFractionDigits: business?.baseCurrencyDecimalPlaces ?? 2,
+                        maximumFractionDigits: business?.baseCurrencyDecimalPlaces ?? 2,
+                      })} ${business?.baseCurrencyCode ?? ''}`
+                    : `${formatNumber(baseTotal, {
+                        minimumFractionDigits: business?.baseCurrencyDecimalPlaces ?? 2,
+                        maximumFractionDigits: business?.baseCurrencyDecimalPlaces ?? 2,
+                      })} ${business?.baseCurrencyCode ?? ''}`
                 }
               />
             )}
             <div className="mt-1.5 flex w-full items-baseline justify-between gap-8 border-t border-border/60 pt-2 text-sm font-bold text-foreground">
-              <span>Grand Total</span>
+              <span>{t('sales:itemsTable.grandTotal')}</span>
               <span className="font-mono text-base text-primary">
                 {isReadOnly
-                  ? `${formatMoney(invoice?.total, selectedCurrency?.decimalPlaces)} ${invoice?.currencyCode ?? ''}`
-                  : `${formatMoney(subtotal, selectedCurrency?.decimalPlaces)} ${selectedCurrency?.code ?? ''}`}
+                  ? `${formatNumber(invoice?.total ?? 0, {
+                      minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                      maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                    })} ${invoice?.currencyCode ?? ''}`
+                  : `${formatNumber(subtotal, {
+                      minimumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                      maximumFractionDigits: selectedCurrency?.decimalPlaces ?? 2,
+                    })} ${selectedCurrency?.code ?? ''}`}
               </span>
             </div>
           </div>
@@ -653,7 +694,3 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 const round6 = (value: number) => Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000
-const formatAmount = (value: number | null | undefined) =>
-  (Number(value) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-const formatMoney = (value: number | null | undefined, decimals = 4) =>
-  (Number(value) || 0).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })

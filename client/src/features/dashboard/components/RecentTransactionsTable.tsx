@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { DashboardRecentTransaction } from '../types/dashboard.types'
 import { formatDashboardAmount, formatRelativeTime } from '../utils/dashboard.utils'
 import { ArrowUpRight, ArrowDownLeft, ArrowLeftRight, ExternalLink } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface RecentTransactionsTableProps {
   transactions?: DashboardRecentTransaction[]
@@ -30,19 +31,20 @@ function getTypeBadgeStyle(type: string) {
 }
 
 export function RecentTransactionsTable({ transactions, isLoading }: RecentTransactionsTableProps) {
+  const { t } = useTranslation(['dashboard', 'common'])
   return (
     <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-bold font-heading text-foreground">
-            Recent Transactions
+            {t('dashboard:recentTransactions')}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Operational cash and document movements
+            {t('dashboard:operationalMovements')}
           </p>
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-muted-foreground">
-          {transactions ? `${transactions.length} items` : ''}
+          {transactions ? `${transactions.length} ${t('dashboard:items')}` : ''}
         </span>
       </div>
 
@@ -55,7 +57,7 @@ export function RecentTransactionsTable({ transactions, isLoading }: RecentTrans
           </div>
         ) : !transactions || transactions.length === 0 ? (
           <div className="py-12 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg">
-            No recent operational transactions in this branch.
+            {t('dashboard:noRecentTransactions')}
           </div>
         ) : (
           <div className="divide-y divide-border/40">
@@ -105,7 +107,7 @@ export function RecentTransactionsTable({ transactions, isLoading }: RecentTrans
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0 ml-4 flex items-center gap-2">
+                  <div className="text-end shrink-0 ms-4 flex items-center gap-2">
                     <div>
                       <div
                         className={`text-xs font-bold font-mono tracking-tight ${
@@ -121,11 +123,12 @@ export function RecentTransactionsTable({ transactions, isLoading }: RecentTrans
                       </div>
                     </div>
                     {tx.targetUrl && (
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary rtl:-scale-x-100 transition-colors shrink-0" />
                     )}
                   </div>
                 </div>
               )
+
 
               return tx.targetUrl ? (
                 <Link key={tx.id} to={tx.targetUrl} className="block">

@@ -1,0 +1,43 @@
+{
+  "login": {
+    "title": "Welcome back",
+    "subtitle": "Enter your credentials to access your Privé workspace.",
+    "cardTitle": "Sign In",
+    "cardDesc": "Authorized salon personnel only",
+    "username": "Username",
+    "usernamePlaceholder": "Enter your username",
+    "password": "Password",
+    "passwordPlaceholder": "••••••••••••",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "signIn": "Sign in to Privé",
+    "signingIn": "Signing in...",
+    "unexpectedError": "An unexpected error occurred. Please try again.",
+    "themeToggleLight": "Switch to light mode",
+    "themeToggleDark": "Switch to dark mode",
+    "themeToggleAria": "Toggle color theme",
+    "editorial": {
+      "headlinePart1": "The art of refined grooming, ",
+      "headlinePart2": "effortlessly orchestrated.",
+      "narrative": "Securely manage reservations, client profiles, POS checkout, and financial workflows with quiet sophistication.",
+      "product": "BloomERP Customized",
+      "system": "Management System",
+      "version": "Version"
+    },
+    "copyright": "System copyrighted to LogicBloom. All rights reserved."
+  },
+  "changePassword": {
+    "trigger": "Change Password",
+    "title": "Change Password",
+    "description": "Enter your current password and choose a new one. You will be logged out upon success.",
+    "currentPassword": "Current password",
+    "currentPasswordPlaceholder": "Enter current password",
+    "newPassword": "New password",
+    "newPasswordPlaceholder": "Enter new password",
+    "confirmPassword": "Confirm new password",
+    "confirmPasswordPlaceholder": "Confirm new password",
+    "submit": "Change Password",
+    "submitting": "Changing...",
+    "unexpectedError": "An unexpected error occurred. Please try again."
+  }
+}

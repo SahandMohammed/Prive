@@ -1,6 +1,7 @@
 import type { DashboardRecentActivity } from '../types/dashboard.types'
 import { formatRelativeTime } from '../utils/dashboard.utils'
 import { UserCheck } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface RecentActivityListProps {
   activities?: DashboardRecentActivity[]
@@ -8,15 +9,16 @@ interface RecentActivityListProps {
 }
 
 export function RecentActivityList({ activities, isLoading }: RecentActivityListProps) {
+  const { t } = useTranslation(['dashboard', 'common'])
   return (
     <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between h-full">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-bold font-heading text-foreground">
-            Recent Activity
+            {t('dashboard:recentActivity')}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Team actions and audit trail
+            {t('dashboard:teamActions')}
           </p>
         </div>
         <UserCheck className="size-4 text-muted-foreground" />
@@ -31,7 +33,7 @@ export function RecentActivityList({ activities, isLoading }: RecentActivityList
           </div>
         ) : !activities || activities.length === 0 ? (
           <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg">
-            No recent activity recorded for this branch.
+            {t('dashboard:noRecentActivity')}
           </div>
         ) : (
           <div className="space-y-2.5">

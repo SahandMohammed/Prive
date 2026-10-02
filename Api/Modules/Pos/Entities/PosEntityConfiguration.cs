@@ -3,285 +3,18 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Modules.Pos;
 
-public sealed class PosRegisterEntityConfiguration : IEntityTypeConfiguration<PosRegisterEntity>
-{
-  public void Configure(EntityTypeBuilder<PosRegisterEntity> builder)
-  {
-    builder.ToTable("pos_registers");
-    builder.HasKey(register => register.Id);
-    builder.HasAlternateKey(register => new { register.Id, register.BranchId });
-    builder.Property(register => register.Code).HasMaxLength(32).IsRequired();
-    builder.Property(register => register.Name).HasMaxLength(120).IsRequired();
-    builder.HasIndex(register => register.Code).IsUnique();
-    builder.HasIndex(register => new { register.BranchId, register.IsActive });
-    builder.HasOne(register => register.Branch).WithMany().HasForeignKey(register => register.BranchId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosRegisterCashboxEntityConfiguration : IEntityTypeConfiguration<PosRegisterCashboxEntity>
-{
-  public const string MoneyAccountUniqueIndexName = "UX_pos_register_cashboxes_money_account_id";
-
-  public void Configure(EntityTypeBuilder<PosRegisterCashboxEntity> builder)
-  {
-    builder.ToTable("pos_register_cashboxes");
-    builder.HasKey(cashbox => cashbox.Id);
-    builder.HasIndex(cashbox => new { cashbox.PosRegisterId, cashbox.CurrencyId })
-      .IsUnique()
-      .HasDatabaseName("UX_pos_register_cashboxes_register_currency");
-    builder.HasIndex(cashbox => cashbox.MoneyAccountId)
-      .IsUnique()
-      .HasDatabaseName(MoneyAccountUniqueIndexName);
-    builder.HasOne(cashbox => cashbox.PosRegister).WithMany(register => register.Cashboxes)
-      .HasForeignKey(cashbox => new { cashbox.PosRegisterId, cashbox.BranchId })
-      .HasPrincipalKey(register => new { register.Id, register.BranchId })
-      .OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(cashbox => cashbox.MoneyAccount).WithMany()
-      .HasForeignKey(cashbox => new { cashbox.MoneyAccountId, cashbox.BranchId, cashbox.CurrencyId })
-      .HasPrincipalKey(account => new { account.Id, account.BranchId, account.CurrencyId })
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(cashbox => cashbox.Currency).WithMany().HasForeignKey(cashbox => cashbox.CurrencyId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosSessionEntityConfiguration : IEntityTypeConfiguration<PosSessionEntity>
-{
-  public void Configure(EntityTypeBuilder<PosSessionEntity> builder)
-  {
-    builder.ToTable("pos_sessions");
-    builder.HasKey(session => session.Id);
-    builder.HasAlternateKey(session => new { session.Id, session.BranchId });
-    builder.Property(session => session.SessionNumber).HasMaxLength(20).IsRequired();
-    builder.Property(session => session.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
-    builder.Property(session => session.OpeningNotes).HasMaxLength(500);
-    builder.Property(session => session.ClosingNotes).HasMaxLength(500);
-    builder.HasIndex(session => session.SessionNumber).IsUnique();
-    builder.HasIndex(session => new { session.BranchId, session.OpenedAtUtc });
-    builder.HasIndex(session => session.RegisterId)
-      .IsUnique()
-      .HasFilter("\"Status\" = 'Open'");
-    builder.HasIndex(session => new { session.BranchId, session.CashierUserId })
-      .IsUnique()
-      .HasFilter("\"Status\" = 'Open'");
-    builder.HasOne(session => session.Branch).WithMany().HasForeignKey(session => session.BranchId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(session => session.Register).WithMany(register => register.Sessions)
-      .HasForeignKey(session => new { session.RegisterId, session.BranchId })
-      .HasPrincipalKey(register => new { register.Id, register.BranchId })
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(session => session.CashierUser).WithMany().HasForeignKey(session => session.CashierUserId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(session => session.ClosedByUser).WithMany().HasForeignKey(session => session.ClosedByUserId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosSessionOpeningCountEntityConfiguration : IEntityTypeConfiguration<PosSessionOpeningCountEntity>
-{
-  public void Configure(EntityTypeBuilder<PosSessionOpeningCountEntity> builder)
-  {
-    builder.ToTable("pos_session_opening_counts");
-    builder.HasKey(count => count.Id);
-    builder.Property(count => count.Amount).HasPrecision(19, 4).IsRequired();
-    builder.Property(count => count.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(count => count.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(count => new { count.PosSessionId, count.MoneyAccountId }).IsUnique();
-    builder.HasIndex(count => new { count.PosSessionId, count.CurrencyId }).IsUnique();
-    builder.HasOne(count => count.PosSession).WithMany(session => session.OpeningCounts)
-      .HasForeignKey(count => new { count.PosSessionId, count.BranchId })
-      .HasPrincipalKey(session => new { session.Id, session.BranchId })
-      .OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(count => count.MoneyAccount).WithMany()
-      .HasForeignKey(count => new { count.MoneyAccountId, count.BranchId, count.CurrencyId })
-      .HasPrincipalKey(account => new { account.Id, account.BranchId, account.CurrencyId })
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(count => count.Currency).WithMany().HasForeignKey(count => count.CurrencyId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosSessionClosingCountEntityConfiguration : IEntityTypeConfiguration<PosSessionClosingCountEntity>
-{
-  public void Configure(EntityTypeBuilder<PosSessionClosingCountEntity> builder)
-  {
-    builder.ToTable("pos_session_closing_counts");
-    builder.HasKey(count => count.Id);
-    builder.Property(count => count.ExpectedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(count => count.CountedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(count => count.VarianceAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(count => count.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(count => count.ExpectedBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(count => count.CountedBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(count => count.VarianceBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(count => new { count.PosSessionId, count.MoneyAccountId }).IsUnique();
-    builder.HasIndex(count => new { count.PosSessionId, count.CurrencyId }).IsUnique();
-    builder.HasOne(count => count.PosSession).WithMany(session => session.ClosingCounts)
-      .HasForeignKey(count => new { count.PosSessionId, count.BranchId })
-      .HasPrincipalKey(session => new { session.Id, session.BranchId })
-      .OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(count => count.MoneyAccount).WithMany()
-      .HasForeignKey(count => new { count.MoneyAccountId, count.BranchId, count.CurrencyId })
-      .HasPrincipalKey(account => new { account.Id, account.BranchId, account.CurrencyId })
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(count => count.Currency).WithMany().HasForeignKey(count => count.CurrencyId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosZReportEntityConfiguration : IEntityTypeConfiguration<PosZReportEntity>
-{
-  public void Configure(EntityTypeBuilder<PosZReportEntity> builder)
-  {
-    builder.ToTable("pos_z_reports");
-    builder.HasKey(report => report.Id);
-    builder.Property(report => report.ReportNumber).HasMaxLength(20).IsRequired();
-    builder.Property(report => report.BranchCode).HasMaxLength(32).IsRequired();
-    builder.Property(report => report.BranchName).HasMaxLength(200).IsRequired();
-    builder.Property(report => report.RegisterCode).HasMaxLength(32).IsRequired();
-    builder.Property(report => report.RegisterName).HasMaxLength(120).IsRequired();
-    builder.Property(report => report.CashierUsername).HasMaxLength(100).IsRequired();
-    builder.Property(report => report.ClosedByUsername).HasMaxLength(100).IsRequired();
-    builder.Property(report => report.BaseCurrencyCode).HasMaxLength(8).IsRequired();
-    builder.Property(report => report.ServiceSalesBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.ProductSalesBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.GrossSalesBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.ServiceRefundsBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.ProductRefundsBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.RefundTotalBase).HasPrecision(19, 4).IsRequired();
-    builder.Property(report => report.NetSalesBase).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(report => report.ReportNumber).IsUnique();
-    builder.HasIndex(report => report.PosSessionId).IsUnique();
-    builder.HasIndex(report => new { report.BranchId, report.ClosedAtUtc });
-    builder.HasOne(report => report.PosSession).WithOne(session => session.ZReport)
-      .HasForeignKey<PosZReportEntity>(report => report.PosSessionId).OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosZPaymentSummaryEntityConfiguration : IEntityTypeConfiguration<PosZPaymentSummaryEntity>
-{
-  public void Configure(EntityTypeBuilder<PosZPaymentSummaryEntity> builder)
-  {
-    builder.ToTable("pos_z_payment_summaries");
-    builder.HasKey(summary => summary.Id);
-    builder.Property(summary => summary.MoneyAccountCode).HasMaxLength(32).IsRequired();
-    builder.Property(summary => summary.MoneyAccountName).HasMaxLength(200).IsRequired();
-    builder.Property(summary => summary.MoneyAccountType).HasConversion<string>().HasMaxLength(16).IsRequired();
-    builder.Property(summary => summary.CurrencyCode).HasMaxLength(8).IsRequired();
-    builder.Property(summary => summary.TenderedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ChangeAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.RefundAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.NetAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.TenderedBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ChangeBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.RefundBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.NetBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(summary => new { summary.PosZReportId, summary.MoneyAccountId }).IsUnique();
-    builder.HasOne(summary => summary.PosZReport).WithMany(report => report.PaymentSummaries)
-      .HasForeignKey(summary => summary.PosZReportId).OnDelete(DeleteBehavior.Cascade);
-  }
-}
-
-public sealed class PosZDrawerSummaryEntityConfiguration : IEntityTypeConfiguration<PosZDrawerSummaryEntity>
-{
-  public void Configure(EntityTypeBuilder<PosZDrawerSummaryEntity> builder)
-  {
-    builder.ToTable("pos_z_drawer_summaries");
-    builder.HasKey(summary => summary.Id);
-    builder.Property(summary => summary.MoneyAccountCode).HasMaxLength(32).IsRequired();
-    builder.Property(summary => summary.MoneyAccountName).HasMaxLength(200).IsRequired();
-    builder.Property(summary => summary.CurrencyCode).HasMaxLength(8).IsRequired();
-    builder.Property(summary => summary.OpeningAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.TenderedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ChangeAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.RefundAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ExpectedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CountedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.VarianceAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(summary => summary.OpeningBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.TenderedBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ChangeBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.RefundBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.ExpectedBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CountedBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.VarianceBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CashInAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CashOutAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CashDropAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.AdjustmentAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CashInBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CashOutBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.CashDropBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(summary => summary.AdjustmentBaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(summary => new { summary.PosZReportId, summary.MoneyAccountId }).IsUnique();
-    builder.HasOne(summary => summary.PosZReport).WithMany(report => report.DrawerSummaries)
-      .HasForeignKey(summary => summary.PosZReportId).OnDelete(DeleteBehavior.Cascade);
-  }
-}
-
 public sealed class PosContextEntityConfiguration : IEntityTypeConfiguration<PosContextEntity>
 {
   public void Configure(EntityTypeBuilder<PosContextEntity> builder)
   {
     builder.ToTable("pos_contexts");
     builder.HasKey(context => context.SalesInvoiceId);
-    builder.Property(context => context.PaymentMode).HasConversion<string>().HasMaxLength(16).IsRequired();
     builder.Property(context => context.RequestFingerprint).HasMaxLength(64);
-    builder.HasIndex(context => context.PaymentId).IsUnique().HasFilter("\"PaymentId\" IS NOT NULL");
-    builder.HasIndex(context => context.PosSessionId);
     builder.HasIndex(context => context.CompletedAtUtc);
     builder.HasIndex(context => context.ClientRequestId).IsUnique().HasFilter("\"ClientRequestId\" IS NOT NULL");
     builder.HasOne(context => context.SalesInvoice).WithOne(invoice => invoice.PosContext)
       .HasForeignKey<PosContextEntity>(context => context.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(context => context.Payment).WithOne(payment => payment.SourcePosContext).HasForeignKey<PosContextEntity>(context => context.PaymentId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(context => context.PosSession).WithMany(session => session.PosContexts)
-      .HasForeignKey(context => context.PosSessionId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(context => context.CashierUser).WithMany().HasForeignKey(context => context.CashierUserId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosTenderEntityConfiguration : IEntityTypeConfiguration<PosTenderEntity>
-{
-  public void Configure(EntityTypeBuilder<PosTenderEntity> builder)
-  {
-    builder.ToTable("pos_tenders");
-    builder.HasKey(tender => tender.Id);
-    builder.Property(tender => tender.TenderedAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(tender => tender.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(tender => tender.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(tender => new { tender.SalesInvoiceId, tender.Sequence }).IsUnique();
-    builder.HasIndex(tender => tender.MoneyAccountId);
-    builder.HasIndex(tender => tender.PaymentMoneyLineId).IsUnique();
-    builder.HasOne(tender => tender.PosContext).WithMany(context => context.Tenders)
-      .HasForeignKey(tender => tender.SalesInvoiceId).OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(tender => tender.MoneyAccount).WithMany().HasForeignKey(tender => tender.MoneyAccountId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(tender => tender.PaymentMoneyLine).WithMany().HasForeignKey(tender => tender.PaymentMoneyLineId)
-      .OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosChangeEntityConfiguration : IEntityTypeConfiguration<PosChangeEntity>
-{
-  public void Configure(EntityTypeBuilder<PosChangeEntity> builder)
-  {
-    builder.ToTable("pos_changes");
-    builder.HasKey(change => change.Id);
-    builder.Property(change => change.Amount).HasPrecision(19, 4).IsRequired();
-    builder.Property(change => change.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(change => change.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(change => change.SalesInvoiceId).IsUnique();
-    builder.HasIndex(change => change.MoneyAccountId);
-    builder.HasIndex(change => change.PaymentMoneyLineId).IsUnique();
-    builder.HasOne(change => change.PosContext).WithOne(context => context.Change)
-      .HasForeignKey<PosChangeEntity>(change => change.SalesInvoiceId).OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(change => change.MoneyAccount).WithMany().HasForeignKey(change => change.MoneyAccountId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(change => change.PaymentMoneyLine).WithMany().HasForeignKey(change => change.PaymentMoneyLineId)
+    builder.HasOne(context => context.OperatorUser).WithMany().HasForeignKey(context => context.OperatorUserId)
       .OnDelete(DeleteBehavior.Restrict);
   }
 }
@@ -302,8 +35,6 @@ public sealed class PosRefundEntityConfiguration : IEntityTypeConfiguration<PosR
     builder.Property(refund => refund.RequestFingerprint).HasMaxLength(64);
     builder.HasIndex(refund => refund.DocumentNumber).IsUnique();
     builder.HasIndex(refund => new { refund.SalesInvoiceId, refund.PostedAtUtc });
-    builder.HasIndex(refund => new { refund.PosSessionId, refund.PostedAtUtc });
-    builder.HasIndex(refund => refund.SalesInvoiceId);
     builder.HasIndex(refund => refund.JournalEntryId).IsUnique();
     builder.HasIndex(refund => refund.ClientRequestId).IsUnique().HasFilter("\"ClientRequestId\" IS NOT NULL");
     builder.HasOne(refund => refund.SalesInvoice).WithMany(invoice => invoice.PosRefunds)
@@ -312,8 +43,6 @@ public sealed class PosRefundEntityConfiguration : IEntityTypeConfiguration<PosR
       .HasForeignKey(refund => refund.SalesInvoiceId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(refund => refund.Branch).WithMany().HasForeignKey(refund => refund.BranchId)
       .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(refund => refund.PosSession).WithMany(session => session.Refunds)
-      .HasForeignKey(refund => refund.PosSessionId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(refund => refund.Customer).WithMany().HasForeignKey(refund => refund.CustomerId)
       .OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(refund => refund.CreatedByUser).WithMany().HasForeignKey(refund => refund.CreatedByUserId)
@@ -322,46 +51,6 @@ public sealed class PosRefundEntityConfiguration : IEntityTypeConfiguration<PosR
       .OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(refund => refund.JournalEntry).WithOne(entry => entry.SourcePosRefund)
       .HasForeignKey<PosRefundEntity>(refund => refund.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
-  }
-}
-
-public sealed class PosDrawerMovementEntityConfiguration : IEntityTypeConfiguration<PosDrawerMovementEntity>
-{
-  public void Configure(EntityTypeBuilder<PosDrawerMovementEntity> builder)
-  {
-    builder.ToTable("pos_drawer_movements");
-    builder.HasKey(movement => movement.Id);
-    builder.Property(movement => movement.DocumentNumber).HasMaxLength(20).IsRequired();
-    builder.Property(movement => movement.Type).HasConversion<string>().HasMaxLength(16).IsRequired();
-    builder.Property(movement => movement.AdjustmentDirection).HasConversion<string>().HasMaxLength(8);
-    builder.Property(movement => movement.Amount).HasPrecision(19, 4).IsRequired();
-    builder.Property(movement => movement.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(movement => movement.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.Property(movement => movement.Reason).HasMaxLength(200).IsRequired();
-    builder.Property(movement => movement.Notes).HasMaxLength(1000);
-    builder.HasIndex(movement => movement.DocumentNumber).IsUnique();
-    builder.HasIndex(movement => new { movement.PosSessionId, movement.CreatedAtUtc });
-    builder.HasIndex(movement => movement.JournalEntryId).IsUnique();
-    builder.HasIndex(movement => movement.CashboxLedgerEntryId).IsUnique();
-    builder.HasIndex(movement => movement.DestinationLedgerEntryId).IsUnique().HasFilter("\"DestinationLedgerEntryId\" IS NOT NULL");
-    builder.HasOne(movement => movement.PosSession).WithMany(session => session.DrawerMovements)
-      .HasForeignKey(movement => movement.PosSessionId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.CashboxMoneyAccount).WithMany().HasForeignKey(movement => movement.CashboxMoneyAccountId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.DestinationMoneyAccount).WithMany().HasForeignKey(movement => movement.DestinationMoneyAccountId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.OffsetAccount).WithMany().HasForeignKey(movement => movement.OffsetAccountId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.Currency).WithMany().HasForeignKey(movement => movement.CurrencyId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.CreatedByUser).WithMany().HasForeignKey(movement => movement.CreatedByUserId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.JournalEntry).WithOne(journal => journal.SourcePosDrawerMovement)
-      .HasForeignKey<PosDrawerMovementEntity>(movement => movement.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.CashboxLedgerEntry).WithMany().HasForeignKey(movement => movement.CashboxLedgerEntryId)
-      .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(movement => movement.DestinationLedgerEntry).WithMany().HasForeignKey(movement => movement.DestinationLedgerEntryId)
-      .OnDelete(DeleteBehavior.Restrict);
   }
 }
 
@@ -388,23 +77,23 @@ public sealed class PosRefundLineEntityConfiguration : IEntityTypeConfiguration<
   }
 }
 
-public sealed class PosRefundTenderEntityConfiguration : IEntityTypeConfiguration<PosRefundTenderEntity>
+public sealed class PosRefundPayoutEntityConfiguration : IEntityTypeConfiguration<PosRefundPayoutEntity>
 {
-  public void Configure(EntityTypeBuilder<PosRefundTenderEntity> builder)
+  public void Configure(EntityTypeBuilder<PosRefundPayoutEntity> builder)
   {
-    builder.ToTable("pos_refund_tenders");
-    builder.HasKey(tender => tender.Id);
-    builder.Property(tender => tender.Amount).HasPrecision(19, 4).IsRequired();
-    builder.Property(tender => tender.ExchangeRate).HasPrecision(19, 6).IsRequired();
-    builder.Property(tender => tender.BaseAmount).HasPrecision(19, 4).IsRequired();
-    builder.HasIndex(tender => new { tender.PosRefundId, tender.Sequence }).IsUnique();
-    builder.HasIndex(tender => tender.MoneyAccountId);
-    builder.HasIndex(tender => tender.MoneyLedgerEntryId).IsUnique();
-    builder.HasOne(tender => tender.PosRefund).WithMany(refund => refund.Tenders)
-      .HasForeignKey(tender => tender.PosRefundId).OnDelete(DeleteBehavior.Cascade);
-    builder.HasOne(tender => tender.MoneyAccount).WithMany().HasForeignKey(tender => tender.MoneyAccountId)
+    builder.ToTable("pos_refund_payouts");
+    builder.HasKey(line => line.Id);
+    builder.Property(line => line.Amount).HasPrecision(19, 4).IsRequired();
+    builder.Property(line => line.ExchangeRate).HasPrecision(19, 6).IsRequired();
+    builder.Property(line => line.BaseAmount).HasPrecision(19, 4).IsRequired();
+    builder.HasIndex(line => new { line.PosRefundId, line.Sequence }).IsUnique();
+    builder.HasIndex(line => line.MoneyAccountId);
+    builder.HasIndex(line => line.MoneyLedgerEntryId).IsUnique();
+    builder.HasOne(line => line.PosRefund).WithMany(refund => refund.RefundPayouts)
+      .HasForeignKey(line => line.PosRefundId).OnDelete(DeleteBehavior.Cascade);
+    builder.HasOne(line => line.MoneyAccount).WithMany().HasForeignKey(line => line.MoneyAccountId)
       .OnDelete(DeleteBehavior.Restrict);
-    builder.HasOne(tender => tender.MoneyLedgerEntry).WithMany().HasForeignKey(tender => tender.MoneyLedgerEntryId)
+    builder.HasOne(line => line.MoneyLedgerEntry).WithMany().HasForeignKey(line => line.MoneyLedgerEntryId)
       .OnDelete(DeleteBehavior.Restrict);
   }
 }

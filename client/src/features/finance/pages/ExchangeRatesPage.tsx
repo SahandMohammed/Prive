@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowRight,
   Coins,
@@ -33,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/i18n'
 import { useCurrentUser } from '@/features/auth'
 import { useCurrencies, useCurrentBusiness } from '@/features/business'
 import { useExchangeRateActions, useExchangeRates } from '../hooks/useFinance'
@@ -46,6 +48,7 @@ const localNow = () => {
 }
 
 export function ExchangeRatesPage() {
+  const { t } = useTranslation(['finance', 'common'])
   const current = useCurrentUser().data
   const admin = Boolean(current && ['SuperAdmin', 'Manager', 'Owner'].includes(current.role))
   const business = useCurrentBusiness().data
@@ -161,16 +164,15 @@ export function ExchangeRatesPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Exchange Rates
+              {t('finance:exchangeRatesPage.title')}
             </h1>
             <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
               <Coins className="size-3.5" />
-              Multi-Currency FX
+              {t('finance:exchangeRatesPage.badge')}
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Effective-dated currency conversion rates. Posted Finance &amp; Accounting documents preserve
-            their historical transaction rates.
+            {t('finance:exchangeRatesPage.description')}
           </p>
         </div>
 
@@ -183,7 +185,7 @@ export function ExchangeRatesPage() {
             disabled={filteredRates.length === 0}
           >
             <Download className="size-3.5" />
-            Export CSV
+            {t('finance:exchangeRatesPage.exportCsv')}
           </Button>
           {admin && (
             <Button
@@ -192,7 +194,7 @@ export function ExchangeRatesPage() {
               onClick={() => setIsDialogOpen(true)}
             >
               <Plus className="size-4 stroke-[2.5]" />
-              Add Exchange Rate
+              {t('finance:exchangeRatesPage.addRate')}
             </Button>
           )}
         </div>
@@ -226,31 +228,28 @@ export function ExchangeRatesPage() {
                   {rate ? (
                     <div>
                       <p className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">
-                        1 {currency.code} = {rate.rate.toLocaleString(undefined, {
+                        1 {currency.code} = {formatNumber(rate.rate, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 6,
                         })}{' '}
                         <span className="text-xs font-normal text-slate-500">{baseCurrencyCode}</span>
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-400">
-                        Effective:{' '}
-                        {new Date(rate.effectiveAtUtc).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
+                        {t('finance:exchangeRatesPage.effective', {
+                          date: formatDate(rate.effectiveAtUtc),
                         })}
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-xs font-medium text-amber-600">No active rate set</p>
+                      <p className="text-xs font-medium text-amber-600">{t('finance:exchangeRatesPage.noActiveRate')}</p>
                       {admin && (
                         <button
                           type="button"
                           onClick={() => setIsDialogOpen(true)}
                           className="mt-1 text-[11px] font-semibold text-primary hover:underline"
                         >
-                          + Set initial rate
+                          {t('finance:exchangeRatesPage.setInitialRate')}
                         </button>
                       )}
                     </div>
@@ -266,15 +265,15 @@ export function ExchangeRatesPage() {
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-xs dark:border-slate-800">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              placeholder="Search pair or creator..."
-              className="h-9 pl-9 text-xs"
+              placeholder={t('finance:exchangeRatesPage.searchPlaceholder')}
+              className="h-9 ps-9 text-xs"
             />
           </div>
 
@@ -286,7 +285,7 @@ export function ExchangeRatesPage() {
             }}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="">All Currencies</option>
+            <option value="">{t('finance:exchangeRatesPage.allCurrencies')}</option>
             {currencies.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code} — {c.name}
@@ -302,14 +301,14 @@ export function ExchangeRatesPage() {
             }}
             className="h-9 rounded-md border border-input bg-background px-3 text-xs"
           >
-            <option value="all">All Statuses</option>
-            <option value="active">Active Only</option>
-            <option value="inactive">Inactive / Superseded</option>
+            <option value="all">{t('finance:exchangeRatesPage.allStatuses')}</option>
+            <option value="active">{t('finance:exchangeRatesPage.activeOnly')}</option>
+            <option value="inactive">{t('finance:exchangeRatesPage.inactiveOnly')}</option>
           </select>
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-slate-500">
-              {totalCount} {totalCount === 1 ? 'rate record' : 'rate records'}
+              {t('finance:exchangeRatesPage.rateRecordsCount', { count: totalCount })}
             </p>
             {hasActiveFilters && (
               <Button
@@ -319,7 +318,7 @@ export function ExchangeRatesPage() {
                 onClick={handleClearFilters}
               >
                 <RotateCcw className="size-3.5" />
-                Reset Filters
+                {t('finance:exchangeRatesPage.resetFilters')}
               </Button>
             )}
           </div>
@@ -332,12 +331,12 @@ export function ExchangeRatesPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                <TableHead className="w-48 px-4 py-3">Currency Pair</TableHead>
-                <TableHead className="px-4 py-3 text-right">Exchange Rate</TableHead>
-                <TableHead className="w-48 px-4 py-3">Effective Date & Time</TableHead>
-                <TableHead className="w-36 px-4 py-3">Created By</TableHead>
-                <TableHead className="w-28 px-4 py-3">Status</TableHead>
-                {admin && <TableHead className="w-28 px-4 py-3 text-right">Actions</TableHead>}
+                <TableHead className="w-48 px-4 py-3 text-start">{t('finance:exchangeRatesPage.th.pair')}</TableHead>
+                <TableHead className="px-4 py-3 text-end">{t('finance:exchangeRatesPage.th.rate')}</TableHead>
+                <TableHead className="w-48 px-4 py-3 text-start">{t('finance:exchangeRatesPage.th.effectiveDate')}</TableHead>
+                <TableHead className="w-36 px-4 py-3 text-start">{t('finance:exchangeRatesPage.th.createdBy')}</TableHead>
+                <TableHead className="w-28 px-4 py-3 text-start">{t('finance:exchangeRatesPage.th.status')}</TableHead>
+                {admin && <TableHead className="w-28 px-4 py-3 text-end">{t('finance:exchangeRatesPage.th.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -345,7 +344,7 @@ export function ExchangeRatesPage() {
                 <TableRow>
                   <TableCell colSpan={admin ? 6 : 5} className="h-48 text-center text-sm text-slate-500">
                     <Loader2 className="mx-auto mb-2 size-6 animate-spin text-primary" />
-                    Loading exchange rates...
+                    {t('finance:exchangeRatesPage.loading')}
                   </TableCell>
                 </TableRow>
               ) : query.isError ? (
@@ -360,10 +359,10 @@ export function ExchangeRatesPage() {
                     <div className="flex flex-col items-center justify-center gap-2">
                       <History className="size-8 text-slate-300 dark:text-slate-600" />
                       <p className="font-medium text-slate-700 dark:text-slate-300">
-                        No exchange rates found
+                        {t('finance:exchangeRatesPage.empty')}
                       </p>
                       <p className="text-xs text-slate-400">
-                        Try clearing search filters or create your first rate above.
+                        {t('finance:exchangeRatesPage.emptySub')}
                       </p>
                     </div>
                   </TableCell>
@@ -375,42 +374,36 @@ export function ExchangeRatesPage() {
                       key={rate.id}
                       className="hover:bg-slate-50/80 transition-colors dark:hover:bg-slate-800/40"
                     >
-                      <TableCell className="px-4 py-3.5">
+                      <TableCell className="px-4 py-3.5 text-start">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
                             {rate.fromCurrencyCode}
                           </span>
-                          <ArrowRight className="size-3.5 text-slate-400" />
+                          <ArrowRight className="size-3.5 text-slate-400 rtl:rotate-180" />
                           <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
                             {rate.toCurrencyCode}
                           </span>
                         </div>
                       </TableCell>
 
-                      <TableCell className="px-4 py-3.5 text-right font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      <TableCell className="px-4 py-3.5 text-end font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
                         1 {rate.fromCurrencyCode} ={' '}
-                        {rate.rate.toLocaleString(undefined, {
+                        {formatNumber(rate.rate, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 6,
                         })}{' '}
                         {rate.toCurrencyCode}
                       </TableCell>
 
-                      <TableCell className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300">
-                        {new Date(rate.effectiveAtUtc).toLocaleString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                      <TableCell className="px-4 py-3.5 text-start text-xs text-slate-700 dark:text-slate-300">
+                        {formatDateTime(rate.effectiveAtUtc)}
                       </TableCell>
 
-                      <TableCell className="px-4 py-3.5 text-xs text-slate-600 dark:text-slate-400">
-                        {rate.createdByUsername ?? 'System'}
+                      <TableCell className="px-4 py-3.5 text-start text-xs text-slate-600 dark:text-slate-400">
+                        {rate.createdByUsername ?? t('finance:exchangeRatesPage.systemUser')}
                       </TableCell>
 
-                      <TableCell className="px-4 py-3.5">
+                      <TableCell className="px-4 py-3.5 text-start">
                         <span
                           className={`inline-flex rounded px-2 py-0.5 text-[11px] font-semibold ${
                             rate.isActive
@@ -418,12 +411,12 @@ export function ExchangeRatesPage() {
                               : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                           }`}
                         >
-                          {rate.isActive ? 'Active' : 'Inactive'}
+                          {rate.isActive ? t('finance:exchangeRatesPage.active') : t('finance:exchangeRatesPage.inactive')}
                         </span>
                       </TableCell>
 
                       {admin && (
-                        <TableCell className="px-4 py-3.5 text-right">
+                        <TableCell className="px-4 py-3.5 text-end">
                           {rate.isActive && (
                             <Button
                               variant="outline"
@@ -433,14 +426,18 @@ export function ExchangeRatesPage() {
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    `Deactivate rate 1 ${rate.fromCurrencyCode} = ${rate.rate} ${rate.toCurrencyCode}?`
+                                    t('finance:exchangeRatesPage.deactivateConfirm', {
+                                      from: rate.fromCurrencyCode,
+                                      rate: formatNumber(rate.rate, { minimumFractionDigits: 2, maximumFractionDigits: 6 }),
+                                      to: rate.toCurrencyCode,
+                                    })
                                   )
                                 ) {
                                   actions.deactivate.mutate(rate.id)
                                 }
                               }}
                             >
-                              Deactivate
+                              {t('finance:exchangeRatesPage.deactivate')}
                             </Button>
                           )}
                         </TableCell>
@@ -491,6 +488,7 @@ function AddRateDialog({
   baseCurrencyId: string
   baseCurrencyCode: string
 }) {
+  const { t } = useTranslation(['finance', 'common'])
   const actions = useExchangeRateActions()
 
   const defaultFromCurrencyId = useMemo(() => {
@@ -550,20 +548,20 @@ function AddRateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Exchange Rate</DialogTitle>
+          <DialogTitle>{t('finance:exchangeRatesPage.dialog.title')}</DialogTitle>
           <DialogDescription>
-            Enter how much of the target currency equals exactly one unit of the source currency.
+            {t('finance:exchangeRatesPage.dialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="From Currency" error={form.formState.errors.fromCurrencyId?.message}>
+            <FormField label={t('finance:exchangeRatesPage.dialog.fromCurrency')} error={form.formState.errors.fromCurrencyId?.message}>
               <select
                 {...form.register('fromCurrencyId')}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
               >
-                <option value="">Select source currency</option>
+                <option value="">{t('finance:exchangeRatesPage.dialog.selectSource')}</option>
                 {currencies.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.code} — {c.name}
@@ -572,15 +570,15 @@ function AddRateDialog({
               </select>
             </FormField>
 
-            <FormField label="To Currency" error={form.formState.errors.toCurrencyId?.message}>
+            <FormField label={t('finance:exchangeRatesPage.dialog.toCurrency')} error={form.formState.errors.toCurrencyId?.message}>
               <select
                 {...form.register('toCurrencyId')}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
               >
-                <option value="">Select target currency</option>
+                <option value="">{t('finance:exchangeRatesPage.dialog.selectTarget')}</option>
                 {currencies.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.code} — {c.name} {c.id === baseCurrencyId ? '(Base)' : ''}
+                    {c.code} — {c.name} {c.id === baseCurrencyId ? t('finance:exchangeRatesPage.dialog.baseTag') : ''}
                   </option>
                 ))}
               </select>
@@ -588,14 +586,17 @@ function AddRateDialog({
           </div>
 
           <FormField
-            label={`Rate · 1 ${fromCurrObj?.code ?? 'source unit'} = how many ${toCurrObj?.code ?? baseCurrencyCode}?`}
+            label={t('finance:exchangeRatesPage.dialog.rateLabel', {
+              from: fromCurrObj?.code ?? '—',
+              to: toCurrObj?.code ?? baseCurrencyCode,
+            })}
             error={form.formState.errors.rate?.message}
           >
             <Input
               type="number"
               min="0.000001"
               step="0.000001"
-              placeholder="Enter the business-approved rate"
+              placeholder={t('finance:exchangeRatesPage.dialog.ratePlaceholder')}
               className="h-9 font-mono text-sm"
               {...form.register('rate', { valueAsNumber: true })}
             />
@@ -604,10 +605,12 @@ function AddRateDialog({
           {/* Conversion Preview Pill */}
           {fromCurrObj && toCurrObj && numericRate > 0 && (
             <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-xs dark:border-indigo-950 dark:bg-indigo-950/20">
-              <p className="font-semibold text-indigo-900 dark:text-indigo-200">Rate Preview:</p>
+              <p className="font-semibold text-indigo-900 dark:text-indigo-200">
+                {t('finance:exchangeRatesPage.dialog.preview')}
+              </p>
               <div className="mt-1 flex flex-col gap-1 font-mono text-slate-700 dark:text-slate-300">
                 <p>
-                  1 {fromCurrObj.code} = <strong>{numericRate.toLocaleString()}</strong> {toCurrObj.code}
+                  1 {fromCurrObj.code} = <strong>{formatNumber(numericRate)}</strong> {toCurrObj.code}
                 </p>
               </div>
             </div>
@@ -615,12 +618,16 @@ function AddRateDialog({
 
           {fromCurrObj && toCurrObj && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
-              Enter {toCurrObj.code} per 1 {fromCurrObj.code}. For POS USD tender, use USD as From and {baseCurrencyCode} as To. Do not enter the inverse rate.
+              {t('finance:exchangeRatesPage.dialog.guidance', {
+                to: toCurrObj.code,
+                from: fromCurrObj.code,
+                base: baseCurrencyCode,
+              })}
             </p>
           )}
 
           <FormField
-            label="Effective Date & Time"
+            label={t('finance:exchangeRatesPage.dialog.effectiveAt')}
             error={form.formState.errors.effectiveAtUtc?.message}
           >
             <Input type="datetime-local" className="h-9 text-xs" {...form.register('effectiveAtUtc')} />
@@ -632,14 +639,14 @@ function AddRateDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button
               type="submit"
               disabled={actions.create.isPending}
             >
               {actions.create.isPending && <Loader2 className="size-4 animate-spin" />}
-              Save Exchange Rate
+              {t('finance:exchangeRatesPage.dialog.saveRate')}
             </Button>
           </DialogFooter>
         </form>

@@ -22,22 +22,21 @@ public sealed class PosService
   private readonly AppDbContext _db;
   private readonly SalesService _sales;
   private readonly PosSettlementService _settlements;
-  private readonly PosSessionService _sessions;
   private readonly PaymentService _payments;
+  private readonly InvoiceSettlementReader _invoiceSettlements;
 
   public PosService(
     AppDbContext db,
     SalesService sales,
-    FinanceService finance,
-    PosSessionService sessions,
-    PosSettlementService? settlements = null,
-    PaymentService? payments = null)
+    PosSettlementService settlements,
+    PaymentService payments,
+    InvoiceSettlementReader invoiceSettlements)
   {
     _db = db;
     _sales = sales;
-    _sessions = sessions;
-    _settlements = settlements ?? new PosSettlementService(db, finance, sessions);
-    _payments = payments ?? new PaymentService(db);
+    _settlements = settlements;
+    _payments = payments;
+    _invoiceSettlements = invoiceSettlements;
   }
 
   public async Task<PosSetupResponse> GetSetupAsync(Guid userId, CancellationToken ct)
@@ -254,7 +253,6 @@ public sealed class PosService
     }
     if (request.CustomerId is not null) query = query.Where(sale => sale.SalesInvoice.CustomerId == request.CustomerId);
     if (request.BranchId is not null) query = query.Where(sale => sale.SalesInvoice.BranchId == request.BranchId);
-    if (request.PosSessionId is not null) query = query.Where(sale => sale.PosSessionId == request.PosSessionId);
     if (request.FromDate is not null)
     {
       var from = BusinessTime.UtcRange(business, request.FromDate.Value, request.FromDate.Value).FromUtc;
@@ -265,8 +263,6 @@ public sealed class PosService
       var to = BusinessTime.UtcRange(business, request.ToDate.Value, request.ToDate.Value).ToUtc;
       query = query.Where(sale => sale.CompletedAtUtc < to);
     }
-    if (request.PaymentMode is not null)
-      query = query.Where(sale => sale.PaymentMode == request.PaymentMode);
     if (request.RefundState is not null)
     {
       query = request.RefundState switch
@@ -287,14 +283,19 @@ public sealed class PosService
         sale.SalesInvoice.Branch.Name,
         sale.SalesInvoice.CustomerId,
         sale.SalesInvoice.Customer.Name,
-        sale.PosSessionId,
-        sale.PosSession.SessionNumber,
         sale.SalesInvoice.Total,
-        (sale.Tenders.Sum(tender => (decimal?)tender.BaseAmount) ?? 0m) - (sale.Change == null ? 0m : sale.Change.BaseAmount),
+        sale.SalesInvoice.PaymentAllocations.Where(allocation => !allocation.Payment.IsDeleted)
+          .Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m,
         Math.Max(sale.SalesInvoice.BaseTotal
-          - (sale.SalesInvoice.PaymentAllocations.Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
+          - (sale.SalesInvoice.PaymentAllocations.Where(allocation => !allocation.Payment.IsDeleted)
+            .Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
           - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted).Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m),
           0m),
+        Math.Max((sale.SalesInvoice.PaymentAllocations.Where(allocation => !allocation.Payment.IsDeleted)
+            .Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
+          - Math.Max(sale.SalesInvoice.BaseTotal
+            - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+              .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m), 0m), 0m),
         sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
           .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m,
         sale.SalesInvoice.BaseTotal - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
@@ -305,9 +306,24 @@ public sealed class PosService
               .Sum(refund => (decimal?)refund.TotalRefundBase) ?? 0m) >= sale.SalesInvoice.BaseTotal
             ? PosRefundState.FullyRefunded
             : PosRefundState.PartiallyRefunded,
-        sale.PaymentMode,
+        (sale.SalesInvoice.PaymentAllocations.Where(allocation => !allocation.Payment.IsDeleted)
+            .Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
+            > Math.Max(sale.SalesInvoice.BaseTotal
+              - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+                .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m), 0m)
+          ? SalesInvoicePaymentStatus.Overpaid
+          : (sale.SalesInvoice.PaymentAllocations.Where(allocation => !allocation.Payment.IsDeleted)
+              .Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m)
+              >= Math.Max(sale.SalesInvoice.BaseTotal
+                - (sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
+                  .Sum(refund => (decimal?)refund.ReceivableReversalBase) ?? 0m), 0m)
+            ? SalesInvoicePaymentStatus.Paid
+            : (sale.SalesInvoice.PaymentAllocations.Where(allocation => !allocation.Payment.IsDeleted)
+                .Sum(allocation => (decimal?)allocation.BaseAmount) ?? 0m) <= 0m
+              ? SalesInvoicePaymentStatus.Unpaid
+              : SalesInvoicePaymentStatus.PartiallyPaid,
         sale.SalesInvoice.BaseCurrency.Code,
-        sale.CashierUser.Username))
+        sale.OperatorUser.Username))
       .ToPagedResultAsync(request, ct);
   }
 
@@ -315,7 +331,8 @@ public sealed class PosService
   {
     var sale = await SaleQuery().SingleOrDefaultAsync(item => item.SalesInvoiceId == salesInvoiceId, ct)
       ?? throw new NotFoundException(ErrorCodes.Pos.SaleNotFound, "POS Sale not found.");
-    return ToResponse(sale);
+    var settlement = await _invoiceSettlements.GetAsync(salesInvoiceId, ct);
+    return ToResponse(sale, settlement);
   }
 
   public async Task<PosSaleResponse> CompleteSaleAsync(
@@ -335,7 +352,7 @@ public sealed class PosService
     catch (Exception exception) when (PosConcurrency.IsConflict(exception))
     {
       throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
-        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
+        "Another checkout changed stock, balance, or numbering. Review the cart and try again.");
     }
     if (existing is not null) return existing;
     try
@@ -348,7 +365,7 @@ public sealed class PosService
       existing = await FindIdempotentSaleAsync(request.ClientRequestId, fingerprint, ct);
       if (existing is not null) return existing;
       throw new ConflictException(ErrorCodes.Pos.ConcurrentCheckout,
-        "Another checkout changed stock, balance, session, or numbering. Review the cart and try again.");
+        "Another checkout changed stock, balance, or numbering. Review the cart and try again.");
     }
   }
 
@@ -362,16 +379,9 @@ public sealed class PosService
       ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
       : null;
 
-    var session = await _sessions.RequireOpenSessionAsync(
-      userId, request.PosSessionId, request.BranchId, ct);
     var business = await _db.Businesses.AsNoTracking().Include(item => item.BaseCurrency)
       .SingleOrDefaultAsync(item => item.IsActive && item.IsSetupCompleted, ct)
       ?? throw BusinessNotConfigured();
-    var baseCashbox = session.OpeningCounts.SingleOrDefault(
-      count => count.CurrencyId == business.BaseCurrencyId);
-    if (request.PaymentMode == PosPaymentMode.Paid && baseCashbox is null)
-      throw new BadRequestException(ErrorCodes.Pos.BaseCashboxRequired,
-        $"This POS Session has no configured {business.BaseCurrency.Code} Cashbox. Close it and correct the Register configuration.");
     var existing = await FindIdempotentSaleAsync(request.ClientRequestId, fingerprint, ct);
     if (existing is not null) return existing;
     var date = BusinessTime.DateAt(business, DateTime.UtcNow);
@@ -390,6 +400,10 @@ public sealed class PosService
       .ToDictionaryAsync(product => product.Id, ct);
     if (services.Count != serviceIds.Count || products.Count != productIds.Count)
       throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "Every POS line must reference an existing Service or Product.");
+    if (request.Lines.Any(line => line.LineType == SalesLineType.Service
+      && (line.ProfessionalId is null || line.ProfessionalId == Guid.Empty)))
+      throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
+        "Every POS Service line requires a Professional.");
     var professionalIds = request.Lines.Where(line => line.ProfessionalId is not null)
       .Select(line => line.ProfessionalId!.Value).Distinct().ToList();
     if (professionalIds.Count > 0)
@@ -425,14 +439,12 @@ public sealed class PosService
 
     var settlement = await _settlements.PrepareAsync(new PosSettlementRequest(
       request.BranchId,
-      request.PosSessionId,
       request.CustomerId,
       saleTotal,
       request.PaymentMode,
-      request.Tenders,
-      request.Change), userId, management: false, ct, session, business, rateAtUtc);
+      request.Collections,
+      request.Change), userId, ct, business, rateAtUtc);
 
-    var documentNumber = await NextDocumentNumberAsync(ct);
     var branch = await _db.Branches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.BranchId, ct)
       ?? throw new BadRequestException(ErrorCodes.Finance.BranchInvalid, "Select an active branch.");
     var customerId = request.CustomerId ?? branch.WalkInCustomerId;
@@ -445,17 +457,13 @@ public sealed class PosService
       null,
       "Immediate POS sale",
       salesLines);
-    var invoice = await _sales.PrepareImmediateSaleAsync(
-      invoiceRequest, documentNumber, userId, ct);
+    var invoice = await _sales.PrepareImmediateSaleAsync(invoiceRequest, userId, ct);
     var completedAt = invoice.PostedAtUtc!.Value;
     var sale = new PosContextEntity
     {
       SalesInvoiceId = invoice.Id,
       SalesInvoice = invoice,
-      PaymentMode = request.PaymentMode,
-      PosSessionId = session.Id,
-      PosSession = session,
-      CashierUserId = userId,
+      OperatorUserId = userId,
       CompletedAtUtc = completedAt,
       ClientRequestId = request.ClientRequestId,
       RequestFingerprint = fingerprint
@@ -463,12 +471,12 @@ public sealed class PosService
 
     _db.PosContexts.Add(sale);
 
-    var settledBase = Money(settlement.Tenders.Sum(tender => tender.BaseAmount)
+    var settledBase = Money(settlement.Collections.Sum(line => line.BaseAmount)
       - (settlement.Change?.BaseAmount ?? 0m));
     if (settledBase > 0)
     {
-      var moneyLines = settlement.Tenders.Select(tender => new PaymentMoneyLineCommand(
-        tender.Account.Id, tender.Request.Amount, tender.ExchangeRate, PaymentMoneyDirection.Collection)).ToList();
+      var moneyLines = settlement.Collections.Select(line => new PaymentMoneyLineCommand(
+        line.Account.Id, line.Request.Amount, line.ExchangeRate, PaymentMoneyDirection.Collection)).ToList();
       if (settlement.Change is not null)
         moneyLines.Add(new PaymentMoneyLineCommand(settlement.Change.Account.Id,
           settlement.Change.Request.Amount, settlement.Change.ExchangeRate, PaymentMoneyDirection.Change));
@@ -482,9 +490,6 @@ public sealed class PosService
         "POS checkout settlement",
         [new PaymentAllocationCommand(invoice.Id, settledBase)],
         moneyLines), userId, ct);
-      sale.Payment = payment;
-      sale.PaymentId = payment.Id;
-      _settlements.AddEffects(settlement, sale, payment);
     }
     await _db.SaveChangesAsync(ct);
     if (transaction is not null) await transaction.CommitAsync(ct);
@@ -527,22 +532,20 @@ public sealed class PosService
         throw new ConflictException(ErrorCodes.Pos.SettlementHasRefundDependency,
           "This POS settlement cannot be changed because a posted refund or void depends on it.");
 
-      var session = await _sessions.FindSessionForInvoiceCorrectionAsync(
-        context.PosSessionId, invoice.BranchId, ct)
-        ?? throw SettlementDependent("The original POS Session could not be identified safely.");
-      if (!session.PosContexts.Any(item => item.SalesInvoiceId == salesInvoiceId))
-        throw SettlementDependent("The POS context is not consistently linked to its original session.");
-      var zIdentity = ValidateAndCaptureZIdentity(session);
       var preparation = await _settlements.PrepareAsync(new PosSettlementRequest(
         invoice.BranchId,
-        context.PosSessionId,
         invoice.CustomerId,
         invoice.BaseTotal,
         request.PaymentMode,
-        request.Tenders,
-        request.Change), userId, management: true, ct, existingSession: session);
-      var payment = context.PaymentId is Guid paymentId
-        ? await _payments.FindTrackedAsync(paymentId, ct)
+        request.Collections,
+        request.Change), userId, ct);
+      var paymentId = await _db.Payments.AsNoTracking().IgnoreQueryFilters()
+        .Where(item => !item.IsDeleted && item.Origin == PaymentOrigin.Pos
+          && item.SourceSalesInvoiceId == invoice.Id)
+        .Select(item => (Guid?)item.Id)
+        .SingleOrDefaultAsync(ct);
+      var payment = paymentId is Guid id
+        ? await _payments.FindTrackedAsync(id, ct)
           ?? throw SettlementDependent("The POS Payment could not be identified safely.")
         : null;
       if (payment is not null
@@ -554,25 +557,16 @@ public sealed class PosService
         throw new BadRequestException(ErrorCodes.Finance.PaymentSourceInvoiceMismatch,
           "The POS Payment does not match its source Sales Invoice.");
 
-      var before = SettlementSnapshot(context, session);
-      RemoveZReport(session, zIdentity);
-      _db.PosTenders.RemoveRange(context.Tenders);
-      if (context.Change is not null) _db.PosChanges.Remove(context.Change);
-      context.Tenders.Clear();
-      context.Change = null;
+      var before = SettlementSnapshot(context, payment);
 
-      // Tender/change rows reference PaymentMoneyLines, so flush their removal before
-      // rebuilding or deleting the Payment-owned accounting effects.
-      await _db.SaveChangesAsync(ct);
-
-      var settledBase = Money(preparation.Tenders.Sum(tender => tender.BaseAmount)
+      var settledBase = Money(preparation.Collections.Sum(line => line.BaseAmount)
         - (preparation.Change?.BaseAmount ?? 0m));
       if (settledBase > 0m)
       {
-        var moneyLines = preparation.Tenders.Select(tender => new PaymentMoneyLineCommand(
-          tender.Account.Id,
-          tender.Request.Amount,
-          tender.ExchangeRate,
+        var moneyLines = preparation.Collections.Select(line => new PaymentMoneyLineCommand(
+          line.Account.Id,
+          line.Request.Amount,
+          line.ExchangeRate,
           PaymentMoneyDirection.Collection)).ToList();
         if (preparation.Change is not null)
           moneyLines.Add(new PaymentMoneyLineCommand(
@@ -603,21 +597,15 @@ public sealed class PosService
             userId,
             ct);
 
-        context.Payment = payment;
-        context.PaymentId = payment.Id;
-        _settlements.AddEffects(preparation, context, payment);
       }
       else if (payment is not null)
       {
         await _payments.DeleteOwnedPaymentAsync(payment, reason, userId, ct);
-        context.Payment = null;
-        context.PaymentId = null;
+        payment = null;
       }
 
       var correctedAtUtc = DateTime.UtcNow;
-      context.PaymentMode = request.PaymentMode;
       invoice.UpdatedAtUtc = correctedAtUtc;
-      RegenerateZReport(session, zIdentity, correctedAtUtc);
       _db.ActivityLogs.Add(new ActivityLogEntity
       {
         BranchId = invoice.BranchId,
@@ -629,7 +617,7 @@ public sealed class PosService
         Description = "Corrected POS settlement",
         Reason = reason,
         BeforeState = before,
-        AfterState = SettlementSnapshot(context, session),
+        AfterState = SettlementSnapshot(context, payment),
         TimestampUtc = correctedAtUtc
       });
 
@@ -652,8 +640,6 @@ public sealed class PosService
   private IQueryable<PosContextEntity> SettlementCorrectionQuery() => _db.PosContexts
     .Include(context => context.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(context => context.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
-    .Include(context => context.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
-    .Include(context => context.Change).ThenInclude(change => change!.PaymentMoneyLine)
     .Include(context => context.Refunds);
 
   private static void EnsureSettlementTimestamp(SalesInvoiceEntity invoice, DateTime expectedUpdatedAtUtc)
@@ -665,99 +651,24 @@ public sealed class PosService
       throw SettlementConcurrencyConflict();
   }
 
-  private static PosZReportIdentity? ValidateAndCaptureZIdentity(PosSessionEntity session)
-  {
-    if (session.Status == PosSessionStatus.Open)
-    {
-      if (session.ZReport is not null || session.ClosingCounts.Count > 0)
-        throw SettlementDependent("The open POS Session has closing data that cannot be classified safely.");
-      return null;
-    }
-    if (session.Status != PosSessionStatus.Closed)
-      throw SettlementDependent("The POS Session status cannot be classified safely.");
-
-    var report = session.ZReport
-      ?? throw SettlementDependent("The closed POS Session has no Z Report to regenerate safely.");
-    if (session.ClosedAtUtc is null || session.ClosedByUserId is null
-      || report.PosSessionId != session.Id
-      || report.BranchId != session.BranchId
-      || report.RegisterId != session.RegisterId
-      || report.CashierUserId != session.CashierUserId
-      || report.ClosedByUserId != session.ClosedByUserId
-      || report.OpenedAtUtc != session.OpenedAtUtc
-      || report.ClosedAtUtc != session.ClosedAtUtc)
-      throw SettlementDependent("The Z Report identity does not consistently match its closed POS Session.");
-
-    var openingAccounts = session.OpeningCounts.Select(count => count.MoneyAccountId).Order().ToList();
-    var closingAccounts = session.ClosingCounts.Select(count => count.MoneyAccountId).Order().ToList();
-    if (openingAccounts.Count == 0
-      || session.ClosingCounts.Select(count => count.MoneyAccountId).Distinct().Count() != session.ClosingCounts.Count
-      || !openingAccounts.SequenceEqual(closingAccounts))
-      throw SettlementDependent("The closed POS Session has incomplete physical closing counts.");
-
-    return new PosZReportIdentity(
-      report.Id, report.ReportNumber, report.BranchId, report.BranchCode, report.BranchName,
-      report.RegisterId, report.RegisterCode, report.RegisterName,
-      report.CashierUserId, report.CashierUsername,
-      report.ClosedByUserId, report.ClosedByUsername,
-      report.BaseCurrencyId, report.BaseCurrencyCode, report.OpenedAtUtc, report.ClosedAtUtc);
-  }
-
-  private void RemoveZReport(PosSessionEntity session, PosZReportIdentity? identity)
-  {
-    if (identity is null) return;
-    var report = session.ZReport
-      ?? throw SettlementDependent("The closed POS Session Z Report could not be removed safely.");
-    if (report.Id != identity.Id || report.ReportNumber != identity.ReportNumber)
-      throw SettlementDependent("The closed POS Session Z Report identity changed during correction.");
-    _db.PosZPaymentSummaries.RemoveRange(report.PaymentSummaries);
-    _db.PosZDrawerSummaries.RemoveRange(report.DrawerSummaries);
-    _db.PosZReports.Remove(report);
-    report.PaymentSummaries.Clear();
-    report.DrawerSummaries.Clear();
-    session.ZReport = null;
-  }
-
-  private void RegenerateZReport(
-    PosSessionEntity session,
-    PosZReportIdentity? identity,
-    DateTime correctedAtUtc)
-  {
-    if (identity is null) return;
-    if (session.Status != PosSessionStatus.Closed)
-      throw SettlementDependent("The POS Session must remain closed while its Z Report is regenerated.");
-    _db.PosZReports.Add(_sessions.RegenerateClosedSessionZReport(
-      session, identity, new DateTimeOffset(correctedAtUtc)));
-  }
-
-  private static string SettlementSnapshot(PosContextEntity context, PosSessionEntity session) =>
+  private static string SettlementSnapshot(PosContextEntity context, PaymentEntity? payment) =>
     JsonSerializer.Serialize(new
     {
       context.SalesInvoiceId,
-      context.PaymentMode,
-      context.PaymentId,
       context.SalesInvoice.UpdatedAtUtc,
-      Tenders = context.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new
+      PaymentId = payment?.Id,
+      PaymentDocumentNumber = payment?.DocumentNumber,
+      MoneyLines = payment?.MoneyLines.OrderBy(line => line.Sequence).Select(line => new
       {
-        tender.Id,
-        tender.Sequence,
-        tender.MoneyAccountId,
-        tender.TenderedAmount,
-        tender.ExchangeRate,
-        tender.BaseAmount,
-        tender.PaymentMoneyLineId
-      }),
-      Change = context.Change is null ? null : new
-      {
-        context.Change.Id,
-        context.Change.MoneyAccountId,
-        context.Change.Amount,
-        context.Change.ExchangeRate,
-        context.Change.BaseAmount,
-        context.Change.PaymentMoneyLineId
-      },
-      ZReportId = session.ZReport?.Id,
-      ZReportNumber = session.ZReport?.ReportNumber
+        line.Id,
+        line.Sequence,
+        line.Direction,
+        line.MoneyAccountId,
+        line.Amount,
+        line.ExchangeRate,
+        line.BaseAmount,
+        line.MoneyLedgerEntryId
+      })
     });
 
   private static ConflictException SettlementDependent(string message) =>
@@ -769,61 +680,37 @@ public sealed class PosService
 
   private IQueryable<PosContextEntity> SaleQuery() => _db.PosContexts.AsNoTracking()
     .Where(sale => !sale.SalesInvoice.IsDeleted)
-    .Include(sale => sale.CashierUser)
+    .Include(sale => sale.OperatorUser)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Customer)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Branch)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Warehouse)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.BaseCurrency)
-    .Include(sale => sale.Payment)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Movements)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.PaymentAllocations).ThenInclude(allocation => allocation.Payment)
+      .ThenInclude(payment => payment.MoneyLines).ThenInclude(line => line.MoneyAccount).ThenInclude(account => account.Currency)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Service)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Product)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.UnitOfMeasure)
     .Include(sale => sale.SalesInvoice).ThenInclude(invoice => invoice.Lines).ThenInclude(line => line.Professional)
-    .Include(sale => sale.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(sale => sale.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
-    .Include(sale => sale.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(sale => sale.Change).ThenInclude(change => change!.PaymentMoneyLine)
     .Include(sale => sale.Refunds).ThenInclude(refund => refund.ApprovedByUser);
 
-  private static PosSaleResponse ToResponse(PosContextEntity sale)
+  private static PosSaleResponse ToResponse(PosContextEntity sale, InvoiceSettlement settlement)
   {
     var invoice = sale.SalesInvoice;
-    var tenders = sale.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosTenderResponse(
-      tender.Id,
-      tender.Sequence,
-      tender.MoneyAccountId,
-      tender.MoneyAccount.Code,
-      tender.MoneyAccount.Name,
-      tender.MoneyAccount.CurrencyId,
-      tender.MoneyAccount.Currency.Code,
-      tender.TenderedAmount,
-      tender.ExchangeRate,
-      tender.BaseAmount,
-      tender.PaymentMoneyLineId,
-      tender.PaymentMoneyLine.MoneyLedgerEntryId)).ToList();
-    var change = sale.Change is null ? null : new PosChangeResponse(
-      sale.Change.Id,
-      sale.Change.MoneyAccountId,
-      sale.Change.MoneyAccount.Code,
-      sale.Change.MoneyAccount.Name,
-      sale.Change.MoneyAccount.CurrencyId,
-      sale.Change.MoneyAccount.Currency.Code,
-      sale.Change.Amount,
-      sale.Change.ExchangeRate,
-      sale.Change.BaseAmount,
-      sale.Change.PaymentMoneyLineId,
-      sale.Change.PaymentMoneyLine.MoneyLedgerEntryId);
-    var tenderedBase = Money(tenders.Sum(tender => tender.BaseAmount));
-    var changeBase = change?.BaseAmount ?? 0;
-    var settledBase = Money(tenderedBase - changeBase);
-    var collectedBase = Money(invoice.PaymentAllocations.Sum(allocation => allocation.BaseAmount));
+    var payment = invoice.PaymentAllocations.Select(allocation => allocation.Payment)
+      .Where(item => !item.IsDeleted && item.Origin == PaymentOrigin.Pos
+        && item.SourceSalesInvoiceId == invoice.Id)
+      .DistinctBy(item => item.Id)
+      .SingleOrDefault();
+    var moneyLines = payment?.MoneyLines.OrderBy(line => line.Sequence)
+      .Select(ToMoneyLineResponse).ToList() ?? [];
+    var collections = moneyLines.Where(line => line.Direction == PaymentMoneyDirection.Collection).ToList();
+    var change = moneyLines.SingleOrDefault(line => line.Direction == PaymentMoneyDirection.Change);
+    var grossCollectionBase = Money(collections.Sum(line => line.BaseAmount));
+    var changeBase = change?.BaseAmount ?? 0m;
     var postedRefunds = sale.Refunds.Where(refund => refund.Status == PosRefundStatus.Posted)
       .OrderBy(refund => refund.PostedAtUtc).ToList();
     var refundedBase = Money(postedRefunds.Sum(refund => refund.TotalRefundBase));
-    var receivableReversalBase = Money(postedRefunds.Sum(refund => refund.ReceivableReversalBase));
-    var outstandingBase = Math.Max(Money(invoice.BaseTotal - collectedBase - receivableReversalBase), 0);
     var remainingRefundableBase = Math.Max(Money(invoice.BaseTotal - refundedBase), 0);
     var refundStatus = refundedBase <= 0
       ? PosRefundState.NotRefunded
@@ -833,7 +720,6 @@ public sealed class PosService
     return new PosSaleResponse(
       sale.SalesInvoiceId,
       invoice.DocumentNumber,
-      sale.PosSessionId,
       invoice.CustomerId,
       invoice.Customer.Name,
       invoice.BranchId,
@@ -846,19 +732,20 @@ public sealed class PosService
       invoice.BaseCurrency.Code,
       invoice.Subtotal,
       invoice.Total,
-      tenderedBase,
+      grossCollectionBase,
       changeBase,
-      settledBase,
-      outstandingBase,
+      settlement.CollectedBaseAmount,
+      settlement.OutstandingBaseAmount,
+      settlement.OverpaidBaseAmount,
       refundedBase,
       remainingRefundableBase,
       Money(invoice.BaseTotal - refundedBase),
       refundStatus,
-      sale.PaymentMode,
-      sale.PaymentId,
-      sale.Payment?.DocumentNumber,
-      sale.CashierUserId,
-      sale.CashierUser.Username,
+      PaymentStatus(settlement),
+      payment?.Id,
+      payment?.DocumentNumber,
+      sale.OperatorUserId,
+      sale.OperatorUser.Username,
       sale.CompletedAtUtc,
       invoice.UpdatedAtUtc,
       invoice.JournalEntryId!.Value,
@@ -882,7 +769,7 @@ public sealed class PosService
         line.UnitPrice,
         line.BaseUnitPrice,
         line.LineAmount)).ToList(),
-      tenders,
+      collections,
       change,
       postedRefunds.Select(refund => new PosRefundSummaryResponse(
         refund.Id, refund.DocumentNumber, refund.IsVoid, refund.Reason,
@@ -890,42 +777,68 @@ public sealed class PosService
         refund.PostedAtUtc, refund.ApprovedByUser.Username)).ToList());
   }
 
+  private static PosPaymentMoneyLineResponse ToMoneyLineResponse(PaymentMoneyLineEntity line) => new(
+    line.Id,
+    line.Sequence,
+    line.Direction,
+    line.MoneyAccountId,
+    line.MoneyAccount.Code,
+    line.MoneyAccount.Name,
+    line.MoneyAccount.CurrencyId,
+    line.MoneyAccount.Currency.Code,
+    line.Amount,
+    line.ExchangeRate,
+    line.BaseAmount,
+    line.MoneyLedgerEntryId);
+
+  private static SalesInvoicePaymentStatus PaymentStatus(InvoiceSettlement settlement) =>
+    settlement.OverpaidBaseAmount > 0m
+      ? SalesInvoicePaymentStatus.Overpaid
+      : settlement.OutstandingBaseAmount <= 0m
+        ? SalesInvoicePaymentStatus.Paid
+        : settlement.CollectedBaseAmount <= 0m
+          ? SalesInvoicePaymentStatus.Unpaid
+          : SalesInvoicePaymentStatus.PartiallyPaid;
+
   private static void ValidateRequestShape(CompletePosSaleRequest request)
   {
-    if (request.PosSessionId == Guid.Empty)
-      throw new BadRequestException(ErrorCodes.Pos.SessionRequired, "Open a POS Session before completing a checkout.");
     if (request.Lines.Count == 0)
       throw new BadRequestException(ErrorCodes.Pos.LinesRequired, "Add at least one Service or Product.");
     if (!Enum.IsDefined(request.PaymentMode))
-      throw new BadRequestException(ErrorCodes.Pos.TenderInvalid, "Select a valid POS payment mode.");
-    if (request.PaymentMode is PosPaymentMode.Paid or PosPaymentMode.Partial && request.Tenders.Count == 0)
-      throw new BadRequestException(ErrorCodes.Pos.TenderRequired, "Add at least one tender line.");
-    if (request.PaymentMode == PosPaymentMode.Credit && request.Tenders.Count > 0)
-      throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
-        "Credit POS Sales cannot include a tender. Choose Partial when money is received now.");
+      throw new BadRequestException(ErrorCodes.Pos.CollectionInvalid, "Select a valid POS payment mode.");
+    if (request.PaymentMode is PosPaymentMode.Paid or PosPaymentMode.Partial && request.Collections.Count == 0)
+      throw new BadRequestException(ErrorCodes.Pos.CollectionRequired, "Add at least one collection money line.");
+    if (request.PaymentMode == PosPaymentMode.Credit && request.Collections.Count > 0)
+      throw new BadRequestException(ErrorCodes.Pos.CollectionInvalid,
+        "Credit POS Sales cannot include collection money lines. Choose Partial when money is received now.");
     if (request.PaymentMode != PosPaymentMode.Paid && request.Change is not null)
       throw new BadRequestException(ErrorCodes.Pos.ChangeNotDue,
         "Change can only be recorded for a fully paid POS Sale.");
     if (request.Lines.Any(line => line.Quantity <= 0))
       throw new BadRequestException(ErrorCodes.Pos.LineInvalid, "POS quantities must be greater than zero.");
-    if (request.Tenders.Any(tender => tender.MoneyAccountId == Guid.Empty || tender.Amount <= 0))
-      throw new BadRequestException(ErrorCodes.Pos.TenderInvalid,
-        "Every tender requires a Money Account and an amount greater than zero.");
+    if (request.Collections.Any(line => line.MoneyAccountId == Guid.Empty || line.Amount <= 0))
+      throw new BadRequestException(ErrorCodes.Pos.CollectionInvalid,
+        "Every collection requires a Money Account and an amount greater than zero.");
     if (request.Change is not null
       && (request.Change.MoneyAccountId == Guid.Empty || request.Change.Amount <= 0))
       throw new BadRequestException(ErrorCodes.Pos.ChangeMismatch,
         "Change requires a Money Account and an amount greater than zero.");
+    if (request.Lines.Any(line => line.LineType == SalesLineType.Service
+      && (line.ProfessionalId is null || line.ProfessionalId == Guid.Empty)))
+      throw new BadRequestException(ErrorCodes.Sales.ProfessionalInvalid,
+        "Every POS Service line requires a Professional.");
 
     foreach (var line in request.Lines)
     {
       var service = line.LineType == SalesLineType.Service && line.ServiceId is not null && line.ServiceId != Guid.Empty
-        && line.ProductId is null && line.UnitOfMeasureId is null;
+        && line.ProductId is null && line.UnitOfMeasureId is null
+        && line.ProfessionalId is not null && line.ProfessionalId != Guid.Empty;
       var product = line.LineType == SalesLineType.Product && line.ProductId is not null && line.ProductId != Guid.Empty
         && line.ServiceId is null && line.ProfessionalId is null
         && line.UnitOfMeasureId is not null && line.UnitOfMeasureId != Guid.Empty;
       if (!service && !product)
         throw new BadRequestException(ErrorCodes.Pos.LineInvalid,
-          "Each POS line must reference exactly one Service or Product; only Services may have a Professional.");
+          "Each POS line must reference exactly one Service or Product, and every Service requires a Professional.");
     }
 
     var serviceIds = request.Lines.Where(line => line.LineType == SalesLineType.Service)
@@ -934,16 +847,6 @@ public sealed class PosService
       .Select(line => line.ProductId!.Value).ToList();
     if (serviceIds.Distinct().Count() != serviceIds.Count || productIds.Distinct().Count() != productIds.Count)
       throw new BadRequestException(ErrorCodes.Pos.DuplicateLine, "A Service or Product can appear only once in the POS cart.");
-  }
-
-  private async Task<string> NextDocumentNumberAsync(CancellationToken ct)
-  {
-    var last = await _db.SalesInvoices.IgnoreQueryFilters()
-      .Where(invoice => invoice.PosContext != null)
-      .Select(invoice => invoice.DocumentNumber)
-      .OrderByDescending(number => number).FirstOrDefaultAsync(ct);
-    var next = last is not null && last.StartsWith("POS-") && int.TryParse(last[4..], out var value) ? value + 1 : 1;
-    return $"POS-{next:000000}";
   }
 
   private static decimal Money(decimal value) => decimal.Round(value, 4, MidpointRounding.AwayFromZero);
@@ -969,15 +872,14 @@ public sealed class PosService
   private static string Fingerprint(CompletePosSaleRequest request) => Hash(new
   {
     request.BranchId,
-    request.PosSessionId,
     request.WarehouseId,
     request.CustomerId,
     request.PaymentMode,
     Lines = request.Lines
       .OrderBy(line => line.LineType).ThenBy(line => line.ServiceId).ThenBy(line => line.ProductId)
       .Select(line => new { line.LineType, line.ServiceId, line.ProductId, line.UnitOfMeasureId, line.Quantity, line.ProfessionalId }),
-    Tenders = request.Tenders.OrderBy(tender => tender.MoneyAccountId).ThenBy(tender => tender.Amount)
-      .Select(tender => new { tender.MoneyAccountId, tender.Amount }),
+    Collections = request.Collections.OrderBy(line => line.MoneyAccountId).ThenBy(line => line.Amount)
+      .Select(line => new { line.MoneyAccountId, line.Amount }),
     Change = request.Change is null ? null : new { request.Change.MoneyAccountId, request.Change.Amount }
   });
 

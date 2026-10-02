@@ -1,0 +1,78 @@
+{
+  "title": "Professionals",
+  "description": "Manage the team members available for services and POS sales.",
+  "addProfessional": "Add professional",
+  "searchPlaceholder": "Search name, phone, or email",
+  "searchLabel": "Search professionals",
+  "statusFilter": "Professional status",
+  "allStatuses": "All statuses",
+  "branchFilter": "Professional branch",
+  "allBranches": "All branches",
+  "count_one": "{{count}} professional",
+  "count_other": "{{count}} professionals",
+  "th": {
+    "professional": "Professional",
+    "contact": "Contact",
+    "branches": "Branches",
+    "linkedAccount": "Linked account",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "unassigned": "Unassigned",
+  "inactiveSuffix": "(inactive)",
+  "noProfessionals": "No professionals found.",
+  "actions": {
+    "edit": "Edit {{name}}",
+    "activate": "Activate {{name}}",
+    "deactivate": "Deactivate {{name}}",
+    "delete": "Delete {{name}}",
+    "confirmDelete": "Permanently delete {{name}}? This cannot be undone."
+  },
+  "dialog": {
+    "titleAdd": "Add professional",
+    "titleEdit": "Edit {{name}}",
+    "description": "Profiles control service availability. Login account access is managed separately.",
+    "fields": {
+      "name": "Name",
+      "phone": "Phone",
+      "email": "Email",
+      "notes": "Notes",
+      "linkedAccount": "Linked login account",
+      "noLinkedAccount": "No linked account",
+      "posBranches": "POS branches",
+      "loadingBranches": "Loading branches…",
+      "noActiveBranches": "No active branches are available.",
+      "activeInPos": "Active and available in POS"
+    },
+    "cancel": "Cancel",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "create": "Add professional"
+  },
+  "performance": {
+    "title": "Professional Performance",
+    "description": "Service activity and posted refunds in the selected branch and base currency.",
+    "period": "Period",
+    "periods": { "today": "Today", "thisWeek": "This week", "thisMonth": "This month", "custom": "Custom" },
+    "professional": "Professional",
+    "allProfessionals": "All professionals",
+    "service": "Service",
+    "allServices": "All services",
+    "source": "Source",
+    "sources": { "all": "All", "pos": "POS", "manual": "Manual" },
+    "fromDate": "From date",
+    "toDate": "To date",
+    "branchHint": "Uses the global branch selection",
+    "serviceQuantity": "Service quantity",
+    "visitsServed": "Visits served",
+    "gross": "Gross value",
+    "refunds": "Refund value",
+    "net": "Net value",
+    "empty": "No sale or refund activity matches these filters.",
+    "invalidDates": "Choose a valid custom date range."
+  }
+}

@@ -25,7 +25,15 @@ vi.mock('@/lib/theme', () => ({
   useThemeStore: () => ({ theme: 'light', toggleTheme: vi.fn() }),
 }))
 
-vi.mock('@/lib/i18n', () => ({ changeAppLanguage: vi.fn() }))
+vi.mock('@/lib/i18n', () => ({
+  changeAppLanguage: vi.fn(),
+  isRtlLanguage: () => false,
+  languages: {
+    en: { code: 'en', nativeName: 'English' },
+    ckb: { code: 'ckb', nativeName: 'کوردی' },
+    ar: { code: 'ar', nativeName: 'العربية' },
+  },
+}))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -51,19 +59,19 @@ function mount(path: string) {
 afterEach(cleanup)
 
 describe('AppLayout POS routes', () => {
-  it('keeps the ERP shell on the POS session dashboard', () => {
-    mount('/pos')
-
-    expect(screen.getByText('ERP sidebar')).toBeInTheDocument()
-    expect(screen.getByText('Dollar rate control')).toBeInTheDocument()
-    expect(screen.getByTestId('branch-workspace')).toContainElement(screen.getByText('Route content'))
-  })
-
   it('renders the POS workspace without the ERP shell', () => {
-    mount('/pos/workspace')
+    mount('/pos')
 
     expect(screen.queryByText('ERP sidebar')).not.toBeInTheDocument()
     expect(screen.queryByText('Dollar rate control')).not.toBeInTheDocument()
+    expect(screen.getByTestId('branch-workspace')).toContainElement(screen.getByText('Route content'))
+  })
+
+  it('keeps the ERP shell on POS receipt routes', () => {
+    mount('/pos/sales/invoice-1')
+
+    expect(screen.getByText('ERP sidebar')).toBeInTheDocument()
+    expect(screen.getByText('Dollar rate control')).toBeInTheDocument()
     expect(screen.getByTestId('branch-workspace')).toContainElement(screen.getByText('Route content'))
   })
 })

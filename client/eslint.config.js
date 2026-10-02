@@ -122,5 +122,15 @@ export default defineConfig([
     },
   },
 
+  {
+    // Tests register feature-owned translations without importing feature
+    // entry points, which would eagerly load production components before
+    // per-test mocks are installed.
+    files: ['src/test/setup.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
+
   prettier,
 ])

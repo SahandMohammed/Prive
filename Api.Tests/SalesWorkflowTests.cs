@@ -760,7 +760,7 @@ public sealed class SalesWorkflowTests
   }
 
   [Fact]
-  public async Task Posted_invoice_delete_first_save_does_not_apply_deletion_or_add_audit()
+  public async Task Posted_invoice_delete_saves_deleted_state_and_audit_atomically()
   {
     var interceptor = new CorrectionSaveObserver();
     var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -783,16 +783,12 @@ public sealed class SalesWorkflowTests
       data.UserId,
       default);
 
-    Assert.Equal(2, interceptor.Observations.Count);
-    var first = interceptor.Observations[0];
-    Assert.False(first.IsDeleted);
-    Assert.Equal(0, first.AddedActivityCount);
-    Assert.Contains(nameof(SalesInvoiceEntity.JournalEntryId), first.ModifiedInvoiceProperties);
-    Assert.DoesNotContain(nameof(SalesInvoiceEntity.IsDeleted), first.ModifiedInvoiceProperties);
-    Assert.DoesNotContain(nameof(SalesInvoiceEntity.DeletedAtUtc), first.ModifiedInvoiceProperties);
-    var second = interceptor.Observations[1];
-    Assert.True(second.IsDeleted);
-    Assert.Equal(1, second.AddedActivityCount);
+    var saved = Assert.Single(interceptor.Observations);
+    Assert.True(saved.IsDeleted);
+    Assert.Equal(1, saved.AddedActivityCount);
+    Assert.Contains(nameof(SalesInvoiceEntity.JournalEntryId), saved.ModifiedInvoiceProperties);
+    Assert.Contains(nameof(SalesInvoiceEntity.IsDeleted), saved.ModifiedInvoiceProperties);
+    Assert.Contains(nameof(SalesInvoiceEntity.DeletedAtUtc), saved.ModifiedInvoiceProperties);
   }
 
   [Fact]
@@ -1090,9 +1086,7 @@ public sealed class SalesWorkflowTests
   private static SalesInvoiceCorrectionService CreateCorrectionService(AppDbContext db)
   {
     var sales = CreateService(db);
-    var finance = new FinanceService(db, Options.Create(new FinanceOptions()));
-    var sessions = new PosSessionService(db, finance);
-    return new SalesInvoiceCorrectionService(db, sales, sessions);
+    return new SalesInvoiceCorrectionService(db, sales, new PaymentService(db));
   }
 
   private static SalesInvoiceDraftRequest Request(

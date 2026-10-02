@@ -1,9 +1,14 @@
-import { isValidElement, type ReactElement, type ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
+import { isValidElement, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { router } from './router'
 
-vi.mock('@/lib/i18n', () => ({ changeAppLanguage: vi.fn() }))
+vi.mock('@/lib/i18n', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/i18n')>()
+  return {
+    ...actual,
+    changeAppLanguage: vi.fn(),
+  }
+})
 vi.mock('@/lib/theme', () => ({
   useThemeStore: () => ({ theme: 'light', toggleTheme: vi.fn() }),
 }))
@@ -24,13 +29,13 @@ function findRoute(routes: RouteNode[], path: string): RouteNode | undefined {
 }
 
 describe('POS route contracts', () => {
-  it('keeps the legacy sessions URL redirected to the POS dashboard', () => {
-    const route = findRoute(router.routes as RouteNode[], '/pos/sessions')
+  it('exposes the direct POS workspace without legacy session routes', () => {
+    const workspace = findRoute(router.routes as RouteNode[], '/pos')
 
-    expect(route).toBeDefined()
-    expect(isValidElement(route?.element)).toBe(true)
-    const redirect = route?.element as ReactElement<{ to: string, replace: boolean }>
-    expect(redirect.type).toBe(Navigate)
-    expect(redirect.props).toMatchObject({ to: '/pos', replace: true })
+    expect(workspace).toBeDefined()
+    expect(isValidElement(workspace?.element)).toBe(true)
+    expect(findRoute(router.routes as RouteNode[], '/pos/workspace')).toBeUndefined()
+    expect(findRoute(router.routes as RouteNode[], '/pos/sessions')).toBeUndefined()
+    expect(findRoute(router.routes as RouteNode[], '/pos/z-reports/:id')).toBeUndefined()
   })
 })

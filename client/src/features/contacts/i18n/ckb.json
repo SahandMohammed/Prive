@@ -1,0 +1,84 @@
+{
+  "title": "پەیوەندییەکان",
+  "description": "بەڕێوەبردنی کەسەکان و کۆمپانیا بەکارهێنراوەکان لە فرۆشتن و کڕین.",
+  "addContact": "زیادکردنی پەیوەندی",
+  "saveChanges": "پاشەکەوتکردنی گۆڕانکارییەکان",
+  "cancel": "پاشگەزبوونەوە",
+  "deleteConfirm": "سڕینەوەی یەکجارەکیی {{name}}؟ ناتوانرێت بگەرێندرێتەوە.",
+  "searchPlaceholder": "گەڕان بەپێی ناو، مۆبایل، یان ئیمەیڵ",
+  "contactsCount_one": "{{count}} پەیوەندی",
+  "contactsCount_other": "{{count}} پەیوەندی",
+  "loadingContacts": "بارکردنی پەیوەندییەکان…",
+  "loadingContact": "بارکردنی پەیوەندی…",
+  "failedToLoad": "بارکردنی پەیوەندییەکان سەرکەوتوو نەبوو.",
+  "noContacts": "هیچ پەیوەندییەک نەدۆزرایەوە.",
+  "roles": {
+    "all": "هەموو",
+    "customer": "کڕیار",
+    "customers": "کڕیاران",
+    "supplier": "دابینکەر",
+    "suppliers": "دابینکەران",
+    "both": "هەردووکی",
+    "customerSupplier": "کڕیار · دابینکەر"
+  },
+  "kinds": {
+    "all": "هەموو جۆرەکان",
+    "individual": "تاکەکەسی",
+    "business": "کۆمپانیا"
+  },
+  "statuses": {
+    "all": "هەموو دۆخەکان",
+    "active": "چالاک",
+    "inactive": "ناچالاک"
+  },
+  "filters": {
+    "role": "ڕۆڵ",
+    "status": "دۆخ",
+    "type": "جۆر"
+  },
+  "th": {
+    "contact": "پەیوەندی",
+    "role": "ڕۆڵ",
+    "phone": "مۆبایل",
+    "email": "ئیمەیڵ",
+    "city": "شار",
+    "status": "دۆخ",
+    "actions": "کردارەکان"
+  },
+  "actions": {
+    "view": "بینینی {{name}}",
+    "edit": "دەستکاریکردنی {{name}}",
+    "activate": "چالاککردنی {{name}}",
+    "deactivate": "ناچالاککردنی {{name}}",
+    "delete": "سڕینەوەی {{name}}"
+  },
+  "form": {
+    "createTitle": "زیادکردنی پەیوەندی",
+    "editTitle": "دەستکاریکردنی {{name}}",
+    "dialogDesc": "تۆمارەکە سادە بهێڵەرەوە؛ تەنها ناو و لانی کەم یەک ڕۆڵ پێویستە.",
+    "basicInfo": "زانیارییە سەرەکییەکان",
+    "name": "ناو",
+    "type": "جۆر",
+    "roles": "ڕۆڵەکان",
+    "customer": "کڕیار",
+    "supplier": "دابینکەر",
+    "contactInfo": "زانیاریی پەیوەندی",
+    "primaryPhone": "مۆبایلی سەرەکی",
+    "secondaryPhone": "مۆبایلی لاوەکی",
+    "email": "ئیمەیڵ",
+    "address": "ناونیشان",
+    "city": "شار",
+    "region": "پارێزگا / ناوچە",
+    "country": "وڵات",
+    "additional": "زیاتر",
+    "notes": "تێبینییەکان",
+    "active": "چالاک"
+  },
+  "detail": {
+    "title": "وردەکاریی پەیوەندی",
+    "description": "ناسنامەی بازرگانی و زانیاریی پەیوەندی.",
+    "contactInfo": "زانیاریی پەیوەندی",
+    "address": "ناونیشان",
+    "notes": "تێبینییەکان"
+  }
+}

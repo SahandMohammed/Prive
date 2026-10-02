@@ -271,7 +271,7 @@ describe('CreateSalesInvoicePage', () => {
       renderPage(['/sales/invoices/new'])
 
       // Line 1 is always present by default on new invoice
-      expect(screen.getByRole('combobox', { name: /service for line 1/i })).toBeInTheDocument()
+      expect(screen.getByRole('combobox', { name: /item for line 1/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /remove line 1/i })).toBeInTheDocument()
 
       const addLineBtn = screen.getByRole('button', { name: /add line/i })
@@ -279,7 +279,7 @@ describe('CreateSalesInvoicePage', () => {
 
       fireEvent.click(addLineBtn)
       // Second line is now added
-      expect(screen.getByRole('combobox', { name: /service for line 2/i })).toBeInTheDocument()
+      expect(screen.getByRole('combobox', { name: /item for line 2/i })).toBeInTheDocument()
     })
 
     it('supports selecting items from Add Items modal and inserts them into the invoice', () => {
@@ -303,8 +303,8 @@ describe('CreateSalesInvoicePage', () => {
       fireEvent.click(screen.getByRole('button', { name: /add 2 items/i }))
 
       // Both items are now populated in the invoice lines
-      expect(screen.getByRole('combobox', { name: /service for line 1/i })).toHaveValue('Full Hair Coloring')
-      expect(screen.getByRole('combobox', { name: /product for line 2/i })).toHaveValue('Argan Hair Oil 100ml (OIL-100)')
+      expect(screen.getByRole('combobox', { name: /item for line 1/i })).toHaveValue('Full Hair Coloring')
+      expect(screen.getByRole('combobox', { name: /item for line 2/i })).toHaveValue('Argan Hair Oil 100ml (OIL-100)')
     })
 
     it('preserves a valid embedded Payment account and clears it only after a successful scoped query proves it invalid', async () => {

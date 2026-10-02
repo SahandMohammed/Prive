@@ -1,11 +1,9 @@
-import type { MoneyAccountType } from '@/features/finance'
+import type { MoneyAccountType, PaymentMoneyDirection } from '@/features/finance'
 import type { ProductUnitConversion } from '@/features/inventory'
-import type { SalesLineType } from '@/features/sales'
+import type { SalesInvoicePaymentStatus, SalesLineType } from '@/features/sales'
 
 export const PosCatalogItemType = { Service: 0, Product: 1 } as const
 export type PosCatalogItemType = (typeof PosCatalogItemType)[keyof typeof PosCatalogItemType]
-export const PosSessionStatus = { Open: 0, Closed: 1 } as const
-export type PosSessionStatus = (typeof PosSessionStatus)[keyof typeof PosSessionStatus]
 export const PosPaymentMode = { Paid: 0, Partial: 1, Credit: 2 } as const
 export type PosPaymentMode = (typeof PosPaymentMode)[keyof typeof PosPaymentMode]
 export const PosRefundStatus = { Posted: 0 } as const
@@ -23,10 +21,6 @@ export const PosRefundReason = {
   Other: 7,
 } as const
 export type PosRefundReason = (typeof PosRefundReason)[keyof typeof PosRefundReason]
-export const PosDrawerMovementType = { CashIn: 0, CashOut: 1, CashDrop: 2, Adjustment: 3 } as const
-export type PosDrawerMovementType = (typeof PosDrawerMovementType)[keyof typeof PosDrawerMovementType]
-export const PosDrawerAdjustmentDirection = { In: 0, Out: 1 } as const
-export type PosDrawerAdjustmentDirection = (typeof PosDrawerAdjustmentDirection)[keyof typeof PosDrawerAdjustmentDirection]
 
 export interface PosBranch { id: string; code: string; name: string; isMainBranch: boolean }
 export interface PosWarehouse { id: string; code: string; name: string; branchId: string }
@@ -88,33 +82,22 @@ export interface PosCatalogFilters {
   warehouseId?: string
 }
 export interface PosCustomerFilters { page: number; pageSize: number; search?: string }
-export interface PosRegisterFilters {
-  page?: number
-  pageSize?: number
+export interface PosSaleFilters {
+  page: number
+  pageSize: number
   search?: string
-  includeInactive?: boolean
-}
-export interface PosSessionFilters {
-  page: number
-  pageSize: number
-  status?: PosSessionStatus
-  registerId?: string
-  cashierUserId?: string
-  fromDate?: string
-  toDate?: string
-}
-export interface PosZReportFilters {
-  page: number
-  pageSize: number
-  registerId?: string
-  cashierUserId?: string
+  customerId?: string
+  branchId?: string
+  refundState?: PosRefundState
   fromDate?: string
   toDate?: string
 }
 
+export interface PosCollectionInput { moneyAccountId: string; amount: number }
+export interface ChangeMoneyLineInput { moneyAccountId: string; amount: number }
+
 export interface CompletePosSaleInput {
   branchId: string
-  posSessionId: string
   warehouseId: string | null
   customerId: string | null
   lines: {
@@ -125,208 +108,18 @@ export interface CompletePosSaleInput {
     quantity: number
     professionalId: string | null
   }[]
-  tenders: { moneyAccountId: string; amount: number }[]
-  change: { moneyAccountId: string; amount: number } | null
+  collections: PosCollectionInput[]
+  change: ChangeMoneyLineInput | null
   paymentMode: PosPaymentMode
   clientRequestId?: string
 }
 
 export interface CorrectPosSettlementInput {
   paymentMode: PosPaymentMode
-  tenders: { moneyAccountId: string; amount: number }[]
-  change: { moneyAccountId: string; amount: number } | null
+  collections: PosCollectionInput[]
+  change: ChangeMoneyLineInput | null
   reason: string
   expectedUpdatedAtUtc: string
-}
-
-export interface PosRegisterCashbox {
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  currencyId: string
-  currencyCode: string
-  currencyDecimalPlaces: number
-}
-export interface PosRegister {
-  id: string
-  code: string
-  name: string
-  branchId: string
-  isActive: boolean
-  hasOpenSession: boolean
-  cashboxes: PosRegisterCashbox[]
-}
-export interface PosSessionCount {
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  currencyId: string
-  currencyCode: string
-  currencyDecimalPlaces: number
-  amount: number
-  exchangeRate: number
-  baseAmount: number
-}
-export interface PosSession {
-  id: string
-  sessionNumber: string
-  branchId: string
-  branchCode: string
-  branchName: string
-  registerId: string
-  registerCode: string
-  registerName: string
-  cashierUserId: string
-  cashierUsername: string
-  status: PosSessionStatus
-  openedAtUtc: string
-  closedAtUtc: string | null
-  closedByUserId: string | null
-  closedByUsername: string | null
-  openingNotes: string | null
-  closingNotes: string | null
-  openingCounts: PosSessionCount[]
-}
-export interface PosSessionSummary {
-  id: string
-  sessionNumber: string
-  registerId: string
-  registerCode: string
-  registerName: string
-  cashierUserId: string
-  cashierUsername: string
-  status: PosSessionStatus
-  openedAtUtc: string
-  closedAtUtc: string | null
-  saleCount: number
-  grossSalesBase: number
-  varianceBase: number
-  baseCurrencyCode: string
-}
-export interface OpenPosSessionInput {
-  registerId: string
-  openingCounts: { moneyAccountId: string; amount: number }[]
-  notes: string | null
-}
-export interface ClosePosSessionInput {
-  closingCounts: { moneyAccountId: string; countedAmount: number }[]
-  notes: string | null
-}
-export interface PosPaymentSummary {
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  moneyAccountType: MoneyAccountType
-  currencyId: string
-  currencyCode: string
-  tenderedAmount: number
-  changeAmount: number
-  refundAmount: number
-  netAmount: number
-  tenderedBaseAmount: number
-  changeBaseAmount: number
-  refundBaseAmount: number
-  netBaseAmount: number
-}
-export interface PosDrawerSummary {
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  currencyId: string
-  currencyCode: string
-  currencyDecimalPlaces: number
-  openingAmount: number
-  tenderedAmount: number
-  changeAmount: number
-  refundAmount: number
-  expectedAmount: number
-  countedAmount: number | null
-  varianceAmount: number | null
-  openingBaseAmount: number
-  tenderedBaseAmount: number
-  changeBaseAmount: number
-  refundBaseAmount: number
-  expectedBaseAmount: number
-  countedBaseAmount: number | null
-  varianceBaseAmount: number | null
-  cashInAmount: number
-  cashOutAmount: number
-  cashDropAmount: number
-  adjustmentAmount: number
-  cashInBaseAmount: number
-  cashOutBaseAmount: number
-  cashDropBaseAmount: number
-  adjustmentBaseAmount: number
-  closingExchangeRate: number | null
-}
-export interface PosXReport {
-  session: PosSession
-  generatedAtUtc: string
-  saleCount: number
-  serviceSalesBase: number
-  productSalesBase: number
-  grossSalesBase: number
-  refundCount: number
-  serviceRefundsBase: number
-  productRefundsBase: number
-  refundTotalBase: number
-  netSalesBase: number
-  baseCurrencyId: string
-  baseCurrencyCode: string
-  payments: PosPaymentSummary[]
-  drawers: PosDrawerSummary[]
-}
-export interface PosZReportSummary {
-  id: string
-  reportNumber: string
-  posSessionId: string
-  sessionNumber: string
-  registerId: string
-  registerCode: string
-  registerName: string
-  cashierUserId: string
-  cashierUsername: string
-  openedAtUtc: string
-  closedAtUtc: string
-  saleCount: number
-  grossSalesBase: number
-  refundCount: number
-  refundTotalBase: number
-  netSalesBase: number
-  varianceBase: number
-  baseCurrencyCode: string
-}
-export interface PosZReport {
-  id: string
-  reportNumber: string
-  posSessionId: string
-  sessionNumber: string
-  branchId: string
-  branchCode: string
-  branchName: string
-  registerId: string
-  registerCode: string
-  registerName: string
-  cashierUserId: string
-  cashierUsername: string
-  closedByUserId: string
-  closedByUsername: string
-  openedAtUtc: string
-  closedAtUtc: string
-  generatedAtUtc: string
-  saleCount: number
-  serviceSalesBase: number
-  productSalesBase: number
-  grossSalesBase: number
-  refundCount: number
-  serviceRefundsBase: number
-  productRefundsBase: number
-  refundTotalBase: number
-  netSalesBase: number
-  baseCurrencyId: string
-  baseCurrencyCode: string
-  payments: PosPaymentSummary[]
-  drawers: PosDrawerSummary[]
 }
 
 export interface PosSaleLine {
@@ -349,22 +142,11 @@ export interface PosSaleLine {
   baseUnitPrice: number
   lineTotal: number
 }
-export interface PosTender {
+
+export interface PosPaymentMoneyLine {
   id: string
   sequence: number
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  currencyId: string
-  currencyCode: string
-  tenderedAmount: number
-  exchangeRate: number
-  baseAmount: number
-  paymentMoneyLineId: string
-  moneyLedgerEntryId: string
-}
-export interface PosChange {
-  id: string
+  direction: PaymentMoneyDirection
   moneyAccountId: string
   moneyAccountCode: string
   moneyAccountName: string
@@ -373,13 +155,12 @@ export interface PosChange {
   amount: number
   exchangeRate: number
   baseAmount: number
-  paymentMoneyLineId: string
   moneyLedgerEntryId: string
 }
+
 export interface PosSale {
   id: string
   documentNumber: string
-  posSessionId: string
   customerId: string
   customerName: string
   branchId: string
@@ -392,26 +173,27 @@ export interface PosSale {
   baseCurrencyCode: string
   subtotal: number
   total: number
-  tenderedBaseAmount: number
+  grossCollectionBaseAmount: number
   changeBaseAmount: number
-  settledBaseAmount: number
+  collectedBaseAmount: number
   outstandingBaseAmount: number
+  overpaidBaseAmount: number
   refundedBaseAmount: number
   remainingRefundableBaseAmount: number
   netSaleBaseAmount: number
   refundStatus: PosRefundState
-  paymentMode: PosPaymentMode
+  paymentStatus: SalesInvoicePaymentStatus
   paymentId: string | null
   paymentDocumentNumber: string | null
-  cashierUserId: string
-  cashierUsername: string
+  operatorUserId: string
+  operatorUsername: string
   completedAtUtc: string
   updatedAtUtc: string
   journalEntryId: string
   stockMovementIds: string[]
   lines: PosSaleLine[]
-  tenders: PosTender[]
-  change: PosChange | null
+  collections: PosPaymentMoneyLine[]
+  change: PosPaymentMoneyLine | null
   refunds: PosRefundSummary[]
 }
 
@@ -423,69 +205,16 @@ export interface PosSaleSummary {
   branchName: string
   customerId: string
   customerName: string
-  posSessionId: string | null
-  posSessionNumber: string | null
   total: number
-  settledBaseAmount: number
+  collectedBaseAmount: number
   outstandingBaseAmount: number
+  overpaidBaseAmount: number
   refundedBaseAmount: number
   netSaleBaseAmount: number
   refundStatus: PosRefundState
-  paymentMode: PosPaymentMode
+  paymentStatus: SalesInvoicePaymentStatus
   baseCurrencyCode: string
-  cashierUsername: string
-}
-
-export interface PosSaleFilters {
-  page: number
-  pageSize: number
-  search?: string
-  customerId?: string
-  branchId?: string
-  posSessionId?: string
-  paymentMode?: PosPaymentMode
-  refundState?: PosRefundState
-  fromDate?: string
-  toDate?: string
-}
-
-export interface PosDrawerMovement {
-  id: string
-  documentNumber: string
-  posSessionId: string
-  posSessionNumber: string
-  type: PosDrawerMovementType
-  adjustmentDirection: PosDrawerAdjustmentDirection | null
-  cashboxMoneyAccountId: string
-  cashboxMoneyAccountCode: string
-  destinationMoneyAccountId: string | null
-  destinationMoneyAccountCode: string | null
-  offsetAccountId: string | null
-  offsetAccountCode: string | null
-  currencyId: string
-  currencyCode: string
-  amount: number
-  exchangeRate: number
-  baseAmount: number
-  reason: string
-  notes: string | null
-  createdByUserId: string
-  createdByUsername: string
-  createdAtUtc: string
-  journalEntryId: string
-  cashboxLedgerEntryId: string
-  destinationLedgerEntryId: string | null
-}
-
-export interface CreatePosDrawerMovementInput {
-  type: PosDrawerMovementType
-  adjustmentDirection: PosDrawerAdjustmentDirection | null
-  cashboxMoneyAccountId: string
-  destinationMoneyAccountId: string | null
-  offsetAccountId: string | null
-  amount: number
-  reason: string
-  notes: string | null
+  operatorUsername: string
 }
 
 export interface PosRefundSummary {
@@ -524,7 +253,7 @@ export interface PosRefundability {
   customerName: string
   warehouseId: string | null
   completedAtUtc: string
-  cashierUsername: string
+  operatorUsername: string
   originalTotalBase: number
   refundedBaseAmount: number
   remainingRefundableBaseAmount: number
@@ -551,7 +280,7 @@ export interface PosRefundLine {
   stockMovementIds: string[]
 }
 
-export interface PosRefundTender {
+export interface PosRefundPayout {
   id: string
   sequence: number
   moneyAccountId: string
@@ -573,8 +302,6 @@ export interface PosRefund {
   branchId: string
   branchCode: string
   branchName: string
-  posSessionId: string
-  posSessionNumber: string
   customerId: string
   customerName: string
   reason: PosRefundReason
@@ -594,23 +321,21 @@ export interface PosRefund {
   postedAtUtc: string
   journalEntryId: string
   lines: PosRefundLine[]
-  tenders: PosRefundTender[]
+  refundPayouts: PosRefundPayout[]
 }
 
 export interface CreatePosRefundInput {
-  posSessionId: string
   reason: PosRefundReason
   notes: string | null
   lines: { salesInvoiceLineId: string; quantity: number; restockProduct: boolean }[]
-  refundTenders: { moneyAccountId: string; amount: number }[]
+  refundPayouts: { moneyAccountId: string; amount: number }[]
   clientRequestId?: string
 }
 
 export interface VoidPosSaleInput {
-  posSessionId: string
   reason: PosRefundReason
   notes: string | null
   restockSalesInvoiceLineIds: string[]
-  refundTenders: { moneyAccountId: string; amount: number }[]
+  refundPayouts: { moneyAccountId: string; amount: number }[]
   clientRequestId?: string
 }

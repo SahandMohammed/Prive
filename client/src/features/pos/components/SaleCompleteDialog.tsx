@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CheckCircle2, Printer, ShoppingCart } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { SalesInvoicePaymentStatus } from '@/features/sales'
 import {
   Dialog,
   DialogContent,
@@ -9,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { formatNumber } from '@/lib/i18n'
 import { receiptPrintService } from '../services/receiptPrint.service'
-import { PosPaymentMode } from '../types/pos.types'
 import type { PosSale } from '../types/pos.types'
 
 export function SaleCompleteDialog({
@@ -20,6 +22,7 @@ export function SaleCompleteDialog({
   sale: PosSale | null
   onNewSale: () => void
 }) {
+  const { t } = useTranslation(['pos', 'common'])
   const [printError, setPrintError] = useState('')
 
   const print = () => {
@@ -39,11 +42,11 @@ export function SaleCompleteDialog({
           <div className="mx-auto mb-2 grid size-12 place-items-center rounded-full bg-emerald-500/10 text-emerald-600">
             <CheckCircle2 className="size-6" />
           </div>
-          <DialogTitle className="text-center">Sale completed</DialogTitle>
+          <DialogTitle className="text-center">{t('pos:saleComplete.title')}</DialogTitle>
           <DialogDescription className="text-center">
             {sale?.outstandingBaseAmount
-              ? 'The sale was posted and the unpaid balance is recorded in Accounts Receivable.'
-              : 'The sale, accounting, stock and payment effects were committed successfully.'}
+              ? t('pos:saleComplete.outstandingNotice')
+              : t('pos:saleComplete.settledNotice')}
           </DialogDescription>
         </DialogHeader>
 
@@ -56,19 +59,19 @@ export function SaleCompleteDialog({
               </p>
               <p className="mt-1 text-xs text-muted-foreground">{sale.customerName}</p>
             </div>
-            <div className="grid grid-cols-2 gap-2 border-t pt-3 text-left text-xs">
-              <Metric label="Received now" value={`${amount(sale.settledBaseAmount)} ${sale.baseCurrencyCode}`} />
+            <div className="grid grid-cols-2 gap-2 border-t pt-3 text-start text-xs">
+              <Metric label={t('pos:saleComplete.receivedNow')} value={`${amount(sale.collectedBaseAmount)} ${sale.baseCurrencyCode}`} />
               <Metric
-                label={sale.outstandingBaseAmount > 0 ? 'Customer owes' : 'Status'}
+                label={sale.outstandingBaseAmount > 0 ? t('pos:saleComplete.customerOwes') : t('pos:saleComplete.status')}
                 value={sale.outstandingBaseAmount > 0
                   ? `${amount(sale.outstandingBaseAmount)} ${sale.baseCurrencyCode}`
-                  : 'Paid'}
+                  : t('pos:saleComplete.paid')}
                 accent={sale.outstandingBaseAmount > 0}
               />
             </div>
-            {sale.paymentMode !== PosPaymentMode.Paid && (
-              <p className="text-left text-xs text-muted-foreground">
-                {sale.paymentMode === PosPaymentMode.Credit ? 'Credit sale' : 'Partial payment'} · collect the remaining balance later through Customer Receipts.
+            {sale.paymentStatus !== SalesInvoicePaymentStatus.Paid && sale.paymentStatus !== SalesInvoicePaymentStatus.Overpaid && (
+              <p className="text-start text-xs text-muted-foreground">
+                {sale.paymentStatus === SalesInvoicePaymentStatus.Unpaid ? t('pos:saleComplete.creditSale') : t('pos:saleComplete.partialPayment')} · {t('pos:saleComplete.collectBalanceLater')}
               </p>
             )}
           </div>
@@ -76,18 +79,18 @@ export function SaleCompleteDialog({
 
         {printError && (
           <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            Sale completed successfully. {printError}
+            {t('pos:saleComplete.printSuccessWithIssue', { error: printError })}
           </p>
         )}
 
         <DialogFooter className="sm:justify-center">
           <Button type="button" variant="outline" onClick={print}>
             <Printer className="size-4" />
-            Print Receipt
+            {t('pos:saleComplete.printReceipt')}
           </Button>
           <Button type="button" onClick={onNewSale}>
             <ShoppingCart className="size-4" />
-            New Sale
+            {t('pos:saleComplete.newSale')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -104,4 +107,4 @@ function Metric({ label, value, accent = false }: { label: string; value: string
   )
 }
 
-const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+const amount = (value: number) => formatNumber(value, { maximumFractionDigits: 4 })

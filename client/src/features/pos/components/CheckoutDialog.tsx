@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Banknote, Check, RotateCcw } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,20 +13,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { MoneyAccountType } from '@/features/finance'
 import { SalesLineType } from '@/features/sales'
+import { formatNumber } from '@/lib/i18n'
 import { useCompletePosSale } from '../hooks/usePos'
 import { posCartTotal } from '../lib/posCart'
-import { posTenderBaseAmount, roundPosMoney } from '../lib/posMoney'
+import { posMoneyLineBaseAmount, roundPosMoney } from '../lib/posMoney'
 import { posCheckoutSchema } from '../schemas/pos.schema'
 import type { PosCheckoutValues } from '../schemas/pos.schema'
 import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
 import type {
   PosCartLine,
   PosCustomer,
+  PosMoneyAccount,
   PosProfessional,
   PosSale,
-  PosSession,
-  PosSessionCount,
   PosSetup,
 } from '../types/pos.types'
 
@@ -33,12 +35,10 @@ const IQD_BILLS = [250, 500, 1_000, 5_000, 10_000, 25_000, 50_000]
 const USD_BILLS = [1, 5, 10, 20, 50, 100]
 const POS_MONEY_QUANTUM = 0.0001
 
-type SessionCashbox = PosSessionCount & { currentExchangeRate: number | null }
-
 export function CheckoutDialog({
   open,
   setup,
-  session,
+  branchId,
   warehouseId,
   customer,
   professional,
@@ -49,7 +49,7 @@ export function CheckoutDialog({
 }: {
   open: boolean
   setup: PosSetup
-  session: PosSession
+  branchId: string
   warehouseId: string
   customer: PosCustomer | null
   professional: PosProfessional | null
@@ -58,47 +58,49 @@ export function CheckoutDialog({
   onBack: () => void
   onCompleted: (sale: PosSale) => void
 }) {
+  const { t } = useTranslation(['pos', 'common'])
   const total = posCartTotal(cart)
   const complete = useCompletePosSale()
   const resetComplete = complete.reset
   const initializedForOpen = useRef(false)
-  const cashboxes = useMemo<SessionCashbox[]>(() => session.openingCounts
-    .map((snapshot) => ({
-      ...snapshot,
-      currentExchangeRate: setup.moneyAccounts.find((account) => account.id === snapshot.moneyAccountId)
-        ?.currentExchangeRate ?? null,
-    }))
+  const accounts = useMemo(() => setup.moneyAccounts
+    .filter((account) => account.branchId === branchId)
     .sort((left, right) => {
       const leftBase = left.currencyId === setup.baseCurrencyId ? 0 : 1
       const rightBase = right.currencyId === setup.baseCurrencyId ? 0 : 1
       return leftBase - rightBase || left.currencyCode.localeCompare(right.currencyCode)
-    }), [session.openingCounts, setup.baseCurrencyId, setup.moneyAccounts])
-  const baseCashbox = cashboxes.find((cashbox) => cashbox.currencyId === setup.baseCurrencyId)
-  const initialCashboxId = cashboxes[0]?.moneyAccountId ?? ''
-  const [activeCashboxId, setActiveCashboxId] = useState(initialCashboxId)
+    }), [branchId, setup.baseCurrencyId, setup.moneyAccounts])
+  const baseCashbox = accounts.find((account) =>
+    account.type === MoneyAccountType.Cashbox && account.currencyId === setup.baseCurrencyId)
+  const initialAccountId = accounts[0]?.id ?? ''
+  const [activeAccountId, setActiveAccountId] = useState(initialAccountId)
   const form = useForm<PosCheckoutValues>({
     resolver: zodResolver(posCheckoutSchema),
     defaultValues: {
       paymentMode: PosPaymentMode.Paid,
-      cashboxAmounts: Object.fromEntries(cashboxes.map((cashbox) => [cashbox.moneyAccountId, 0])),
+      collectionAmounts: Object.fromEntries(accounts.map((account) => [account.id, 0])),
     },
   })
   const values = useWatch({ control: form.control })
   const paymentMode = values.paymentMode ?? PosPaymentMode.Paid
   const paid = paymentMode === PosPaymentMode.Paid
-  const cashboxAmounts = values.cashboxAmounts ?? {}
-  const positiveCashboxes = cashboxes.filter((cashbox) => numberOrZero(cashboxAmounts[cashbox.moneyAccountId]) > 0)
-  const missingRate = positiveCashboxes.find((cashbox) => cashbox.currentExchangeRate === null)
-  const receivedBaseAmount = roundPosMoney(cashboxes.reduce((sum, cashbox) => sum + posTenderBaseAmount(
-    numberOrZero(cashboxAmounts[cashbox.moneyAccountId]), cashbox.currentExchangeRate ?? 0,
+  const partial = paymentMode === PosPaymentMode.Partial
+  const credit = paymentMode === PosPaymentMode.Credit
+  const collectionAmounts = values.collectionAmounts ?? {}
+  const positiveAccounts = accounts.filter((account) => numberOrZero(collectionAmounts[account.id]) > 0)
+  const missingRate = positiveAccounts.find((account) => account.currentExchangeRate === null)
+  const receivedBaseAmount = roundPosMoney(accounts.reduce((sum, account) => sum + posMoneyLineBaseAmount(
+    numberOrZero(collectionAmounts[account.id]), account.currentExchangeRate ?? 0,
   ), 0))
   const remaining = roundPosMoney(Math.max(total - receivedBaseAmount, 0))
   const changeDue = paid ? roundPosMoney(Math.max(receivedBaseAmount - total, 0)) : 0
   const hasCustomer = Boolean(customer)
   const ready = paid
-    ? positiveCashboxes.length > 0 && !missingRate && Boolean(baseCashbox) && receivedBaseAmount >= total
-    : hasCustomer
-  const activeCashbox = cashboxes.find((cashbox) => cashbox.moneyAccountId === activeCashboxId)
+    ? positiveAccounts.length > 0 && !missingRate && (receivedBaseAmount === total || Boolean(baseCashbox)) && receivedBaseAmount >= total
+    : partial
+      ? hasCustomer && positiveAccounts.length > 0 && !missingRate && receivedBaseAmount > 0 && receivedBaseAmount < total
+      : hasCustomer && positiveAccounts.length === 0
+  const activeAccount = accounts.find((account) => account.id === activeAccountId)
 
   useEffect(() => {
     if (!open) {
@@ -108,72 +110,72 @@ export function CheckoutDialog({
     if (initializedForOpen.current) return
     form.reset({
       paymentMode: PosPaymentMode.Paid,
-      cashboxAmounts: Object.fromEntries(cashboxes.map((cashbox) => [cashbox.moneyAccountId, 0])),
+      collectionAmounts: Object.fromEntries(accounts.map((account) => [account.id, 0])),
     })
-    setActiveCashboxId(initialCashboxId)
+    setActiveAccountId(initialAccountId)
     resetComplete()
     initializedForOpen.current = true
-  }, [cashboxes, form, initialCashboxId, open, resetComplete])
+  }, [accounts, form, initialAccountId, open, resetComplete])
 
-  const selectPaymentMode = (mode: typeof PosPaymentMode.Paid | typeof PosPaymentMode.Credit) => {
+  const selectPaymentMode = (mode: PosPaymentMode) => {
     form.setValue('paymentMode', mode, { shouldValidate: true })
     form.clearErrors('root')
     complete.reset()
   }
 
-  const setCashboxAmount = (cashbox: SessionCashbox, next: number) => {
-    const normalized = normalizeDisplayAmount(Math.max(next, 0), cashbox.currencyDecimalPlaces)
-    form.setValue(`cashboxAmounts.${cashbox.moneyAccountId}`, normalized, { shouldValidate: true })
+  const setAccountAmount = (account: PosMoneyAccount, next: number) => {
+    const normalized = normalizeDisplayAmount(Math.max(next, 0), account.currencyDecimalPlaces)
+    form.setValue(`collectionAmounts.${account.id}`, normalized, { shouldValidate: true })
     form.clearErrors('root')
     complete.reset()
   }
 
   const appendDigit = (digit: string) => {
-    if (!activeCashbox) return
-    const current = numberOrZero(cashboxAmounts[activeCashbox.moneyAccountId])
+    if (!activeAccount) return
+    const current = numberOrZero(collectionAmounts[activeAccount.id])
     const nextText = current === 0 ? digit : `${current}${digit}`
-    if (decimalPlaces(nextText) > activeCashbox.currencyDecimalPlaces) return
+    if (decimalPlaces(nextText) > activeAccount.currencyDecimalPlaces) return
     const next = Number(nextText)
-    if (Number.isFinite(next)) setCashboxAmount(activeCashbox, next)
+    if (Number.isFinite(next)) setAccountAmount(activeAccount, next)
   }
 
   const backspace = () => {
-    if (!activeCashbox) return
-    const current = numberOrZero(cashboxAmounts[activeCashbox.moneyAccountId])
+    if (!activeAccount) return
+    const current = numberOrZero(collectionAmounts[activeAccount.id])
     const nextText = String(current).slice(0, -1)
-    setCashboxAmount(activeCashbox, nextText === '' ? 0 : Number(nextText))
+    setAccountAmount(activeAccount, nextText === '' ? 0 : Number(nextText))
   }
 
   const exactRemaining = () => {
-    if (!activeCashbox || !activeCashbox.currentExchangeRate) return
-    const otherBase = roundPosMoney(cashboxes
-      .filter((cashbox) => cashbox.moneyAccountId !== activeCashbox.moneyAccountId)
-      .reduce((sum, cashbox) => sum + posTenderBaseAmount(
-        Math.max(numberOrZero(cashboxAmounts[cashbox.moneyAccountId]), 0),
-        cashbox.currentExchangeRate ?? 0,
+    if (!activeAccount || !activeAccount.currentExchangeRate) return
+    const otherBase = roundPosMoney(accounts
+      .filter((account) => account.id !== activeAccount.id)
+      .reduce((sum, account) => sum + posMoneyLineBaseAmount(
+        Math.max(numberOrZero(collectionAmounts[account.id]), 0),
+        account.currentExchangeRate ?? 0,
       ), 0))
     const remainingBase = roundPosMoney(Math.max(total - otherBase, 0))
     if (remainingBase === 0) {
-      setCashboxAmount(activeCashbox, 0)
+      setAccountAmount(activeAccount, 0)
       return
     }
 
-    let nativeAmount = roundPosMoney(remainingBase / activeCashbox.currentExchangeRate)
-    while (posTenderBaseAmount(nativeAmount, activeCashbox.currentExchangeRate) < remainingBase) {
+    let nativeAmount = roundPosMoney(remainingBase / activeAccount.currentExchangeRate)
+    while (posMoneyLineBaseAmount(nativeAmount, activeAccount.currentExchangeRate) < remainingBase) {
       nativeAmount = roundPosMoney(nativeAmount + POS_MONEY_QUANTUM)
     }
-    nativeAmount = ceilToDisplayPrecision(nativeAmount, activeCashbox.currencyDecimalPlaces)
-    const displayQuantum = quantum(activeCashbox.currencyDecimalPlaces)
-    while (posTenderBaseAmount(nativeAmount, activeCashbox.currentExchangeRate) < remainingBase) {
-      nativeAmount = normalizeDisplayAmount(nativeAmount + displayQuantum, activeCashbox.currencyDecimalPlaces)
+    nativeAmount = ceilToDisplayPrecision(nativeAmount, activeAccount.currencyDecimalPlaces)
+    const displayQuantum = quantum(activeAccount.currencyDecimalPlaces)
+    while (posMoneyLineBaseAmount(nativeAmount, activeAccount.currentExchangeRate) < remainingBase) {
+      nativeAmount = normalizeDisplayAmount(nativeAmount + displayQuantum, activeAccount.currencyDecimalPlaces)
     }
-    setCashboxAmount(activeCashbox, nativeAmount)
+    setAccountAmount(activeAccount, nativeAmount)
   }
 
   const submit = form.handleSubmit((value) => {
     if (!ready) {
       form.setError('root', { message: readinessMessage({
-        paid, customer, cashboxes, positiveCashboxes, missingRate, baseCashbox, remaining, setup,
+        paymentMode, customer, accounts, positiveAccounts, missingRate, baseCashbox, receivedBaseAmount, total, setup,
       }) })
       return
     }
@@ -181,8 +183,7 @@ export function CheckoutDialog({
     form.clearErrors('root')
     complete.mutate(
       {
-        branchId: session.branchId,
-        posSessionId: session.id,
+        branchId,
         warehouseId: warehouseId || null,
         customerId: customer?.id ?? null,
         lines: cart.map((line) => {
@@ -196,18 +197,19 @@ export function CheckoutDialog({
             professionalId: service ? professional?.id ?? null : null,
           }
         }),
-        tenders: paid
-          ? cashboxes.flatMap((cashbox) => {
+        collections: credit
+          ? []
+          : accounts.flatMap((account) => {
               const nativeAmount = normalizeDisplayAmount(
-                numberOrZero(value.cashboxAmounts[cashbox.moneyAccountId]), cashbox.currencyDecimalPlaces,
+                numberOrZero(value.collectionAmounts[account.id]), account.currencyDecimalPlaces,
               )
-              return nativeAmount > 0 ? [{ moneyAccountId: cashbox.moneyAccountId, amount: nativeAmount }] : []
-            })
-          : [],
+              return nativeAmount > 0 ? [{ moneyAccountId: account.id, amount: nativeAmount }] : []
+            }),
         change: paid && changeDue > 0 && baseCashbox
-          ? { moneyAccountId: baseCashbox.moneyAccountId, amount: changeDue }
+
+          ? { moneyAccountId: baseCashbox.id, amount: changeDue }
           : null,
-        paymentMode: paid ? PosPaymentMode.Paid : PosPaymentMode.Credit,
+        paymentMode,
       },
       {
         onSuccess: (sale) => {
@@ -222,78 +224,98 @@ export function CheckoutDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[96vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">Payment</DialogTitle>
+          <DialogTitle className="text-xl">{t('pos:checkout.title', { defaultValue: 'Payment' })}</DialogTitle>
           <DialogDescription>
-            Enter native amounts in this session’s Cashboxes. Exchange values shown here are previews; Save validates current rates again.
+            {t('pos:checkout.paymentDescription', { defaultValue: 'Enter native collection amounts. Exchange values shown here are previews; Save validates current rates again.' })}
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={submit}>
           <div className="grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-3">
-            <Summary label="Customer" value={customer?.name ?? 'Walk-in'} />
-            <Summary label="Master" value={professional?.name ?? '—'} />
-            <Summary label="Sale total" value={`${amount(total)} ${setup.baseCurrencyCode}`} />
+            <Summary label={t('pos:checkout.customer', { defaultValue: 'Customer' })} value={customer?.name ?? t('pos:checkout.walkIn', { defaultValue: 'Walk-in' })} />
+            <Summary label={t('pos:cart.professional', { defaultValue: 'Staff / Stylist' })} value={professional?.name ?? '—'} />
+            <Summary label={t('pos:checkout.saleTotal', { defaultValue: 'Sale total' })} value={`${amount(total)} ${setup.baseCurrencyCode}`} />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1.5">
-            <PaymentModeButton active={paid} title="Paid" description="Settle now" onClick={() => selectPaymentMode(PosPaymentMode.Paid)} />
-            <PaymentModeButton active={!paid} title="Unpaid" description="Collect later" onClick={() => selectPaymentMode(PosPaymentMode.Credit)} />
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-1.5">
+            <PaymentModeButton
+              active={paid}
+              title={t('pos:checkout.paid', { defaultValue: 'Paid' })}
+              description={t('pos:checkout.settleNow', { defaultValue: 'Settle now' })}
+              onClick={() => selectPaymentMode(PosPaymentMode.Paid)}
+            />
+            <PaymentModeButton
+              active={partial}
+              title={t('pos:checkout.partial', { defaultValue: 'Partial' })}
+              description={t('pos:checkout.collectPart', { defaultValue: 'Collect part now' })}
+              onClick={() => selectPaymentMode(PosPaymentMode.Partial)}
+            />
+            <PaymentModeButton
+              active={credit}
+              title={t('pos:checkout.credit', { defaultValue: 'Credit' })}
+              description={t('pos:checkout.collectLater', { defaultValue: 'Collect later' })}
+              onClick={() => selectPaymentMode(PosPaymentMode.Credit)}
+            />
           </div>
 
-          {paid ? (
+          {!credit ? (
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
               <div className="space-y-4">
-                {cashboxes.length === 0 && (
+                {accounts.length === 0 && (
                   <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-                    This session has no Cashbox snapshot. Paid completion is unavailable.
+                    No operable Money Account is available for this branch.
                   </p>
                 )}
-                {cashboxes.map((cashbox) => {
-                  const fieldName = `cashboxAmounts.${cashbox.moneyAccountId}` as const
+                {accounts.map((account) => {
+                  const fieldName = `collectionAmounts.${account.id}` as const
                   const field = form.register(fieldName, { setValueAs: (input) => input === '' ? 0 : Number(input) })
-                  const nativeAmount = numberOrZero(cashboxAmounts[cashbox.moneyAccountId])
-                  const bills = cashbox.currencyCode === 'IQD' ? IQD_BILLS : cashbox.currencyCode === 'USD' ? USD_BILLS : []
-                  const error = form.formState.errors.cashboxAmounts?.[cashbox.moneyAccountId]?.message
+                  const nativeAmount = numberOrZero(collectionAmounts[account.id])
+                  const bills = account.currencyCode === 'IQD' ? IQD_BILLS : account.currencyCode === 'USD' ? USD_BILLS : []
+                  const error = form.formState.errors.collectionAmounts?.[account.id]?.message
                   return (
                     <section
-                      key={cashbox.moneyAccountId}
-                      className={`space-y-3 rounded-xl border p-4 ${activeCashboxId === cashbox.moneyAccountId ? 'ring-2 ring-ring' : ''}`}
+                      key={account.id}
+                      className={`space-y-3 rounded-xl border p-4 ${activeAccountId === account.id ? 'ring-2 ring-ring' : ''}`}
                     >
-                      <Field label={`${cashbox.currencyCode} · ${cashbox.moneyAccountCode}`} error={error}>
+                      <Field label={`${account.currencyCode} · ${account.code}`} error={error}>
                         <div className="relative">
                           <Input
-                            aria-label={`${cashbox.currencyCode} amount`}
+                            aria-label={`${account.currencyCode} amount`}
                             type="number"
                             min="0"
-                            step={quantum(cashbox.currencyDecimalPlaces)}
+                            step={quantum(account.currencyDecimalPlaces)}
                             inputMode="decimal"
-                            className="h-16 pr-20 text-right font-mono text-2xl font-bold"
+                            className="h-16 pe-20 text-end font-mono text-2xl font-bold"
                             {...field}
-                            onFocus={() => setActiveCashboxId(cashbox.moneyAccountId)}
+                            onFocus={() => setActiveAccountId(account.id)}
                             onChange={(event) => {
-                              if (decimalPlaces(event.target.value) <= cashbox.currencyDecimalPlaces) field.onChange(event)
+                              if (decimalPlaces(event.target.value) <= account.currencyDecimalPlaces) field.onChange(event)
                               form.clearErrors('root')
                               complete.reset()
                             }}
                             onBlur={(event) => {
                               field.onBlur(event)
-                              setCashboxAmount(cashbox, Number(event.target.value) || 0)
+                              setAccountAmount(account, Number(event.target.value) || 0)
                             }}
                           />
-                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                            {cashbox.currencyCode}
+                          <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                            {account.currencyCode}
                           </span>
                         </div>
                       </Field>
 
                       <p className="text-xs text-muted-foreground">
-                        {cashbox.moneyAccountName}
-                        {cashbox.currencyId !== setup.baseCurrencyId && cashbox.currentExchangeRate !== null && (
-                          <span className="ml-2 font-medium text-foreground">
-                            {formatNative(nativeAmount, cashbox.currencyDecimalPlaces)} {cashbox.currencyCode} ≈ {amount(posTenderBaseAmount(nativeAmount, cashbox.currentExchangeRate))} {setup.baseCurrencyCode}
+                        {account.name}
+                        {account.currencyId !== setup.baseCurrencyId && account.currentExchangeRate !== null && (
+                          <span className="ms-2 font-medium text-foreground">
+                            {formatNative(nativeAmount, account.currencyDecimalPlaces)} {account.currencyCode} ≈ {amount(posMoneyLineBaseAmount(nativeAmount, account.currentExchangeRate))} {setup.baseCurrencyCode}
                           </span>
                         )}
-                        {cashbox.currentExchangeRate === null && <span className="ml-2 text-destructive">Current rate unavailable</span>}
+                        {account.currentExchangeRate === null && (
+                          <span className="ms-2 text-destructive">
+                            {t('pos:checkout.rateUnavailable', { defaultValue: 'Current rate unavailable' })}
+                          </span>
+                        )}
                       </p>
 
                       {bills.length > 0 && (
@@ -305,11 +327,11 @@ export function CheckoutDialog({
                               variant="outline"
                               className="h-11 font-mono"
                               onClick={() => {
-                                setActiveCashboxId(cashbox.moneyAccountId)
-                                setCashboxAmount(cashbox, nativeAmount + bill)
+                                setActiveAccountId(account.id)
+                                setAccountAmount(account, nativeAmount + bill)
                               }}
                             >
-                              {cashbox.currencyCode === 'USD' ? `$${bill}` : compactBill(bill)}
+                              {account.currencyCode === 'USD' ? `$${bill}` : compactBill(bill)}
                             </Button>
                           ))}
                         </div>
@@ -322,18 +344,19 @@ export function CheckoutDialog({
               <div className="space-y-4">
                 <NumericKeypad
                   onDigit={appendDigit}
-                  onClear={() => activeCashbox && setCashboxAmount(activeCashbox, 0)}
+                  onClear={() => activeAccount && setAccountAmount(activeAccount, 0)}
                   onBackspace={backspace}
                 />
                 <Button
                   type="button"
                   variant="secondary"
                   className="h-14 w-full text-base"
-                  disabled={!activeCashbox?.currentExchangeRate}
+                  disabled={!activeAccount?.currentExchangeRate}
                   onClick={exactRemaining}
                 >
                   <RotateCcw className="size-4" />
-                  Exact remaining{activeCashbox ? ` · ${activeCashbox.currencyCode}` : ''}
+                  {t('pos:checkout.exactRemaining', { defaultValue: 'Exact remaining' })}
+                  {activeAccount ? ` · ${activeAccount.currencyCode}` : ''}
                 </Button>
                 <PaymentSummary
                   total={total}
@@ -349,17 +372,25 @@ export function CheckoutDialog({
             <UnpaidSummary customer={customer} professional={professional} total={total} baseCurrencyCode={setup.baseCurrencyCode} />
           )}
 
-          {(form.formState.errors.root?.message || form.formState.errors.cashboxAmounts?.root?.message || complete.error) && (
+          {(form.formState.errors.root?.message || form.formState.errors.collectionAmounts?.root?.message || complete.error) && (
             <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
-              {form.formState.errors.root?.message ?? form.formState.errors.cashboxAmounts?.root?.message ?? complete.error?.message}
+              {form.formState.errors.root?.message ?? form.formState.errors.collectionAmounts?.root?.message ?? complete.error?.message}
             </p>
           )}
 
           <DialogFooter className="gap-2 sm:justify-between">
-            <Button type="button" variant="outline" className="h-12" onClick={onBack}>Back to sale</Button>
+            <Button type="button" variant="outline" className="h-12" onClick={onBack}>
+              {t('pos:checkout.backToSale', { defaultValue: 'Back to sale' })}
+            </Button>
             <Button type="submit" className="h-12 min-w-56" disabled={!ready || complete.isPending}>
               <Banknote className="size-4" />
-              {complete.isPending ? 'Saving…' : paid ? `Save Paid Sale · ${amount(total)} ${setup.baseCurrencyCode}` : 'Save Unpaid Sale'}
+              {complete.isPending
+                ? t('common:status.loading', { defaultValue: 'Saving…' })
+                : paid
+                  ? `${t('pos:checkout.savePaidSale', { defaultValue: 'Save Paid Sale' })} · ${amount(total)} ${setup.baseCurrencyCode}`
+                  : partial
+                    ? t('pos:checkout.savePartialSale', { defaultValue: 'Save Partially Paid Sale' })
+                    : t('pos:checkout.saveCreditSale', { defaultValue: 'Save Credit Sale' })}
             </Button>
           </DialogFooter>
         </form>
@@ -374,7 +405,7 @@ function PaymentModeButton({ active, title, description, onClick }: { active: bo
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`min-h-14 rounded-lg px-4 text-left transition-colors ${active ? 'bg-background shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'}`}
+      className={`min-h-14 rounded-lg px-4 text-start transition-colors ${active ? 'bg-background shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'}`}
     >
       <span className="flex items-center gap-2 text-base font-semibold">{active && <Check className="size-4" />}{title}</span>
       <span className="mt-0.5 block text-xs">{description}</span>
@@ -403,7 +434,7 @@ function PaymentSummary({ total, receivedBaseAmount, remaining, changeDue, baseC
   receivedBaseAmount: number
   remaining: number
   changeDue: number
-  baseCashbox: SessionCashbox | undefined
+  baseCashbox: PosMoneyAccount | undefined
   baseCurrencyCode: string
 }) {
   return (
@@ -415,10 +446,10 @@ function PaymentSummary({ total, receivedBaseAmount, remaining, changeDue, baseC
         <div className="rounded-lg bg-primary p-3 text-primary-foreground">
           <p className="text-xs font-semibold uppercase tracking-wide">Change</p>
           <p className="mt-1 font-mono text-2xl font-bold">{amount(changeDue)} {baseCurrencyCode}</p>
-          {baseCashbox && <p className="mt-1 text-xs opacity-90">From {baseCashbox.moneyAccountCode}</p>}
+          {baseCashbox && <p className="mt-1 text-xs opacity-90">From {baseCashbox.code}</p>}
         </div>
       )}
-      {!baseCashbox && <p className="text-xs font-medium text-destructive">This session has no {baseCurrencyCode} Cashbox. Paid completion is blocked.</p>}
+      {!baseCashbox && changeDue > 0 && <p className="text-xs font-medium text-destructive">No operable {baseCurrencyCode} Cashbox is available to return change.</p>}
     </div>
   )
 }
@@ -428,13 +459,13 @@ function UnpaidSummary({ customer, professional, total, baseCurrencyCode }: { cu
     return (
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
         <h3 className="font-semibold">Customer required</h3>
-        <p className="mt-1 text-sm">This sale cannot be saved as unpaid while the customer is Walk-in. Select a customer before saving this sale.</p>
+        <p className="mt-1 text-sm">A Walk-in sale must be fully paid. Select a registered customer to save it on credit.</p>
       </div>
     )
   }
   return (
     <div className="rounded-xl border bg-muted/30 p-5">
-      <h3 className="text-lg font-semibold">Unpaid sale</h3>
+      <h3 className="text-lg font-semibold">Credit sale</h3>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Summary label="Customer" value={customer.name} />
         <Summary label="Master" value={professional?.name ?? '—'} />
@@ -453,22 +484,32 @@ function Summary({ label, value, accent = false }: { label: string; value: strin
   return <div><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className={`mt-1 font-mono text-lg font-bold ${accent ? 'text-destructive' : ''}`}>{value}</p></div>
 }
 
-function readinessMessage({ paid, customer, cashboxes, positiveCashboxes, missingRate, baseCashbox, remaining, setup }: {
-  paid: boolean
+function readinessMessage({ paymentMode, customer, accounts, positiveAccounts, missingRate, baseCashbox, receivedBaseAmount, total, setup }: {
+  paymentMode: PosPaymentMode
   customer: PosCustomer | null
-  cashboxes: SessionCashbox[]
-  positiveCashboxes: SessionCashbox[]
-  missingRate: SessionCashbox | undefined
-  baseCashbox: SessionCashbox | undefined
-  remaining: number
+  accounts: PosMoneyAccount[]
+  positiveAccounts: PosMoneyAccount[]
+  missingRate: PosMoneyAccount | undefined
+  baseCashbox: PosMoneyAccount | undefined
+  receivedBaseAmount: number
+  total: number
   setup: PosSetup
 }) {
-  if (!paid) return customer ? 'Unpaid sales do not receive payment now.' : 'A customer is required for an unpaid sale.'
-  if (cashboxes.length === 0) return 'This POS Session has no configured Cashboxes.'
-  if (!baseCashbox) return `This POS Session requires its configured ${setup.baseCurrencyCode} Cashbox before Paid checkout.`
-  if (positiveCashboxes.length === 0) return 'Enter an amount received.'
+  if (paymentMode === PosPaymentMode.Credit) {
+    if (!customer) return 'A registered customer is required for a credit sale.'
+    return positiveAccounts.length === 0 ? 'Review the credit sale before saving.' : 'Credit sales cannot include collection money lines.'
+  }
+  if (accounts.length === 0) return 'No operable Money Account is available for this branch.'
+  if (!customer && paymentMode === PosPaymentMode.Partial) return 'A registered customer is required for a partially paid sale.'
+  if (positiveAccounts.length === 0) return 'Enter an amount received.'
   if (missingRate) return `The current ${missingRate.currencyCode} exchange rate is unavailable.`
-  if (remaining > 0) return `Remaining to collect: ${amount(remaining)} ${setup.baseCurrencyCode}.`
+  if (paymentMode === PosPaymentMode.Partial && receivedBaseAmount >= total) return 'Partial collection must be less than the sale total.'
+  if (paymentMode === PosPaymentMode.Paid && receivedBaseAmount < total) {
+    return `Remaining to collect: ${amount(total - receivedBaseAmount)} ${setup.baseCurrencyCode}.`
+  }
+  if (paymentMode === PosPaymentMode.Paid && receivedBaseAmount > total && !baseCashbox) {
+    return `An operable ${setup.baseCurrencyCode} Cashbox is required to return change.`
+  }
   return 'Review the payment details before saving this sale.'
 }
 
@@ -502,4 +543,4 @@ function compactBill(value: number) {
   return value >= 1_000 ? `${value / 1_000}K` : String(value)
 }
 
-const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+const amount = (value: number) => formatNumber(value, { maximumFractionDigits: 4 })

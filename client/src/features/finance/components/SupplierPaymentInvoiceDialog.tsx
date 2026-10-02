@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Check,
   CheckSquare,
@@ -25,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatDate, formatNumber } from '@/lib/i18n'
 import type { OutstandingPurchaseInvoice } from '../types/finance.types'
 
 interface SupplierPaymentInvoiceDialogProps {
@@ -49,6 +51,7 @@ export function SupplierPaymentInvoiceDialog({
   currentAllocations,
   onApply,
 }: SupplierPaymentInvoiceDialogProps) {
+  const { t } = useTranslation(['finance', 'common'])
   // Map of invoiceId -> allocation amount
   const [allocatedMap, setAllocatedMap] = useState<Record<string, number>>({})
   const [autoAmount, setAutoAmount] = useState<string>('')
@@ -164,12 +167,14 @@ export function SupplierPaymentInvoiceDialog({
           <div className="flex items-center gap-2">
             <FileText className="size-5 text-primary" />
             <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              Choose Purchase Invoices to Pay
+              {t('finance:invoiceAllocationDialog.supplierTitle')}
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500">
-            Select the outstanding bills for <strong>{supplierName}</strong> in{' '}
-            <strong>{currencyCode}</strong>. Selected amounts will auto-calculate the total payment.
+            {t('finance:invoiceAllocationDialog.supplierDesc', {
+              name: supplierName,
+              currency: currencyCode,
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -185,11 +190,11 @@ export function SupplierPaymentInvoiceDialog({
             >
               {allSelected ? (
                 <>
-                  <Square className="size-3.5" /> Deselect All
+                  <Square className="size-3.5" /> {t('finance:invoiceAllocationDialog.deselectAll')}
                 </>
               ) : (
                 <>
-                  <CheckSquare className="size-3.5 text-primary" /> Pay All in Full
+                  <CheckSquare className="size-3.5 text-primary" /> {t('finance:invoiceAllocationDialog.settleAllInFull')}
                 </>
               )}
             </Button>
@@ -201,23 +206,25 @@ export function SupplierPaymentInvoiceDialog({
                 className="h-8 gap-1 text-xs text-slate-500 hover:text-slate-700"
                 onClick={handleClearAll}
               >
-                <RotateCcw className="size-3" /> Clear
+                <RotateCcw className="size-3" /> {t('finance:invoiceAllocationDialog.clear')}
               </Button>
             )}
           </div>
 
           {/* Auto-distribute specific amount */}
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-600 dark:text-slate-400">Auto-Distribute:</span>
+            <span className="text-slate-600 dark:text-slate-400">
+              {t('finance:invoiceAllocationDialog.autoDistribute')}
+            </span>
             <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+              <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
                 {currencyCode}
               </span>
               <Input
                 type="number"
                 min="0.0001"
                 step="0.0001"
-                placeholder="Target Amount"
+                placeholder={t('finance:invoiceAllocationDialog.targetAmount')}
                 value={autoAmount}
                 onChange={(e) => setAutoAmount(e.target.value)}
                 onKeyDown={(e) => {
@@ -226,7 +233,7 @@ export function SupplierPaymentInvoiceDialog({
                     handleAutoDistribute()
                   }
                 }}
-                className="h-8 w-32 pl-9 pr-2 font-mono text-xs"
+                className="h-8 w-32 ps-9 pe-2 font-mono text-xs"
               />
             </div>
             <Button
@@ -238,7 +245,7 @@ export function SupplierPaymentInvoiceDialog({
               onClick={handleAutoDistribute}
             >
               <Sparkles className="size-3.5 text-amber-500" />
-              Apply Oldest First
+              {t('finance:invoiceAllocationDialog.applyOldestFirst')}
             </Button>
           </div>
         </div>
@@ -248,16 +255,16 @@ export function SupplierPaymentInvoiceDialog({
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wider text-slate-700 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                <TableHead className="w-12 px-3 text-center">Select</TableHead>
-                <TableHead className="px-3 font-semibold">Invoice #</TableHead>
-                <TableHead className="px-3 font-semibold">Date</TableHead>
-                <TableHead className="px-3 text-right font-semibold">Original Total</TableHead>
-                <TableHead className="px-3 text-right font-semibold">Paid So Far</TableHead>
-                <TableHead className="px-3 text-right font-semibold text-rose-600 dark:text-rose-400">
-                  Outstanding
+                <TableHead className="w-12 px-3 text-center">{t('finance:invoiceAllocationDialog.th.select')}</TableHead>
+                <TableHead className="px-3 text-start font-semibold">{t('finance:invoiceAllocationDialog.th.invoice')}</TableHead>
+                <TableHead className="px-3 text-start font-semibold">{t('finance:invoiceAllocationDialog.th.date')}</TableHead>
+                <TableHead className="px-3 text-end font-semibold">{t('finance:invoiceAllocationDialog.th.originalTotal')}</TableHead>
+                <TableHead className="px-3 text-end font-semibold">{t('finance:invoiceAllocationDialog.th.paidSoFar')}</TableHead>
+                <TableHead className="px-3 text-end font-semibold text-rose-600 dark:text-rose-400">
+                  {t('finance:invoiceAllocationDialog.th.outstanding')}
                 </TableHead>
-                <TableHead className="w-40 px-3 text-right font-semibold text-primary">
-                  Pay Amount ({currencyCode})
+                <TableHead className="w-40 px-3 text-end font-semibold text-primary">
+                  {t('finance:invoiceAllocationDialog.th.settleAmount', { currency: currencyCode })}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -265,7 +272,7 @@ export function SupplierPaymentInvoiceDialog({
               {invoices.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-32 text-center text-xs text-slate-400">
-                    No outstanding purchase invoices found for this supplier in {currencyCode}.
+                    {t('finance:invoiceAllocationDialog.noSupplierInvoices', { currency: currencyCode })}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -293,34 +300,34 @@ export function SupplierPaymentInvoiceDialog({
                       </TableCell>
 
                       {/* Invoice # */}
-                      <TableCell className="px-3 py-2 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      <TableCell className="px-3 py-2 text-start font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
                         {invoice.documentNumber}
                       </TableCell>
 
                       {/* Date */}
-                      <TableCell className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
-                        {invoice.invoiceDate}
+                      <TableCell className="px-3 py-2 text-start text-xs text-slate-600 dark:text-slate-400">
+                        {formatDate(invoice.invoiceDate)}
                       </TableCell>
 
                       {/* Original Total */}
-                      <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
-                        {invoice.originalTotal.toLocaleString(undefined, {
+                      <TableCell className="px-3 py-2 text-end font-mono text-xs text-slate-600 dark:text-slate-400">
+                        {formatNumber(invoice.originalTotal, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 4,
                         })}
                       </TableCell>
 
                       {/* Paid So Far */}
-                      <TableCell className="px-3 py-2 text-right font-mono text-xs text-slate-500">
-                        {invoice.paidAmount.toLocaleString(undefined, {
+                      <TableCell className="px-3 py-2 text-end font-mono text-xs text-slate-500">
+                        {formatNumber(invoice.paidAmount, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 4,
                         })}
                       </TableCell>
 
                       {/* Outstanding */}
-                      <TableCell className="px-3 py-2 text-right font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
-                        {invoice.outstandingAmount.toLocaleString(undefined, {
+                      <TableCell className="px-3 py-2 text-end font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                        {formatNumber(invoice.outstandingAmount, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 4,
                         })}
@@ -339,7 +346,7 @@ export function SupplierPaymentInvoiceDialog({
                             onChange={(e) =>
                               handleAmountChange(invoice, Number(e.target.value))
                             }
-                            className={`h-8 w-28 text-right font-mono text-xs ${
+                            className={`h-8 w-28 text-end font-mono text-xs ${
                               isChecked ? 'font-bold text-primary' : 'text-slate-400'
                             }`}
                           />
@@ -347,13 +354,13 @@ export function SupplierPaymentInvoiceDialog({
                             type="button"
                             variant="ghost"
                             size="icon-xs"
-                            title="Pay Full Outstanding"
+                            title={t('finance:invoiceAllocationDialog.settleFullOutstanding')}
                             className="text-[10px] text-slate-400 hover:text-primary"
                             onClick={() =>
                               handleAmountChange(invoice, invoice.outstandingAmount)
                             }
                           >
-                            Max
+                            {t('finance:invoiceAllocationDialog.max')}
                           </Button>
                         </div>
                       </TableCell>
@@ -369,16 +376,16 @@ export function SupplierPaymentInvoiceDialog({
         <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-800/40">
           <div className="flex items-center gap-4 text-xs">
             <span className="text-slate-600 dark:text-slate-400">
-              Selected:{' '}
-              <strong className="text-slate-900 dark:text-slate-100">
-                {selectedCount} of {invoices.length} bills
-              </strong>
+              {t('finance:invoiceAllocationDialog.selectedCount', {
+                count: selectedCount,
+                total: invoices.length,
+              })}
             </span>
             <span className="text-slate-400">|</span>
             <span className="text-slate-600 dark:text-slate-400">
-              Total Outstanding:{' '}
+              {t('finance:invoiceAllocationDialog.totalOutstanding')}{' '}
               <strong className="font-mono text-slate-800 dark:text-slate-200">
-                {totalOutstanding.toLocaleString(undefined, {
+                {formatNumber(totalOutstanding, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 4,
                 })}{' '}
@@ -387,10 +394,12 @@ export function SupplierPaymentInvoiceDialog({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-right">
-            <span className="text-xs text-slate-500">Total Selected to Pay:</span>
+          <div className="flex items-center gap-2 text-end">
+            <span className="text-xs text-slate-500">
+              {t('finance:invoiceAllocationDialog.totalSelectedToSettle')}
+            </span>
             <span className="font-mono text-base font-bold text-primary">
-              {totalAllocated.toLocaleString(undefined, {
+              {formatNumber(totalAllocated, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 4,
               })}{' '}
@@ -401,7 +410,7 @@ export function SupplierPaymentInvoiceDialog({
 
         <DialogFooter className="mt-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             type="button"
@@ -411,11 +420,13 @@ export function SupplierPaymentInvoiceDialog({
             onClick={handleApply}
           >
             <Check className="size-4" />
-            Apply Selection ({totalAllocated.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 4,
-            })}{' '}
-            {currencyCode})
+            {t('finance:invoiceAllocationDialog.applySelection', {
+              amount: formatNumber(totalAllocated, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4,
+              }),
+              currency: currencyCode,
+            })}
           </Button>
         </DialogFooter>
       </DialogContent>

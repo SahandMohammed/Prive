@@ -16,6 +16,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -45,6 +46,7 @@ const emptyAccount: AccountInput = {
 }
 
 export function ChartOfAccountsPage() {
+  const { t } = useTranslation(['accounting', 'common'])
   const [search, setSearch] = useState('')
   const [classification, setClassification] = useState<string>('')
   const [editing, setEditing] = useState<Account | null>(null)
@@ -161,10 +163,10 @@ export function ChartOfAccountsPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Chart of Accounts
+            {t('accounting:chartOfAccounts.title')}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            One shared, editable Iraqi IFRS-oriented chart of accounts.
+            {t('accounting:chartOfAccounts.description')}
           </p>
         </div>
         <Button
@@ -172,7 +174,7 @@ export function ChartOfAccountsPage() {
           onClick={openCreateModal}
         >
           <Plus className="h-4 w-4 stroke-[2.5]" />
-          Add account
+          {t('accounting:chartOfAccounts.addAccount')}
         </Button>
       </div>
 
@@ -180,16 +182,16 @@ export function ChartOfAccountsPage() {
         <CardHeader className="border-b border-slate-100 dark:border-slate-800">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Account Hierarchy
+              {t('accounting:chartOfAccounts.hierarchy')}
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search code or name"
-                  className="h-9 rounded-lg border-slate-200 bg-white pl-8 text-xs shadow-xs dark:border-slate-800 dark:bg-slate-900"
+                  placeholder={t('accounting:chartOfAccounts.searchPlaceholder')}
+                  className="h-9 rounded-lg border-slate-200 bg-white ps-8 text-xs shadow-xs dark:border-slate-800 dark:bg-slate-900"
                 />
               </div>
               <select
@@ -197,10 +199,10 @@ export function ChartOfAccountsPage() {
                 onChange={(event) => setClassification(event.target.value)}
                 className="h-9 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-xs shadow-xs outline-none focus:border-primary focus:ring-1 focus:ring-ring dark:border-slate-800 dark:bg-slate-900"
               >
-                <option value="">All classifications</option>
-                {Object.entries(accountClassificationLabels).map(([value, label]) => (
+                <option value="">{t('accounting:chartOfAccounts.allClassifications')}</option>
+                {Object.entries(accountClassificationLabels).map(([value]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(`accounting:classifications.${value}`)}
                   </option>
                 ))}
               </select>
@@ -210,20 +212,20 @@ export function ChartOfAccountsPage() {
                   size="sm"
                   className="h-9 gap-1 text-xs"
                   onClick={expandAll}
-                  title="Expand all groups"
+                  title={t('accounting:chartOfAccounts.expandAll')}
                 >
                   <ChevronsUpDown className="h-3.5 w-3.5" />
-                  Expand all
+                  {t('accounting:chartOfAccounts.expandAll')}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1 text-xs"
                   onClick={collapseAll}
-                  title="Collapse all groups"
+                  title={t('accounting:chartOfAccounts.collapseAll')}
                 >
                   <ChevronsDownUp className="h-3.5 w-3.5" />
-                  Collapse all
+                  {t('accounting:chartOfAccounts.collapseAll')}
                 </Button>
               </div>
             </div>
@@ -241,7 +243,7 @@ export function ChartOfAccountsPage() {
                 onClick={() => deleteAccount.reset()}
                 className="text-xs font-semibold text-red-600 hover:underline"
               >
-                Dismiss
+                {t('accounting:chartOfAccounts.dismiss')}
               </button>
             </div>
           )}
@@ -249,11 +251,11 @@ export function ChartOfAccountsPage() {
           {accountsQuery.isPending ? (
             <div className="flex min-h-64 flex-col items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <p className="text-sm">Loading chart of accounts...</p>
+              <p className="text-sm">{t('accounting:chartOfAccounts.loading')}</p>
             </div>
           ) : accountsQuery.isError ? (
             <div className="flex min-h-64 flex-col items-center justify-center text-red-500">
-              <p className="text-sm font-medium">Could not load the Chart of Accounts.</p>
+              <p className="text-sm font-medium">{t('accounting:chartOfAccounts.error')}</p>
             </div>
           ) : roots.length ? (
             <div className="space-y-0.5">
@@ -267,7 +269,7 @@ export function ChartOfAccountsPage() {
                   onEdit={openEditModal}
                   onChild={openChildModal}
                   onDelete={(id) => {
-                    if (window.confirm('Delete this unused account?')) {
+                    if (window.confirm(t('accounting:chartOfAccounts.deleteConfirm'))) {
                       deleteAccount.mutate(id, {
                         onError: (err) => alert(err.message),
                       })
@@ -278,7 +280,7 @@ export function ChartOfAccountsPage() {
             </div>
           ) : (
             <div className="py-12 text-center text-sm text-slate-500">
-              No accounts match the current filters.
+              {t('accounting:chartOfAccounts.empty')}
             </div>
           )}
         </CardContent>
@@ -292,17 +294,20 @@ export function ChartOfAccountsPage() {
           <DialogHeader>
             <DialogTitle>
               {editing
-                ? `Edit Account (${editing.code})`
+                ? t('accounting:chartOfAccounts.editTitle', { code: editing.code })
                 : parentId
-                  ? `Add Child Account`
-                  : 'Add Account'}
+                  ? t('accounting:chartOfAccounts.addChildTitle')
+                  : t('accounting:chartOfAccounts.addTitle')}
             </DialogTitle>
             <DialogDescription>
               {editing
-                ? 'Update account details, classification, or status.'
+                ? t('accounting:chartOfAccounts.editDesc')
                 : parentId
-                  ? `Create a child account under ${parentAccount?.code} — ${parentAccount?.name}.`
-                  : 'Create a new root or general ledger account.'}
+                  ? t('accounting:chartOfAccounts.addChildDesc', {
+                      code: parentAccount?.code,
+                      name: parentAccount?.name,
+                    })
+                  : t('accounting:chartOfAccounts.addDesc')}
             </DialogDescription>
           </DialogHeader>
 
@@ -310,36 +315,36 @@ export function ChartOfAccountsPage() {
             {parentAccount && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
                 <span className="font-semibold text-slate-900 dark:text-slate-100">
-                  Parent Account:
+                  {t('accounting:chartOfAccounts.parentAccount')}
                 </span>{' '}
                 <span className="font-mono font-medium">{parentAccount.code}</span> —{' '}
-                {parentAccount.name} ({accountClassificationLabels[parentAccount.classification]})
+                {parentAccount.name} ({t(`accounting:classifications.${parentAccount.classification}`)})
               </div>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Account Code" error={form.formState.errors.code?.message}>
+              <Field label={t('accounting:chartOfAccounts.code')} error={form.formState.errors.code?.message}>
                 <Input
-                  placeholder="e.g. 1010"
+                  placeholder={t('accounting:chartOfAccounts.codePlaceholder')}
                   className="font-mono uppercase"
                   {...form.register('code')}
                   autoFocus
                 />
               </Field>
-              <Field label="Account Name" error={form.formState.errors.name?.message}>
-                <Input placeholder="e.g. Cash on Hand" {...form.register('name')} />
+              <Field label={t('accounting:chartOfAccounts.name')} error={form.formState.errors.name?.message}>
+                <Input placeholder={t('accounting:chartOfAccounts.namePlaceholder')} {...form.register('name')} />
               </Field>
             </div>
 
-            <Field label="Classification" error={form.formState.errors.classification?.message}>
+            <Field label={t('accounting:chartOfAccounts.classification')} error={form.formState.errors.classification?.message}>
               <select
                 {...form.register('classification', { valueAsNumber: true })}
                 disabled={Boolean(parentId)}
                 className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-xs outline-none focus:border-primary focus:ring-1 focus:ring-ring disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:disabled:bg-slate-800"
               >
-                {Object.entries(accountClassificationLabels).map(([value, label]) => (
+                {Object.entries(accountClassificationLabels).map(([value]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(`accounting:classifications.${value}`)}
                   </option>
                 ))}
               </select>
@@ -352,7 +357,7 @@ export function ChartOfAccountsPage() {
                   className="size-4 rounded border-slate-300 accent-primary"
                   {...form.register('isGroup')}
                 />
-                <span>Group / Summary account</span>
+                <span>{t('accounting:chartOfAccounts.groupAccount')}</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
@@ -360,7 +365,7 @@ export function ChartOfAccountsPage() {
                   className="size-4 rounded border-slate-300 accent-primary"
                   {...form.register('isActive')}
                 />
-                <span>Active</span>
+                <span>{t('accounting:chartOfAccounts.active')}</span>
               </label>
             </div>
 
@@ -375,14 +380,16 @@ export function ChartOfAccountsPage() {
                 onClick={closeModal}
                 disabled={saveAccount.isPending}
               >
-                Cancel
+                {t('common:actions.cancel')}
               </Button>
               <Button
                 type="submit"
                 disabled={saveAccount.isPending}
               >
-                {saveAccount.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                {editing ? 'Save changes' : 'Create account'}
+                {saveAccount.isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
+                {editing
+                  ? t('accounting:chartOfAccounts.saveChanges')
+                  : t('accounting:chartOfAccounts.createAccount')}
               </Button>
             </DialogFooter>
           </form>
@@ -411,6 +418,7 @@ function AccountNode({
   onChild,
   onDelete,
 }: AccountNodeProps) {
+  const { t } = useTranslation(['accounting', 'common'])
   const children = useMemo(
     () => accounts.filter((child) => child.parentAccountId === account.id),
     [accounts, account.id]
@@ -429,12 +437,16 @@ function AccountNode({
               type="button"
               onClick={() => onToggleExpand(account.id)}
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-              aria-label={isExpanded ? `Collapse ${account.name}` : `Expand ${account.name}`}
+              aria-label={
+                isExpanded
+                  ? t('accounting:chartOfAccounts.collapseAccount', { name: account.name })
+                  : t('accounting:chartOfAccounts.expandAccount', { name: account.name })
+              }
             >
               {isExpanded ? (
                 <ChevronDown className="h-4 w-4" />
               ) : (
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4 rtl:rotate-180" />
               )}
             </button>
           ) : (
@@ -467,16 +479,16 @@ function AccountNode({
             <span
               className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${classificationColor}`}
             >
-              {accountClassificationLabels[account.classification]}
+              {t(`accounting:classifications.${account.classification}`)}
             </span>
             <span
               className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${account.isGroup ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'}`}
             >
-              {account.isGroup ? 'Group' : 'Posting'}
+              {account.isGroup ? t('accounting:chartOfAccounts.group') : t('accounting:chartOfAccounts.posting')}
             </span>
             {!account.isActive && (
               <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                Inactive
+                {t('accounting:chartOfAccounts.inactive')}
               </span>
             )}
           </div>
@@ -488,7 +500,7 @@ function AccountNode({
               size="icon-sm"
               variant="ghost"
               className="h-7 w-7 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
-              title="Add child account"
+              title={t('accounting:chartOfAccounts.addChildTooltip')}
               onClick={() => onChild(account)}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -498,7 +510,7 @@ function AccountNode({
             size="icon-sm"
             variant="ghost"
             className="h-7 w-7 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
-            title="Edit account"
+            title={t('accounting:chartOfAccounts.editTooltip')}
             onClick={() => onEdit(account)}
           >
             <Edit3 className="h-3.5 w-3.5" />
@@ -507,7 +519,7 @@ function AccountNode({
             size="icon-sm"
             variant="ghost"
             className="h-7 w-7 text-slate-500 hover:text-red-600"
-            title="Delete account"
+            title={t('accounting:chartOfAccounts.deleteTooltip')}
             onClick={() => onDelete(account.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -516,7 +528,7 @@ function AccountNode({
       </div>
 
       {hasChildren && isExpanded && (
-        <div className="ml-5 border-l border-slate-200 pl-2.5 dark:border-slate-800">
+        <div className="ms-5 border-s border-slate-200 ps-2.5 dark:border-slate-800">
           {children.map((child) => (
             <AccountNode
               key={child.id}

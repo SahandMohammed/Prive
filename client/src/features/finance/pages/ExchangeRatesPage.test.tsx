@@ -88,7 +88,7 @@ describe('exchange-rate management', () => {
     render(<ExchangeRatesPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Add Exchange Rate' }))
 
-    expect(await screen.findByText(/For POS USD tender, use USD as From and IQD as To/)).toBeInTheDocument()
+    expect(await screen.findByText(/For a POS USD collection money line, use USD as From and IQD as To/)).toBeInTheDocument()
     expect(screen.getByText(/Do not enter the inverse rate/)).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Enter the business-approved rate')).toHaveValue(0)
   })

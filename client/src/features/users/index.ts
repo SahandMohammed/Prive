@@ -12,3 +12,4 @@ export type { CreateUserFormValues, ResetPasswordFormValues } from './schemas/us
 export type { User, CreateUserRequest, UserRole } from './types/users.types'
 
 export { UsersPage } from './pages/UsersPage'
+export * from './i18n'

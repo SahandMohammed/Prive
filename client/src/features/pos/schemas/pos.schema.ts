@@ -4,50 +4,19 @@ import { PosPaymentMode, PosRefundReason } from '../types/pos.types'
 export const posCheckoutSchema = z.object({
   paymentMode: z.union([
     z.literal(PosPaymentMode.Paid),
+    z.literal(PosPaymentMode.Partial),
     z.literal(PosPaymentMode.Credit),
   ]),
-  cashboxAmounts: z.record(z.string().uuid(), z.number().min(0, 'Received amount cannot be negative')),
+  collectionAmounts: z.record(z.string().uuid(), z.number().min(0, 'Received amount cannot be negative')),
 }).superRefine((value, context) => {
-  if (value.paymentMode === PosPaymentMode.Paid
-    && !Object.values(value.cashboxAmounts).some((amount) => amount > 0)) {
+  if ((value.paymentMode === PosPaymentMode.Paid || value.paymentMode === PosPaymentMode.Partial)
+    && !Object.values(value.collectionAmounts).some((amount) => amount > 0)) {
     context.addIssue({
       code: 'custom',
-      path: ['cashboxAmounts'],
+      path: ['collectionAmounts'],
       message: 'Enter an amount received',
     })
   }
-})
-
-export const posOpenSessionSchema = z.object({
-  registerId: z.string().uuid('Select a POS Register'),
-  openingCounts: z.array(
-    z.object({
-      moneyAccountId: z.string().uuid(),
-      amount: z.number().min(0, 'Opening cash cannot be negative'),
-    })
-  ),
-  notes: z.string().max(500, 'Opening notes cannot exceed 500 characters'),
-})
-
-export const posCloseSessionSchema = z.object({
-  closingCounts: z.array(
-    z.object({
-      moneyAccountId: z.string().uuid(),
-      countedAmount: z.number().min(0, 'Counted cash cannot be negative'),
-    })
-  ),
-  notes: z.string().max(500, 'Closing notes cannot exceed 500 characters'),
-})
-
-export const posForceCloseSessionSchema = posCloseSessionSchema.refine(
-  ({ notes }) => notes.trim().length > 0,
-  { path: ['notes'], message: 'A closing reason is required for another cashier\'s session' }
-)
-
-export const posRegisterSchema = z.object({
-  code: z.string().trim().min(1, 'Register code is required').max(32, 'Register code cannot exceed 32 characters'),
-  name: z.string().trim().min(1, 'Register name is required').max(120, 'Register name cannot exceed 120 characters'),
-  cashboxMoneyAccountIds: z.array(z.string().uuid()).min(1, 'Select at least one Cashbox'),
 })
 
 export const posRefundSchema = z.object({
@@ -68,7 +37,7 @@ export const posRefundSchema = z.object({
     quantity: z.number().min(0),
     restockProduct: z.boolean(),
   })),
-  refundTenders: z.array(z.object({
+  refundPayouts: z.array(z.object({
     moneyAccountId: z.string().uuid('Select a Money Account'),
     amount: z.number().positive('Enter a refund amount'),
   })),
@@ -83,7 +52,4 @@ export const posRefundSchema = z.object({
 })
 
 export type PosCheckoutValues = z.infer<typeof posCheckoutSchema>
-export type PosOpenSessionValues = z.infer<typeof posOpenSessionSchema>
-export type PosCloseSessionValues = z.infer<typeof posCloseSessionSchema>
-export type PosRegisterValues = z.infer<typeof posRegisterSchema>
 export type PosRefundValues = z.infer<typeof posRefundSchema>

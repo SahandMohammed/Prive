@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { DataTableColumnHeader } from '@/components/data-table/DataTableColumnHeader'
 import { DataTablePagination } from '@/components/data-table/DataTablePagination'
 import { DataTableShell } from '@/components/data-table/DataTableShell'
@@ -53,20 +54,11 @@ import {
 import { hasCapability, useCurrentUser } from '@/features/auth'
 import { useBranches, useCurrencies } from '@/features/business'
 import { useContacts } from '@/features/contacts'
+import { formatNumber } from '@/lib/i18n'
 import { useDeleteActiveSalesInvoice, useSalesInvoices } from '../hooks/useSales'
 import type { SalesInvoiceSummary } from '../types/sales.types'
 
 type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom'
-
-const DATE_PRESET_OPTIONS: { id: DatePreset; label: string }[] = [
-  { id: 'all', label: 'All Dates' },
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'last7', label: 'Last 7 Days' },
-  { id: 'last30', label: 'Last 30 Days' },
-  { id: 'thisMonth', label: 'This Month' },
-  { id: 'custom', label: 'Custom Range' },
-]
 
 function computePresetDates(preset: DatePreset): { from: string; to: string } {
   const now = new Date()
@@ -101,11 +93,22 @@ function computePresetDates(preset: DatePreset): { from: string; to: string } {
 }
 
 export function SalesInvoicesPage() {
+  const { t } = useTranslation(['sales', 'common'])
   const navigate = useNavigate()
   const currentUser = useCurrentUser().data
   const canViewDeleted = hasCapability(currentUser?.role, 'deletePostedInvoice')
   const canDeletePosted = hasCapability(currentUser?.role, 'deletePostedInvoice')
   const canEditPosted = hasCapability(currentUser?.role, 'editPostedInvoice')
+
+  const datePresetOptions = useMemo<{ id: DatePreset; label: string }[]>(() => [
+    { id: 'all', label: t('sales:filter.datePresets.all') },
+    { id: 'today', label: t('sales:filter.datePresets.today') },
+    { id: 'yesterday', label: t('sales:filter.datePresets.yesterday') },
+    { id: 'last7', label: t('sales:filter.datePresets.last7') },
+    { id: 'last30', label: t('sales:filter.datePresets.last30') },
+    { id: 'thisMonth', label: t('sales:filter.datePresets.thisMonth') },
+    { id: 'custom', label: t('sales:filter.datePresets.custom') },
+  ], [t])
 
   // Pagination state
   const [page, setPage] = useState(1)
@@ -211,7 +214,7 @@ export function SalesInvoicesPage() {
     if (!deleteTarget) return
     const reason = deleteReason.trim()
     if (!reason) {
-      setDeleteError('A deletion reason is required for audit trail.')
+      setDeleteError(t('sales:deleteDialog.reasonRequired'))
       return
     }
     setDeleteError('')
@@ -272,10 +275,10 @@ export function SalesInvoicesPage() {
       if (fromDate && toDate) return `${fromDate} to ${toDate}`
       if (fromDate) return `From ${fromDate}`
       if (toDate) return `Until ${toDate}`
-      return 'Custom Range'
+      return t('sales:filter.datePresets.custom')
     }
-    return DATE_PRESET_OPTIONS.find((o) => o.id === datePreset)?.label
-  }, [datePreset, fromDate, toDate])
+    return datePresetOptions.find((o) => o.id === datePreset)?.label
+  }, [datePreset, fromDate, toDate, datePresetOptions, t])
 
   return (
     <div className="flex min-h-full w-full flex-col pb-12">
@@ -283,13 +286,13 @@ export function SalesInvoicesPage() {
       <header className="sticky -top-5 sm:-top-7 md:-top-8 z-20 -mt-5 sm:-mt-7 md:-mt-8 -mx-5 sm:-mx-7 md:-mx-8 px-5 sm:px-7 md:px-8 py-3.5 sm:py-4 bg-background/95 backdrop-blur-md border-b border-border/80 shadow-2xs flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales Invoices</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('sales:title')}</h1>
             <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-              {totalCount} {totalCount === 1 ? 'invoice' : 'invoices'}
+              {totalCount === 1 ? t('sales:invoiceCount', { count: totalCount }) : t('sales:invoicesCount', { count: totalCount })}
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Saved invoices update receivables, revenue accounts, and stock movements immediately.
+            {t('sales:subtitle')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -299,7 +302,7 @@ export function SalesInvoicesPage() {
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-2xs hover:bg-muted transition-colors"
             >
               <Trash2 className="size-3.5 text-muted-foreground" />
-              Deleted Invoices
+              {t('sales:deletedInvoices')}
             </Link>
           )}
           <Link
@@ -307,7 +310,7 @@ export function SalesInvoicesPage() {
             className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-prive-champagne-light transition-colors"
           >
             <FilePlus2 className="size-3.5" />
-            New Sales Invoice
+            {t('sales:newInvoice')}
           </Link>
         </div>
       </header>
@@ -320,16 +323,16 @@ export function SalesInvoicesPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Search Input */}
           <div className="relative min-w-[240px] flex-1 sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              aria-label="Search Sales Invoices"
-              placeholder="Search document # or customer…"
+              aria-label={t('sales:filter.searchPlaceholder')}
+              placeholder={t('sales:filter.searchPlaceholder')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
                 resetPage()
               }}
-              className="h-9 pl-9 pr-8 text-xs bg-background"
+              className="h-9 ps-9 pe-8 text-xs bg-background"
             />
             {search && (
               <button
@@ -338,8 +341,8 @@ export function SalesInvoicesPage() {
                   setSearch('')
                   resetPage()
                 }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
+                className="absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={t('common:actions.clear', 'Clear')}
               >
                 <X className="size-3.5" />
               </button>
@@ -348,14 +351,14 @@ export function SalesInvoicesPage() {
 
           {/* Quick Date Presets */}
           <div className="relative flex items-center">
-            <Calendar className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Calendar className="pointer-events-none absolute start-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <select
               aria-label="Date preset filter"
               value={datePreset}
               onChange={(e) => handleDatePresetChange(e.target.value as DatePreset)}
-              className="h-9 cursor-pointer rounded-md border border-input bg-background pl-8 pr-7 text-xs font-medium text-foreground outline-hidden transition-colors hover:bg-muted/50 focus:border-ring focus:ring-1 focus:ring-ring"
+              className="h-9 cursor-pointer rounded-md border border-input bg-background ps-8 pe-7 text-xs font-medium text-foreground outline-hidden transition-colors hover:bg-muted/50 focus:border-ring focus:ring-1 focus:ring-ring"
             >
-              {DATE_PRESET_OPTIONS.map((opt) => (
+              {datePresetOptions.map((opt) => (
                 <option key={opt.id} value={opt.id}>
                   {opt.label}
                 </option>
@@ -373,7 +376,7 @@ export function SalesInvoicesPage() {
             }}
             className="h-9 max-w-[200px] cursor-pointer rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground outline-hidden transition-colors hover:bg-muted/50 focus:border-ring focus:ring-1 focus:ring-ring"
           >
-            <option value="">All Customers</option>
+            <option value="">{t('sales:filter.allCustomers')}</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -390,7 +393,7 @@ export function SalesInvoicesPage() {
             aria-label="Toggle secondary filters"
           >
             <SlidersHorizontal className="size-3.5 text-muted-foreground" />
-            <span>Filters</span>
+            <span>{t('sales:filter.filters')}</span>
             {activeSecondaryCount > 0 && (
               <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                 {activeSecondaryCount}
@@ -404,10 +407,10 @@ export function SalesInvoicesPage() {
               variant="ghost"
               size="sm"
               onClick={handleClearAllFilters}
-              className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground ml-auto"
+              className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground ms-auto"
             >
               <RotateCcw className="size-3.5" />
-              Reset
+              {t('sales:filter.reset')}
             </Button>
           )}
         </div>
@@ -418,7 +421,7 @@ export function SalesInvoicesPage() {
             {/* Branch Filter */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                Branch
+                {t('sales:filter.branch')}
               </label>
               <select
                 aria-label="Branch filter"
@@ -429,7 +432,7 @@ export function SalesInvoicesPage() {
                 }}
                 className="h-9 cursor-pointer rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground outline-hidden transition-colors hover:bg-muted/50 focus:border-ring focus:ring-1 focus:ring-ring"
               >
-                <option value="">All branches</option>
+                <option value="">{t('sales:filter.allBranches')}</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
@@ -441,7 +444,7 @@ export function SalesInvoicesPage() {
             {/* Currency Filter */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                Currency
+                {t('sales:filter.currency')}
               </label>
               <select
                 aria-label="Currency filter"
@@ -452,7 +455,7 @@ export function SalesInvoicesPage() {
                 }}
                 className="h-9 cursor-pointer rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground outline-hidden transition-colors hover:bg-muted/50 focus:border-ring focus:ring-1 focus:ring-ring"
               >
-                <option value="">All currencies</option>
+                <option value="">{t('sales:filter.allCurrencies')}</option>
                 {currencies.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.code}
@@ -464,7 +467,7 @@ export function SalesInvoicesPage() {
             {/* Custom Date From */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                From Date
+                {t('sales:filter.fromDate')}
               </label>
               <Input
                 type="date"
@@ -482,7 +485,7 @@ export function SalesInvoicesPage() {
             {/* Custom Date To */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                To Date
+                {t('sales:filter.toDate')}
               </label>
               <Input
                 type="date"
@@ -502,11 +505,11 @@ export function SalesInvoicesPage() {
         {/* Tier 3: Active Filter Chips Bar */}
         {hasAnyFilter && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-2.5">
-            <span className="text-xs font-medium text-muted-foreground mr-1">Active filters:</span>
+            <span className="text-xs font-medium text-muted-foreground me-1">{t('sales:filter.activeFilters')}</span>
 
             {search.trim() && (
               <FilterChip
-                label={`Search: "${search.trim()}"`}
+                label={`${t('common:actions.search', 'Search')}: "${search.trim()}"`}
                 onRemove={() => {
                   setSearch('')
                   resetPage()
@@ -516,7 +519,7 @@ export function SalesInvoicesPage() {
 
             {customerId && customerName && (
               <FilterChip
-                label={`Customer: ${customerName}`}
+                label={`${t('sales:customer')}: ${customerName}`}
                 onRemove={() => {
                   setCustomerId('')
                   resetPage()
@@ -526,7 +529,7 @@ export function SalesInvoicesPage() {
 
             {datePreset !== 'all' && (
               <FilterChip
-                label={`Date: ${datePresetLabel}`}
+                label={`${t('sales:table.date')}: ${datePresetLabel}`}
                 onRemove={() => {
                   setDatePreset('all')
                   setFromDate('')
@@ -538,7 +541,7 @@ export function SalesInvoicesPage() {
 
             {branchId && branchName && (
               <FilterChip
-                label={`Branch: ${branchName}`}
+                label={`${t('sales:filter.branch')}: ${branchName}`}
                 onRemove={() => {
                   setBranchId('')
                   resetPage()
@@ -548,7 +551,7 @@ export function SalesInvoicesPage() {
 
             {currencyId && currencyCode && (
               <FilterChip
-                label={`Currency: ${currencyCode}`}
+                label={`${t('sales:filter.currency')}: ${currencyCode}`}
                 onRemove={() => {
                   setCurrencyId('')
                   resetPage()
@@ -559,9 +562,9 @@ export function SalesInvoicesPage() {
             <button
               type="button"
               onClick={handleClearAllFilters}
-              className="text-xs font-medium text-primary hover:underline ml-1 cursor-pointer"
+              className="text-xs font-medium text-primary hover:underline ms-1 cursor-pointer"
             >
-              Clear all
+              {t('sales:filter.clearAll')}
             </button>
           </div>
         )}
@@ -576,7 +579,7 @@ export function SalesInvoicesPage() {
                 {/* Document Column */}
                 <TableHead className="px-4 py-3">
                   <DataTableColumnHeader
-                    title="Document"
+                    title={t('sales:table.document')}
                     canSort
                     isSorted={sortBy === 'document' ? (sortDescending ? 'desc' : 'asc') : false}
                     onSort={() => handleSort('document', false)}
@@ -586,7 +589,7 @@ export function SalesInvoicesPage() {
                 {/* Customer Column */}
                 <TableHead className="px-4 py-3">
                   <DataTableColumnHeader
-                    title="Customer"
+                    title={t('sales:table.customer')}
                     canSort
                     isSorted={sortBy === 'customer' ? (sortDescending ? 'desc' : 'asc') : false}
                     onSort={() => handleSort('customer', false)}
@@ -596,7 +599,7 @@ export function SalesInvoicesPage() {
                 {/* Date Column (Default sort: desc) */}
                 <TableHead className="px-4 py-3">
                   <DataTableColumnHeader
-                    title="Date"
+                    title={t('sales:table.date')}
                     canSort
                     isSorted={sortBy === 'date' ? (sortDescending ? 'desc' : 'asc') : false}
                     onSort={() => handleSort('date', true)}
@@ -606,7 +609,7 @@ export function SalesInvoicesPage() {
                 {/* Branch / Warehouse Column */}
                 <TableHead className="px-4 py-3">
                   <DataTableColumnHeader
-                    title="Branch / Warehouse"
+                    title={t('sales:table.branchWarehouse')}
                     canSort
                     isSorted={sortBy === 'branch' ? (sortDescending ? 'desc' : 'asc') : false}
                     onSort={() => handleSort('branch', false)}
@@ -616,7 +619,7 @@ export function SalesInvoicesPage() {
                 {/* Currency Column */}
                 <TableHead className="px-4 py-3">
                   <DataTableColumnHeader
-                    title="Currency"
+                    title={t('sales:table.currency')}
                     canSort
                     isSorted={sortBy === 'currency' ? (sortDescending ? 'desc' : 'asc') : false}
                     onSort={() => handleSort('currency', false)}
@@ -624,9 +627,9 @@ export function SalesInvoicesPage() {
                 </TableHead>
 
                 {/* Total Column (Default sort: desc) */}
-                <TableHead className="px-4 py-3 text-right">
+                <TableHead className="px-4 py-3 text-end">
                   <DataTableColumnHeader
-                    title="Total"
+                    title={t('sales:table.total')}
                     align="right"
                     canSort
                     isSorted={sortBy === 'total' ? (sortDescending ? 'desc' : 'asc') : false}
@@ -637,7 +640,7 @@ export function SalesInvoicesPage() {
                 {/* Created By Column */}
                 <TableHead className="px-4 py-3">
                   <DataTableColumnHeader
-                    title="Created By"
+                    title={t('sales:table.createdBy')}
                     canSort
                     isSorted={sortBy === 'createdby' ? (sortDescending ? 'desc' : 'asc') : false}
                     onSort={() => handleSort('createdby', false)}
@@ -645,7 +648,7 @@ export function SalesInvoicesPage() {
                 </TableHead>
 
                 {/* Action Buttons Column */}
-                <TableHead className="px-4 py-3 text-right">Actions</TableHead>
+                <TableHead className="px-4 py-3 text-end">{t('sales:table.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-border/60">
@@ -671,21 +674,21 @@ export function SalesInvoicesPage() {
                     <TableCell className="px-4 py-3.5">
                       <div className="h-4 w-12 rounded bg-muted/60" />
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
-                      <div className="ml-auto h-4 w-20 rounded bg-muted/60" />
+                    <TableCell className="px-4 py-3.5 text-end">
+                      <div className="ms-auto h-4 w-20 rounded bg-muted/60" />
                     </TableCell>
                     <TableCell className="px-4 py-3.5">
                       <div className="h-4 w-24 rounded bg-muted/60" />
                     </TableCell>
-                    <TableCell className="px-4 py-3.5 text-right">
-                      <div className="ml-auto h-7 w-14 rounded bg-muted/60" />
+                    <TableCell className="px-4 py-3.5 text-end">
+                      <div className="ms-auto h-7 w-14 rounded bg-muted/60" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : query.isError ? (
                 <TableRow>
                   <TableCell colSpan={8} className="h-40 text-center text-destructive">
-                    <p className="font-medium">Failed to load sales invoices</p>
+                    <p className="font-medium">{t('sales:table.failedToLoad')}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{query.error.message}</p>
                   </TableCell>
                 </TableRow>
@@ -699,9 +702,9 @@ export function SalesInvoicesPage() {
                             <SearchX className="size-6 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">No invoices match your filters</p>
+                            <p className="font-semibold text-foreground">{t('sales:table.noMatch')}</p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              Try clearing some filters or searching for another document number or customer.
+                              {t('sales:table.noMatchDesc')}
                             </p>
                           </div>
                           <Button
@@ -711,7 +714,7 @@ export function SalesInvoicesPage() {
                             className="gap-1.5 text-xs"
                           >
                             <RotateCcw className="size-3.5" />
-                            Clear Filters
+                            {t('sales:table.clearFilters')}
                           </Button>
                         </>
                       ) : (
@@ -720,15 +723,15 @@ export function SalesInvoicesPage() {
                             <ReceiptText className="size-6" />
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">No sales invoices yet</p>
+                            <p className="font-semibold text-foreground">{t('sales:table.noInvoices')}</p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              Record your first sales invoice to immediately track receivables, revenue, and inventory.
+                              {t('sales:table.noInvoicesDesc')}
                             </p>
                           </div>
                           <Link to="/sales/invoices/new">
                             <Button size="sm" className="gap-1.5 text-xs">
                               <Plus className="size-3.5" />
-                              Create Sales Invoice
+                              {t('sales:newInvoice')}
                             </Button>
                           </Link>
                         </>
@@ -758,7 +761,7 @@ export function SalesInvoicesPage() {
                         <span className="font-medium text-foreground">{invoice.customerName}</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-muted-foreground italic">
-                          <User className="size-3" /> Walk-in customer
+                          <User className="size-3" /> {t('sales:table.walkIn')}
                         </span>
                       )}
                     </TableCell>
@@ -772,7 +775,7 @@ export function SalesInvoicesPage() {
                     <TableCell className="px-4 py-3.5 text-xs">
                       <p className="font-medium text-foreground">{invoice.branchName}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {invoice.warehouseName ?? 'No stock warehouse'}
+                        {invoice.warehouseName ?? t('sales:table.noWarehouse')}
                       </p>
                     </TableCell>
 
@@ -784,8 +787,8 @@ export function SalesInvoicesPage() {
                     </TableCell>
 
                     {/* Total Amount */}
-                    <TableCell className="px-4 py-3.5 text-right font-mono text-xs font-bold text-foreground">
-                      {formatAmount(invoice.total)} {invoice.currencyCode}
+                    <TableCell className="px-4 py-3.5 text-end font-mono text-xs font-bold text-foreground">
+                      {formatNumber(invoice.total, { maximumFractionDigits: 4 })} {invoice.currencyCode}
                     </TableCell>
 
                     {/* Created By */}
@@ -794,14 +797,14 @@ export function SalesInvoicesPage() {
                     </TableCell>
 
                     {/* Action Buttons Column */}
-                    <TableCell className="px-4 py-3.5 text-right">
+                    <TableCell className="px-4 py-3.5 text-end">
                       <div className="flex items-center justify-end gap-1">
                         {/* Primary View Action */}
                         <Link
                           to={`/sales/invoices/${invoice.id}`}
                           className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                           aria-label={`View invoice ${invoice.documentNumber}`}
-                          title="View invoice details"
+                          title={t('sales:table.viewDetails')}
                         >
                           <Eye className="size-3.5" />
                         </Link>
@@ -812,7 +815,7 @@ export function SalesInvoicesPage() {
                             to={`/sales/invoices/${invoice.id}?edit=true`}
                             className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                             aria-label={`Edit invoice ${invoice.documentNumber}`}
-                            title="Edit invoice"
+                            title={t('sales:table.editInvoice')}
                           >
                             <Pencil className="size-3.5" />
                           </Link>
@@ -837,7 +840,7 @@ export function SalesInvoicesPage() {
                               onClick={() => navigate(`/sales/invoices/${invoice.id}`)}
                             >
                               <Eye />
-                              <span>View details</span>
+                              <span>{t('sales:table.viewDetails')}</span>
                             </DropdownMenuItem>
 
                             {canEditPosted && (
@@ -845,7 +848,7 @@ export function SalesInvoicesPage() {
                                 onClick={() => navigate(`/sales/invoices/${invoice.id}?edit=true`)}
                               >
                                 <Pencil />
-                                <span>Edit invoice</span>
+                                <span>{t('sales:table.editInvoice')}</span>
                               </DropdownMenuItem>
                             )}
 
@@ -860,7 +863,7 @@ export function SalesInvoicesPage() {
                                 <Copy />
                               )}
                               <span>
-                                {copiedId === invoice.id ? 'Copied to clipboard' : 'Copy Document #'}
+                                {copiedId === invoice.id ? t('sales:table.copied') : t('sales:table.copyDocument')}
                               </span>
                             </DropdownMenuItem>
 
@@ -872,7 +875,7 @@ export function SalesInvoicesPage() {
                               }
                             >
                               <PackageSearch />
-                              <span>Stock movements</span>
+                              <span>{t('sales:table.stockMovements')}</span>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
@@ -883,7 +886,7 @@ export function SalesInvoicesPage() {
                               }
                             >
                               <BookOpen />
-                              <span>Accounting journal</span>
+                              <span>{t('sales:table.accountingJournal')}</span>
                             </DropdownMenuItem>
 
                             {canDeletePosted && (
@@ -898,7 +901,7 @@ export function SalesInvoicesPage() {
                                   }}
                                 >
                                   <Trash2 />
-                                  <span>Delete invoice</span>
+                                  <span>{t('sales:table.deleteInvoice')}</span>
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -940,22 +943,19 @@ export function SalesInvoicesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <Trash2 className="size-5" />
-              Delete Posted Sales Invoice
+              {t('sales:deleteDialog.title')}
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete invoice{' '}
-              <strong className="font-mono text-foreground">{deleteTarget?.documentNumber}</strong>?
-              This action reverses receivable ledger entries, reverses revenue journal entries, and
-              restores inventory stock movements.
+              {t('sales:deleteDialog.desc', { docNumber: deleteTarget?.documentNumber })}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-2">
             <label className="text-xs font-semibold text-foreground">
-              Reason for deletion <span className="text-destructive">*</span>
+              {t('sales:deleteDialog.reasonLabel')} <span className="text-destructive">*</span>
             </label>
             <Input
-              placeholder="e.g., Invoiced duplicate or order cancelled"
+              placeholder={t('sales:deleteDialog.reasonPlaceholder')}
               value={deleteReason}
               onChange={(e) => {
                 setDeleteReason(e.target.value)
@@ -974,7 +974,7 @@ export function SalesInvoicesPage() {
               onClick={() => setDeleteTarget(null)}
               disabled={deleteMutation.isPending}
             >
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -988,7 +988,7 @@ export function SalesInvoicesPage() {
               ) : (
                 <Trash2 className="size-3.5" />
               )}
-              Confirm Delete
+              {t('sales:deleteDialog.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1001,7 +1001,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
   return (
     <Badge
       variant="secondary"
-      className="gap-1 pl-2.5 pr-1 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+      className="gap-1 ps-2.5 pe-1 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-foreground"
     >
       <span>{label}</span>
       <button
@@ -1015,6 +1015,3 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
     </Badge>
   )
 }
-
-const formatAmount = (value: number) =>
-  value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })

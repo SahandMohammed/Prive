@@ -1,27 +1,20 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ShoppingCart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useCurrentUser } from '@/features/auth'
 import { useBranchSelectionStore } from '@/features/business'
+import { formatNumber } from '@/lib/i18n'
 import { CheckoutDialog } from '../components/CheckoutDialog'
-import { CloseSessionScreen } from '../components/CloseSessionScreen'
-import { OpenSessionScreen } from '../components/OpenSessionScreen'
 import { PosCart } from '../components/PosCart'
 import { PosCatalogGrid } from '../components/PosCatalogGrid'
 import { PosCategoryNav } from '../components/PosCategoryNav'
 import { ProfessionalSelectionDialog } from '../components/ProfessionalSelectionDialog'
 import { PosTopBar } from '../components/PosTopBar'
 import { SaleCompleteDialog } from '../components/SaleCompleteDialog'
-import { SessionClosedScreen } from '../components/SessionClosedScreen'
-import { XReportDialog } from '../components/XReportDialog'
-import {
-  useActivePosSession,
-  usePosCatalog,
-  usePosRegisters,
-  usePosSetup,
-} from '../hooks/usePos'
+import { usePosCatalog, usePosSetup } from '../hooks/usePos'
 import { addCatalogItemToCart, posCartTotal } from '../lib/posCart'
 import { PosCatalogItemType } from '../types/pos.types'
 import type {
@@ -30,86 +23,58 @@ import type {
   PosCategory,
   PosCustomer,
   PosSale,
-  PosSession,
   PosSetup,
-  PosZReport,
 } from '../types/pos.types'
 
 export function PosPage() {
+  const { t } = useTranslation(['pos', 'common'])
   const navigate = useNavigate()
   const { data: user } = useCurrentUser()
   const selectedBranchId = useBranchSelectionStore((state) => state.branchId) ?? ''
   const setupQuery = usePosSetup()
-  const registersQuery = usePosRegisters()
-  const sessionQuery = useActivePosSession()
-  const [closedReport, setClosedReport] = useState<PosZReport | null>(null)
   const setup = setupQuery.data
   const selectedBranch = setup?.branches.find((branch) => branch.id === selectedBranchId) ?? setup?.branches[0]
 
-  if (setupQuery.isPending || registersQuery.isPending || sessionQuery.isPending) {
-    return <FullState>Loading POS session…</FullState>
+  if (setupQuery.isPending) {
+    return <FullState>{t('common:status.loading', { defaultValue: 'Loading…' })}</FullState>
   }
 
-  if (setupQuery.isError || registersQuery.isError || sessionQuery.isError || !setup) {
-    const message = setupQuery.error?.message ?? registersQuery.error?.message ?? sessionQuery.error?.message
+  if (setupQuery.isError || !setup || !selectedBranch) {
+    const message = setupQuery.error?.message
     return (
       <div className="grid h-screen place-items-center bg-background p-6 text-center">
         <div>
-          <p className="font-semibold text-destructive">POS setup is unavailable.</p>
-          <p className="mt-1 text-sm text-muted-foreground">{message ?? 'Refresh the page or return to the ERP workspace.'}</p>
-          <Button className="mt-4" variant="outline" onClick={() => navigate('/pos')}>Back to POS Sessions</Button>
+          <p className="font-semibold text-destructive">{t('pos:setupUnavailable')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{message ?? t('pos:setupUnavailableDesc')}</p>
+          <Button className="mt-4" variant="outline" onClick={() => navigate('/')}>{t('common:actions.back', { defaultValue: 'Back' })}</Button>
         </div>
       </div>
     )
   }
 
-  if (closedReport) {
-    return <SessionClosedScreen report={closedReport} onNewSession={() => navigate('/pos')} />
-  }
-
-  if (!sessionQuery.data) {
-    return (
-      <OpenSessionScreen
-        setup={setup}
-        branch={selectedBranch}
-        registers={registersQuery.data ?? []}
-        cashier={user?.username ?? 'Cashier'}
-        onExit={() => navigate('/pos')}
-      />
-    )
-  }
-
   return (
     <PosWorkspace
-      key={`${selectedBranchId}:${sessionQuery.data.id}`}
+      key={selectedBranch.id}
       setup={setup}
-      session={sessionQuery.data}
-      selectedBranchId={selectedBranchId}
-      cashier={user?.username ?? sessionQuery.data.cashierUsername}
-      onSessionClosed={setClosedReport}
-      onExit={() => navigate('/pos')}
-      onHistory={() => navigate('/pos')}
+      selectedBranchId={selectedBranch.id}
+      operator={user?.username ?? 'Operator'}
+      onExit={() => navigate('/')}
     />
   )
 }
 
 function PosWorkspace({
   setup,
-  session,
   selectedBranchId,
-  cashier,
-  onSessionClosed,
+  operator,
   onExit,
-  onHistory,
 }: {
   setup: PosSetup
-  session: PosSession
   selectedBranchId: string
-  cashier: string
-  onSessionClosed: (report: PosZReport) => void
+  operator: string
   onExit: () => void
-  onHistory: () => void
 }) {
+  const { t } = useTranslation(['pos', 'common'])
   const [selectedWarehouseId, setWarehouseId] = useState('')
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
@@ -122,8 +87,6 @@ function PosWorkspace({
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(null)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [completedSale, setCompletedSale] = useState<PosSale | null>(null)
-  const [xReportOpen, setXReportOpen] = useState(false)
-  const [closing, setClosing] = useState(false)
 
   const branchWarehouses = useMemo(
     () => setup.warehouses.filter((warehouse) => warehouse.branchId === selectedBranchId),
@@ -189,43 +152,21 @@ function PosWorkspace({
     setCompletedSale(sale)
   }
 
-  if (closing) {
-    return (
-      <CloseSessionScreen
-        session={session}
-        onCancel={() => setClosing(false)}
-        onClosed={(report) => {
-          setCart([])
-          setCustomer(null)
-          setSelectedProfessionalId(null)
-          setCheckoutStage(null)
-          setMobileCartOpen(false)
-          setCompletedSale(null)
-          onSessionClosed(report)
-        }}
-      />
-    )
-  }
-
   return (
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-muted/20">
       <PosTopBar
         branch={selectedBranch}
-        session={session}
         warehouses={branchWarehouses}
         warehouseId={warehouseId}
-        cashier={cashier}
+        operator={operator}
         onWarehouseChange={changeWarehouse}
-        onXReport={() => setXReportOpen(true)}
-        onCloseSession={() => setClosing(true)}
-        onHistory={onHistory}
         onExit={onExit}
       />
 
       {branchWarehouses.length > 1 && (
         <div className="shrink-0 border-b bg-card px-3 py-2 xl:hidden">
           <select
-            aria-label="Product warehouse"
+            aria-label={t('pos:topBar.warehouse')}
             value={warehouseId}
             onChange={(event) => changeWarehouse(event.target.value)}
             className="h-9 w-full rounded-lg border bg-background px-3 text-xs font-medium outline-none focus:ring-2 focus:ring-ring"
@@ -238,9 +179,9 @@ function PosWorkspace({
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="hidden w-56 shrink-0 flex-col border-r bg-card lg:flex">
+        <aside className="hidden w-56 shrink-0 flex-col border-e bg-card lg:flex">
           <div className="shrink-0 border-b px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catalog</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('pos:catalog')}</p>
           </div>
           <div className="min-h-0 flex-1">
             <PosCategoryNav
@@ -280,7 +221,7 @@ function PosWorkspace({
         </main>
 
         <PosCart
-          className="hidden w-[390px] shrink-0 border-l xl:flex"
+          className="hidden w-[390px] shrink-0 border-s xl:flex"
           cart={cart}
           setup={setup}
           customer={customer}
@@ -291,9 +232,9 @@ function PosWorkspace({
         />
       </div>
 
-      <Button type="button" className="fixed bottom-4 right-4 z-40 h-12 rounded-full px-5 shadow-lg xl:hidden" onClick={() => setMobileCartOpen(true)}>
+      <Button type="button" className="fixed bottom-4 end-4 z-40 h-12 rounded-full px-5 shadow-lg xl:hidden" onClick={() => setMobileCartOpen(true)}>
         <ShoppingCart className="size-4" />
-        Cart {cart.length > 0 ? `(${cart.length}) · ${amount(total)} ${setup.baseCurrencyCode}` : ''}
+        {t('pos:cart.title')} {cart.length > 0 ? `(${cart.length}) · ${amount(total)} ${setup.baseCurrencyCode}` : ''}
       </Button>
 
       <Dialog open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
@@ -323,7 +264,7 @@ function PosWorkspace({
       <CheckoutDialog
         open={checkoutStage === 'payment'}
         setup={setup}
-        session={session}
+        branchId={selectedBranchId}
         warehouseId={warehouseId}
         customer={customer}
         professional={cartHasServices ? selectedProfessional : null}
@@ -333,7 +274,6 @@ function PosWorkspace({
         onCompleted={completeSale}
       />
 
-      <XReportDialog sessionId={session.id} open={xReportOpen} onOpenChange={setXReportOpen} />
       <SaleCompleteDialog sale={completedSale} onNewSale={() => setCompletedSale(null)} />
     </div>
   )
@@ -343,4 +283,4 @@ function FullState({ children }: { children: React.ReactNode }) {
   return <div className="grid h-screen place-items-center bg-background text-sm text-muted-foreground">{children}</div>
 }
 
-const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+const amount = (value: number) => formatNumber(value, { maximumFractionDigits: 4 })

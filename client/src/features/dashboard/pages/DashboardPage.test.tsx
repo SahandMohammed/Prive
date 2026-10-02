@@ -55,7 +55,7 @@ const mockSalesMix = {
 const mockTransactions = [
   {
     id: 'tx-1',
-    documentNumber: 'POS-000041',
+    documentNumber: 'SI-000041',
     transactionType: 'POS Sale',
     timestampUtc: new Date().toISOString(),
     amount: 35000,
@@ -73,7 +73,7 @@ const mockActivity = [
     username: 'Ahmed',
     action: 'posted',
     entityType: 'POS Sale',
-    documentNumber: 'POS-000041',
+    documentNumber: 'SI-000041',
     timestampUtc: new Date().toISOString(),
     description: 'Completed sale at POS',
   },
@@ -134,7 +134,7 @@ describe('DashboardPage', () => {
 
     // Check Recent Transactions
     expect(screen.getByText('Recent Transactions')).toBeInTheDocument()
-    expect(screen.getAllByText('POS-000041').length).toBe(2)
+    expect(screen.getAllByText('SI-000041').length).toBe(2)
     expect(screen.getByText('+35,000 IQD')).toBeInTheDocument()
 
     // Check Recent Activity

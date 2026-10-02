@@ -465,14 +465,13 @@ public sealed class SalesService
 
   internal async Task<SalesInvoiceEntity> PrepareImmediateSaleAsync(
     SalesInvoiceDraftRequest request,
-    string documentNumber,
     Guid userId,
     CancellationToken ct)
   {
     var validation = await ValidateInvoiceAsync(request, false, ct);
     var invoice = new SalesInvoiceEntity
     {
-      DocumentNumber = documentNumber,
+      DocumentNumber = await NextDocumentNumberAsync(ct),
       CreatedByUserId = userId
     };
     Apply(invoice, request, validation.BaseCurrencyId, validation.ExchangeRate);
@@ -1080,14 +1079,7 @@ public sealed class SalesService
     .Include(invoice => invoice.Currency)
     .Include(invoice => invoice.BaseCurrency)
     .Include(invoice => invoice.CreatedByUser)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.PosSession).ThenInclude(session => session.OpeningCounts).ThenInclude(count => count.MoneyAccount)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.PosSession).ThenInclude(session => session.OpeningCounts).ThenInclude(count => count.Currency)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Payment)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.CashierUser)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Tenders).ThenInclude(tender => tender.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Tenders).ThenInclude(tender => tender.PaymentMoneyLine)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Change).ThenInclude(change => change!.MoneyAccount).ThenInclude(account => account.Currency)
-    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.Change).ThenInclude(change => change!.PaymentMoneyLine)
+    .Include(invoice => invoice.PosContext).ThenInclude(context => context!.OperatorUser)
     .Include(invoice => invoice.PosRefunds)
     .Include(invoice => invoice.Movements)
     .Include(invoice => invoice.PaymentAllocations).ThenInclude(allocation => allocation.Payment)
@@ -1123,61 +1115,10 @@ public sealed class SalesService
     if (invoice.PosContext is not null)
     {
       var sale = invoice.PosContext;
-      var tenders = sale.Tenders.OrderBy(tender => tender.Sequence).Select(tender => new PosTenderResponse(
-        tender.Id,
-        tender.Sequence,
-        tender.MoneyAccountId,
-        tender.MoneyAccount.Code,
-        tender.MoneyAccount.Name,
-        tender.MoneyAccount.CurrencyId,
-        tender.MoneyAccount.Currency.Code,
-        tender.TenderedAmount,
-        tender.ExchangeRate,
-        tender.BaseAmount,
-        tender.PaymentMoneyLineId,
-        tender.PaymentMoneyLine.MoneyLedgerEntryId)).ToList();
-      var change = sale.Change is null ? null : new PosChangeResponse(
-        sale.Change.Id,
-        sale.Change.MoneyAccountId,
-        sale.Change.MoneyAccount.Code,
-        sale.Change.MoneyAccount.Name,
-        sale.Change.MoneyAccount.CurrencyId,
-        sale.Change.MoneyAccount.Currency.Code,
-        sale.Change.Amount,
-        sale.Change.ExchangeRate,
-        sale.Change.BaseAmount,
-        sale.Change.PaymentMoneyLineId,
-        sale.Change.PaymentMoneyLine.MoneyLedgerEntryId);
-      var settledBase = Money(tenders.Sum(tender => tender.BaseAmount) - (change?.BaseAmount ?? 0m));
-      var mode = settledBase <= 0
-        ? PosPaymentMode.Credit
-        : settledBase < invoice.BaseTotal
-          ? PosPaymentMode.Partial
-          : PosPaymentMode.Paid;
       posContext = new SalesInvoicePosContextResponse(
-        sale.PosSessionId,
-        sale.PosSession.SessionNumber,
-        sale.PosSession.Status,
-        sale.CashierUserId,
-        sale.CashierUser.Username,
-        sale.PaymentId,
-        sale.Payment?.DocumentNumber,
-        mode,
-        sale.CompletedAtUtc,
-        sale.PosSession.OpeningCounts.OrderBy(count => count.Currency.Code)
-          .Select(count => new PosSessionCountResponse(
-            count.MoneyAccountId,
-            count.MoneyAccount.Code,
-            count.MoneyAccount.Name,
-            count.CurrencyId,
-            count.Currency.Code,
-            count.Currency.DecimalPlaces,
-            count.Amount,
-            count.ExchangeRate,
-            count.BaseAmount))
-          .ToList(),
-        tenders,
-        change);
+        sale.OperatorUserId,
+        sale.OperatorUser.Username,
+        sale.CompletedAtUtc);
     }
 
     return new SalesInvoiceResponse(

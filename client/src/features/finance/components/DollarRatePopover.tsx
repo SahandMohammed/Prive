@@ -4,6 +4,7 @@ import { DollarSign, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { formatNumber } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -42,7 +43,7 @@ function millisecondsUntilNextBusinessMidnight(now: Date, timeZone?: string) {
 }
 
 export function DollarRatePopover() {
-  const { t } = useTranslation()
+  const { t } = useTranslation('common')
   const user = useCurrentUser().data
   const business = useCurrentBusiness().data
   const currentDollarRate = useCurrentDollarRate()
@@ -60,10 +61,10 @@ export function DollarRatePopover() {
   const savedToday = isSavedToday(dollarRate?.effectiveAtUtc ?? null, todayKey, business?.timeZoneId)
   const canEdit = hasCapability(user?.role, 'manageDollarRate')
   const hasTodayRate = !dollarRate?.isBaseCurrency && dollarRate?.rate !== null && savedToday
-  const formattedRate = dollarRate?.rate?.toLocaleString(undefined, {
+  const formattedRate = dollarRate?.rate != null ? formatNumber(dollarRate.rate, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 6,
-  })
+  }) : ''
 
   useEffect(() => {
     const now = new Date()
@@ -84,16 +85,16 @@ export function DollarRatePopover() {
     setDollarRate.mutate(values, { onSuccess: () => setOpen(false) })
   })
 
-  let triggerLabel = t('common.dollarRateSetToday')
-  if (currentDollarRate.isPending) triggerLabel = t('common.dollarRateLoading')
-  else if (currentDollarRate.isError) triggerLabel = t('common.dollarRateUnavailable')
+  let triggerLabel = t('dollarRateSetToday')
+  if (currentDollarRate.isPending) triggerLabel = t('dollarRateLoading')
+  else if (currentDollarRate.isError) triggerLabel = t('dollarRateUnavailable')
   else if (dollarRate?.isBaseCurrency) triggerLabel = '1 USD = 1 USD'
   else if (hasTodayRate && dollarRate) triggerLabel = `1 USD = ${formattedRate} ${dollarRate.baseCurrencyCode}`
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        aria-label={t('common.dollarRate')}
+        aria-label={t('dollarRate')}
         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 text-xs font-semibold text-foreground shadow-2xs transition-all hover:bg-neutral-100 dark:hover:bg-neutral-800"
       >
         {currentDollarRate.isPending ? (
@@ -107,34 +108,34 @@ export function DollarRatePopover() {
 
       <PopoverContent align="end" className="w-80 gap-3">
         <PopoverHeader>
-          <PopoverTitle>{t('common.dollarRateCurrent')}</PopoverTitle>
+          <PopoverTitle>{t('dollarRateCurrent')}</PopoverTitle>
           <PopoverDescription>
             {dollarRate?.baseCurrencyCode
-              ? t('common.dollarRateDescription', { currency: dollarRate.baseCurrencyCode })
-              : t('common.dollarRateLoading')}
+              ? t('dollarRateDescription', { currency: dollarRate.baseCurrencyCode })
+              : t('dollarRateLoading')}
           </PopoverDescription>
         </PopoverHeader>
 
         {currentDollarRate.isPending ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            {t('common.dollarRateLoading')}
+            {t('dollarRateLoading')}
           </div>
         ) : currentDollarRate.isError ? (
           <div className="space-y-2" role="alert">
             <p className="text-xs text-destructive">{currentDollarRate.error.message}</p>
             <Button variant="outline" size="sm" onClick={() => void currentDollarRate.refetch()}>
-              {t('common.dollarRateRetry')}
+              {t('dollarRateRetry')}
             </Button>
           </div>
         ) : dollarRate?.isBaseCurrency ? (
           <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {t('common.dollarRateBaseCurrency')}
+            {t('dollarRateBaseCurrency')}
           </p>
         ) : !canEdit ? (
           <div className="space-y-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
             {hasTodayRate && <p>1 USD = {formattedRate} {dollarRate?.baseCurrencyCode}</p>}
-            <p>Only a Manager, Owner, or SuperAdmin can update the USD rate.</p>
+            <p>{t('dollarRateRoleRestriction')}</p>
           </div>
         ) : (
           <form className="space-y-3" onSubmit={submit}>
@@ -144,7 +145,7 @@ export function DollarRatePopover() {
               </p>
             )}
             <label className="block space-y-1.5 text-xs font-medium text-foreground">
-              <span>{t('common.dollarRateInput')}</span>
+              <span>{t('dollarRateInput')}</span>
               <Input
                 type="number"
                 min="0.000001"
@@ -165,7 +166,7 @@ export function DollarRatePopover() {
             )}
             <Button type="submit" className="w-full" disabled={setDollarRate.isPending}>
               {setDollarRate.isPending && <Loader2 className="size-4 animate-spin" />}
-              {t('common.dollarRateSave')}
+              {t('dollarRateSave')}
             </Button>
           </form>
         )}
@@ -175,7 +176,7 @@ export function DollarRatePopover() {
           onClick={() => setOpen(false)}
           className="text-xs font-semibold text-primary hover:underline"
         >
-          {t('common.dollarRateViewHistory')}
+          {t('dollarRateViewHistory')}
         </Link>
       </PopoverContent>
     </Popover>

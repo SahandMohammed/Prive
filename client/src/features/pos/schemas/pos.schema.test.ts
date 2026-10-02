@@ -2,35 +2,35 @@ import { describe, expect, it } from 'vitest'
 import { posCheckoutSchema, posRefundSchema } from './pos.schema'
 import { PosPaymentMode, PosRefundReason } from '../types/pos.types'
 
-const cashboxId = '11111111-1111-4111-8111-111111111111'
-const tender = { moneyAccountId: cashboxId, amount: 10_000 }
+const accountId = '11111111-1111-4111-8111-111111111111'
+const payout = { moneyAccountId: accountId, amount: 10_000 }
 
 describe('posCheckoutSchema', () => {
-  it('requires at least one positive session Cashbox amount for a paid checkout', () => {
+  it('requires at least one positive collection amount for a paid checkout', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Paid,
-      cashboxAmounts: { [cashboxId]: 0 },
+      collectionAmounts: { [accountId]: 0 },
     })
 
     expect(result.success).toBe(false)
   })
 
-  it('accepts an unpaid checkout without Cashbox details', () => {
+  it('accepts a credit checkout without collection details', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Credit,
-      cashboxAmounts: {},
+      collectionAmounts: {},
     })
 
     expect(result.success).toBe(true)
   })
 
-  it('does not expose Partial as a cashier checkout mode', () => {
+  it('accepts Partial as a checkout mode with a collection', () => {
     const result = posCheckoutSchema.safeParse({
       paymentMode: PosPaymentMode.Partial,
-      cashboxAmounts: { [cashboxId]: 1 },
+      collectionAmounts: { [accountId]: 1 },
     })
 
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
   })
 })
 
@@ -47,7 +47,7 @@ describe('posRefundSchema', () => {
       reason: PosRefundReason.CustomerComplaint,
       notes: '',
       lines: [{ ...line, selected: false, quantity: 0 }],
-      refundTenders: [],
+      refundPayouts: [],
     }).success).toBe(false)
   })
 
@@ -56,7 +56,7 @@ describe('posRefundSchema', () => {
       reason: PosRefundReason.Other,
       notes: '',
       lines: [line],
-      refundTenders: [],
+      refundPayouts: [],
     }
     expect(posRefundSchema.safeParse(input).success).toBe(false)
     expect(posRefundSchema.safeParse({ ...input, notes: 'Approved exception' }).success).toBe(true)
@@ -67,7 +67,7 @@ describe('posRefundSchema', () => {
       reason: PosRefundReason.ProductReturned,
       notes: 'Product inspected',
       lines: [{ ...line, restockProduct: true }],
-      refundTenders: [tender, { ...tender, moneyAccountId: '33333333-3333-4333-8333-333333333333' }],
+      refundPayouts: [payout, { ...payout, moneyAccountId: '33333333-3333-4333-8333-333333333333' }],
     }).success).toBe(true)
   })
 })

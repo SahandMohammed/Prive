@@ -10,7 +10,6 @@ export const MoneyLedgerSourceType = {
   SupplierPayment: 2,
   Expense: 3,
   PosRefund: 4,
-  PosDrawerMovement: 5,
   Payment: 6,
 } as const
 export type MoneyLedgerSourceType = typeof MoneyLedgerSourceType[keyof typeof MoneyLedgerSourceType]

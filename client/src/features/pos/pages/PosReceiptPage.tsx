@@ -11,6 +11,7 @@ import {
   Undo2,
 } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -21,14 +22,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { SalesLineType } from '@/features/sales'
+import { SalesInvoicePaymentStatus, SalesLineType } from '@/features/sales'
 import { hasCapability, useCurrentUser } from '@/features/auth'
 import { useBranches, useCurrentBusiness } from '@/features/business'
+import { formatDateTime, formatNumber } from '@/lib/i18n'
 import { RefundDialog } from '../components/RefundDialog'
-import { useActivePosSession, usePosSale, usePosSetup } from '../hooks/usePos'
-import { PosPaymentMode, PosRefundState } from '../types/pos.types'
+import { usePosSale, usePosSetup } from '../hooks/usePos'
+import { PosRefundState } from '../types/pos.types'
 
 export function PosReceiptPage() {
+  const { t } = useTranslation(['pos', 'common'])
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -37,7 +40,6 @@ export function PosReceiptPage() {
   const currentUser = useCurrentUser().data
   const business = useCurrentBusiness().data
   const branches = useBranches().data?.data
-  const activeSession = useActivePosSession().data
   const setup = usePosSetup().data
   const sale = query.data
 
@@ -49,14 +51,14 @@ export function PosReceiptPage() {
 
   if (query.isPending)
     return (
-      <div className="grid h-72 place-items-center text-muted-foreground">Loading receipt…</div>
+      <div className="grid h-72 place-items-center text-muted-foreground">{t('common:states.loading')}</div>
     )
   if (query.isError || !sale)
     return (
-      <p className="text-destructive">{query.error?.message ?? 'POS receipt was not found.'}</p>
+      <p className="text-destructive">{query.error?.message ?? t('pos:receipt.title')}</p>
     )
 
-  const hasMoneyMovement = sale.tenders.length > 0 || sale.change !== null
+  const hasMoneyMovement = sale.collections.length > 0 || sale.change !== null
   const canRefund = hasCapability(currentUser?.role, 'managePos')
   const canSalesTrace = hasCapability(currentUser?.role, 'salesTrace')
   const canInventoryTrace = hasCapability(currentUser?.role, 'inventoryTrace')
@@ -64,8 +66,8 @@ export function PosReceiptPage() {
   const canAccountingTrace = hasCapability(currentUser?.role, 'accountingTrace')
   const refundAvailable = sale.remainingRefundableBaseAmount > 0
   const refundState = sale.refundStatus === PosRefundState.FullyRefunded
-    ? 'Fully refunded'
-    : sale.refundStatus === PosRefundState.PartiallyRefunded ? 'Partially refunded' : 'Not refunded'
+    ? t('pos:receipt.fullyRefunded')
+    : sale.refundStatus === PosRefundState.PartiallyRefunded ? t('pos:receipt.partiallyRefunded') : t('pos:receipt.notRefunded')
   const branch = branches?.find((item) => item.id === sale.branchId)
   const receiptName = [business?.name, branch?.name ?? sale.branchName].filter(Boolean).join(' · ') || 'Business'
   const receiptContact = branch?.phoneNumber ?? business?.primaryPhoneNumber
@@ -77,34 +79,34 @@ export function PosReceiptPage() {
         <div className="flex items-center gap-3">
           <Link to="/pos">
             <Button variant="ghost" size="icon">
-              <ArrowLeft />
+              <ArrowLeft className="rtl:rotate-180" />
             </Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold">
-              Sale complete ·{' '}
+              {t('pos:receipt.saleComplete')} ·{' '}
               <span className="font-mono text-primary">{sale.documentNumber}</span>
             </h1>
             <p className="text-sm text-muted-foreground">
-              Sales, accounting and stock effects were committed together. Money Ledger reflects only money actually received or returned.
+              {t('pos:receipt.committedNotice')}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canRefund && refundAvailable && activeSession && setup && (
+          {canRefund && refundAvailable && setup && (
             <>
-              <Button variant="outline" onClick={() => setRefundMode('refund')}><Undo2 /> Refund</Button>
-              <Button variant="destructive" onClick={() => setRefundMode('void')}><Ban /> Void remaining</Button>
+              <Button variant="outline" onClick={() => setRefundMode('refund')}><Undo2 /> {t('pos:receipt.refund')}</Button>
+              <Button variant="destructive" onClick={() => setRefundMode('void')}><Ban /> {t('pos:receipt.voidRemaining')}</Button>
             </>
           )}
           <Button variant="outline" onClick={() => window.print()}>
             <Printer />
-            Print view
+            {t('common:actions.print', 'Print view')}
           </Button>
           <Link to="/pos">
             <Button>
               <ShoppingCart />
-              New Sale
+              {t('pos:saleComplete.newSale')}
             </Button>
           </Link>
         </div>
@@ -117,48 +119,50 @@ export function PosReceiptPage() {
               <CardTitle className="flex items-center gap-2 text-xl">
                 <ReceiptText />
                 {business?.logoReference && <img src={business.logoReference} alt="" className="size-7 rounded object-contain" />}
-                {receiptName} POS Receipt
+                {receiptName} {t('pos:receipt.salesReceipt')}
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">{[receiptContact, receiptAddress].filter(Boolean).join(' · ')}</p>
               <p className="mt-1 font-mono text-lg text-primary">{sale.documentNumber}</p>
             </div>
-            <div className="text-right text-sm">
-              <p>{new Date(sale.completedAtUtc).toLocaleString()}</p>
-              <p className="text-muted-foreground">Cashier: {sale.cashierUsername}</p>
+            <div className="text-end text-sm">
+              <p>{formatDateTime(sale.completedAtUtc)}</p>
+              <p className="text-muted-foreground">{t('pos:operator')}: {sale.operatorUsername}</p>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           <div className="grid gap-3 text-sm sm:grid-cols-5">
-            <Info label="Customer" value={sale.customerName} />
-            <Info label="Branch" value={`${sale.branchCode} — ${sale.branchName}`} />
+            <Info label={t('pos:checkout.customer')} value={sale.customerName} />
+            <Info label={t('pos:branch')} value={`${sale.branchCode} — ${sale.branchName}`} />
             <Info
-              label="Warehouse"
+              label={t('pos:topBar.warehouse')}
               value={
                 sale.warehouseName
                   ? `${sale.warehouseCode} — ${sale.warehouseName}`
-                  : 'No product fulfilment'
+                  : '—'
               }
             />
             <Info
-              label="Payment"
-              value={sale.paymentMode === PosPaymentMode.Paid
-                ? 'Paid'
-                : sale.paymentMode === PosPaymentMode.Partial
-                  ? 'Partial'
-                  : 'Credit'}
+              label={t('pos:checkout.paymentMethod')}
+              value={sale.paymentStatus === SalesInvoicePaymentStatus.Paid
+                ? t('pos:checkout.paid')
+                : sale.paymentStatus === SalesInvoicePaymentStatus.PartiallyPaid
+                  ? t('pos:saleComplete.partialPayment')
+                  : sale.paymentStatus === SalesInvoicePaymentStatus.Overpaid
+                    ? t('sales:status.overpaid', { defaultValue: 'Overpaid' })
+                    : t('pos:saleComplete.creditSale')}
             />
-            <Info label="Refund status" value={refundState} />
+            <Info label={t('pos:status')} value={refundState} />
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Type / Professional</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Unit price</TableHead>
-                  <TableHead className="text-right">Line total</TableHead>
+                  <TableHead>{t('pos:receipt.items')}</TableHead>
+                  <TableHead>{t('pos:cart.professional')}</TableHead>
+                  <TableHead className="text-end">{t('pos:cart.quantity')}</TableHead>
+                  <TableHead className="text-end">{t('pos:cart.price')}</TableHead>
+                  <TableHead className="text-end">{t('pos:cart.total')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -175,18 +179,18 @@ export function PosReceiptPage() {
                     <TableCell>
                       {line.lineType === SalesLineType.Service ? (
                         <>
-                          <p>Service</p>
+                          <p>{t('pos:service')}</p>
                           <p className="text-xs text-muted-foreground">
-                            {line.professionalName ?? 'No Professional assigned'}
+                            {line.professionalName ?? '—'}
                           </p>
                         </>
                       ) : (
-                        'Product'
+                        t('pos:product')
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono">{amount(line.quantity)}</TableCell>
-                    <TableCell className="text-right font-mono">{amount(line.unitPrice)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold">
+                    <TableCell className="text-end font-mono">{amount(line.quantity)}</TableCell>
+                    <TableCell className="text-end font-mono">{amount(line.unitPrice)}</TableCell>
+                    <TableCell className="text-end font-mono font-semibold">
                       {amount(line.lineTotal)}
                     </TableCell>
                   </TableRow>
@@ -196,36 +200,36 @@ export function PosReceiptPage() {
           </div>
           <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
             <div>
-              <h3 className="mb-2 font-semibold">Payments</h3>
+              <h3 className="mb-2 font-semibold">{t('pos:receipt.paymentSummary')}</h3>
               <div className="space-y-2">
-                {sale.tenders.length === 0 && (
+                {sale.collections.length === 0 && (
                   <div className="rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
-                    No payment was received at checkout. The sale remains collectible through Customer Receipts.
+                    {t('pos:checkout.unpaidOutstandingNotice')}
                   </div>
                 )}
-                {sale.tenders.map((tender) => (
+                {sale.collections.map((collection) => (
                   <div
-                    key={tender.id}
+                    key={collection.id}
                     className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm"
                   >
                     <div>
                       <p className="font-medium">
-                        {tender.moneyAccountCode} — {tender.moneyAccountName}
+                        {collection.moneyAccountCode} — {collection.moneyAccountName}
                       </p>
-                      {tender.currencyId !== sale.baseCurrencyId && (
+                      {collection.currencyId !== sale.baseCurrencyId && (
                         <>
                           <p className="text-xs text-muted-foreground">
-                            Rate: 1 {tender.currencyCode} = {amount(tender.exchangeRate)} {sale.baseCurrencyCode}
+                            1 {collection.currencyCode} = {amount(collection.exchangeRate)} {sale.baseCurrencyCode}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Equivalent: {amount(tender.baseAmount)} {sale.baseCurrencyCode}
+                            {amount(collection.baseAmount)} {sale.baseCurrencyCode}
                           </p>
                         </>
                       )}
                     </div>
-                    <div className="text-right">
+                    <div className="text-end">
                       <p className="font-mono font-semibold">
-                        {amount(tender.tenderedAmount)} {tender.currencyCode}
+                        {amount(collection.amount)} {collection.currencyCode}
                       </p>
                     </div>
                   </div>
@@ -233,19 +237,19 @@ export function PosReceiptPage() {
                 {sale.change && (
                   <div className="flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50/50 px-3 py-2 text-sm dark:bg-amber-950/10">
                     <div>
-                      <p className="font-medium">Change · {sale.change.moneyAccountCode}</p>
+                      <p className="font-medium">{t('pos:checkout.change')} · {sale.change.moneyAccountCode}</p>
                       {sale.change.currencyId !== sale.baseCurrencyId && (
                         <>
                           <p className="text-xs text-muted-foreground">
-                            Rate: 1 {sale.change.currencyCode} = {amount(sale.change.exchangeRate)} {sale.baseCurrencyCode}
+                            1 {sale.change.currencyCode} = {amount(sale.change.exchangeRate)} {sale.baseCurrencyCode}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Equivalent: {amount(sale.change.baseAmount)} {sale.baseCurrencyCode}
+                            {amount(sale.change.baseAmount)} {sale.baseCurrencyCode}
                           </p>
                         </>
                       )}
                     </div>
-                    <div className="text-right">
+                    <div className="text-end">
                       <p className="font-mono font-semibold">
                         −{amount(sale.change.amount)} {sale.change.currencyCode}
                       </p>
@@ -255,30 +259,30 @@ export function PosReceiptPage() {
               </div>
             </div>
             <div className="space-y-2 rounded-xl border p-4">
-              <Total label="Subtotal" value={sale.subtotal} currency={sale.baseCurrencyCode} />
+              <Total label={t('pos:cart.subtotal')} value={sale.subtotal} currency={sale.baseCurrencyCode} />
               <Total
-                label="Tendered"
-                value={sale.tenderedBaseAmount}
+                label={t('pos:checkout.received', { defaultValue: 'Gross collection' })}
+                value={sale.grossCollectionBaseAmount}
                 currency={sale.baseCurrencyCode}
               />
               <Total
-                label="Change"
+                label={t('pos:checkout.change')}
                 value={sale.changeBaseAmount}
                 currency={sale.baseCurrencyCode}
               />
               <Total
-                label="Total received"
-                value={sale.settledBaseAmount}
+                label={t('pos:saleComplete.receivedNow')}
+                value={sale.collectedBaseAmount}
                 currency={sale.baseCurrencyCode}
               />
               <div className="border-t pt-2">
-                <Total label="Original sale" value={sale.total} currency={sale.baseCurrencyCode} />
-                <Total label="Refunded" value={sale.refundedBaseAmount} currency={sale.baseCurrencyCode} />
-                <Total label="Net sale" value={sale.netSaleBaseAmount} currency={sale.baseCurrencyCode} strong />
+                <Total label={t('pos:receipt.originalSale')} value={sale.total} currency={sale.baseCurrencyCode} />
+                <Total label={t('pos:refund.alreadyRefunded')} value={sale.refundedBaseAmount} currency={sale.baseCurrencyCode} />
+                <Total label={t('pos:netSales')} value={sale.netSaleBaseAmount} currency={sale.baseCurrencyCode} strong />
               </div>
               <div className="border-t pt-2">
                 <Total
-                  label={sale.outstandingBaseAmount > 0 ? 'Customer owes' : 'Outstanding'}
+                  label={sale.outstandingBaseAmount > 0 ? t('pos:saleComplete.customerOwes') : t('pos:refund.remaining')}
                   value={sale.outstandingBaseAmount}
                   currency={sale.baseCurrencyCode}
                   strong
@@ -289,11 +293,16 @@ export function PosReceiptPage() {
 
           {sale.refunds.length > 0 && (
             <section>
-              <h3 className="mb-2 font-semibold">Refunds and reversals</h3>
+              <h3 className="mb-2 font-semibold">{t('pos:refund.refundLines')}</h3>
               <div className="space-y-2">
                 {sale.refunds.map((refund) => (
                   <Link key={refund.id} to={`/pos/refunds/${refund.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50">
-                    <div><p className="font-mono font-semibold text-primary">{refund.documentNumber}</p><p className="text-xs text-muted-foreground">{refund.isVoid ? 'Void reversal' : 'Refund'} · {new Date(refund.postedAtUtc).toLocaleString()} · approved by {refund.approvedByUsername}</p></div>
+                    <div>
+                      <p className="font-mono font-semibold text-primary">{refund.documentNumber}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {refund.isVoid ? t('pos:refund.postVoid') : t('pos:refund.postRefund')} · {formatDateTime(refund.postedAtUtc)} · {refund.approvedByUsername}
+                      </p>
+                    </div>
                     <span className="font-mono font-semibold">−{amount(refund.totalRefundBase)} {sale.baseCurrencyCode}</span>
                   </Link>
                 ))}
@@ -305,16 +314,11 @@ export function PosReceiptPage() {
       </Card>
 
       {!canRefund && refundAvailable && (
-        <p className="print:hidden text-sm text-muted-foreground">Refund details are visible to you. Posting a refund or void requires a Manager, Owner, or SuperAdmin.</p>
+        <p className="print:hidden text-sm text-muted-foreground">{t('pos:receipt.refund')}</p>
       )}
-      {canRefund && refundAvailable && !activeSession && (
-        <p className="print:hidden rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-100">Open a POS session before posting a refund or void.</p>
-      )}
-
-      {refundMode && activeSession && setup && (
+      {refundMode && setup && (
         <RefundDialog
           saleId={sale.id}
-          session={activeSession}
           setup={setup}
           mode={refundMode}
           open
@@ -325,13 +329,13 @@ export function PosReceiptPage() {
 
       <Card className="print:hidden">
         <CardHeader>
-          <CardTitle>Traceability</CardTitle>
+          <CardTitle>{t('pos:receipt.traceability')}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {canSalesTrace && <Link to={`/sales/invoices/${sale.id}`}>
             <Button variant="outline">
               <ReceiptText />
-              Sales source
+              {t('pos:receipt.originalSale')}
             </Button>
           </Link>}
           {canInventoryTrace && sale.stockMovementIds.length > 0 && (
@@ -340,7 +344,7 @@ export function PosReceiptPage() {
             >
               <Button variant="outline">
                 <PackageSearch />
-                Stock Ledger
+                {t('pos:receipt.stockLedger')}
               </Button>
             </Link>
           )}
@@ -350,14 +354,14 @@ export function PosReceiptPage() {
             >
               <Button variant="outline">
                 <Landmark />
-                Money Ledger
+                {t('pos:receipt.moneyLedger')}
               </Button>
             </Link>
           )}
           {canAccountingTrace && <Link to={`/accounting/journal?search=${encodeURIComponent(sale.documentNumber)}`}>
             <Button variant="outline">
               <BookOpen />
-              Accounting journal
+              {t('pos:receipt.accountingJournal')}
             </Button>
           </Link>}
         </CardContent>
@@ -396,4 +400,4 @@ function Total({
     </div>
   )
 }
-const amount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+const amount = (value: number) => formatNumber(value, { maximumFractionDigits: 4 })

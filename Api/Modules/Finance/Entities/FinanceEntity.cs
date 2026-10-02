@@ -84,7 +84,6 @@ public sealed class PaymentEntity
   public Guid? SourceSalesInvoiceId { get; set; }
   public SalesInvoiceEntity? SourceSalesInvoice { get; set; }
   public CustomerReceiptEntity? SourceCustomerReceipt { get; set; }
-  public PosContextEntity? SourcePosContext { get; set; }
   public string? Notes { get; set; }
   public Guid CreatedByUserId { get; set; }
   public UserEntity CreatedByUser { get; set; } = null!;
@@ -263,7 +262,15 @@ public sealed class CustomerReceiptDraftAllocationEntity
 
 public enum MoneyAccountType { Cashbox, Bank }
 public enum MoneyAccountAccessLevel { View, Operate }
-public enum MoneyLedgerSourceType { OpeningBalance, MoneyTransfer, SupplierPayment, Expense, PosRefund, PosDrawerMovement, Payment }
+public enum MoneyLedgerSourceType
+{
+  OpeningBalance = 0,
+  MoneyTransfer = 1,
+  SupplierPayment = 2,
+  Expense = 3,
+  PosRefund = 4,
+  Payment = 6
+}
 public enum FinanceDocumentStatus { Draft, Posted }
 public enum PaymentOrigin { SalesInvoice, CustomerReceipt, Pos }
 public enum PaymentMoneyDirection { Collection, Change }

@@ -521,7 +521,6 @@ public sealed class PaymentService
     .Include(payment => payment.CreatedByUser)
     .Include(payment => payment.SourceSalesInvoice)
     .Include(payment => payment.SourceCustomerReceipt)
-    .Include(payment => payment.SourcePosContext).ThenInclude(context => context!.SalesInvoice)
     .Include(payment => payment.Allocations).ThenInclude(allocation => allocation.SalesInvoice)
     .Include(payment => payment.MoneyLines).ThenInclude(line => line.MoneyAccount)
     .ThenInclude(account => account.Currency)

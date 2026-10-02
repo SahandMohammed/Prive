@@ -1,0 +1,39 @@
+{
+  "title": "المستخدمون",
+  "description": "إدارة الوصول إلى مساحات عمل الفروع. يمتلك المسؤولون والملاك صلاحية الوصول إلى كل الفروع النشطة.",
+  "searchPlaceholder": "البحث عن مستخدمين",
+  "loading": "جارٍ تحميل المستخدمين…",
+  "failedToLoad": "فشل تحميل المستخدمين.",
+  "noUsers": "لم يتم العثور على مستخدمين.",
+  "th": {
+    "username": "اسم المستخدم",
+    "role": "الدور",
+    "status": "الحالة",
+    "branchAccess": "الوصول للفروع"
+  },
+  "roles": {
+    "Manager": "مدير",
+    "Owner": "مالك",
+    "Professional": "محترف",
+    "Cashier": "أمين الصندوق",
+    "SuperAdmin": "مسؤول رئيسي",
+    "Unassigned": "غير محدد"
+  },
+  "status": {
+    "active": "نشط",
+    "inactive": "غير نشط"
+  },
+  "branchAccess": {
+    "allActiveBranches": "جميع الفروع النشطة",
+    "manageBranches": "إدارة الفروع",
+    "managedByOwner": "تتم إدارته بواسطة المالك أو المسؤول الرئيسي"
+  },
+  "createDialog": {
+    "title": "إنشاء مستخدم",
+    "usernamePlaceholder": "اسم المستخدم",
+    "tempPasswordPlaceholder": "كلمة مرور مؤقتة",
+    "selectRole": "اختر الدور…",
+    "creating": "جارٍ الإنشاء…",
+    "submit": "إنشاء مستخدم"
+  }
+}

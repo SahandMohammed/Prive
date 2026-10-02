@@ -247,8 +247,8 @@ public static class ErrorCodes
     public const string LinesRequired = "POS_LINES_REQUIRED";
     public const string LineInvalid = "POS_LINE_INVALID";
     public const string DuplicateLine = "POS_DUPLICATE_LINE";
-    public const string TenderRequired = "POS_TENDER_REQUIRED";
-    public const string TenderInvalid = "POS_TENDER_INVALID";
+    public const string CollectionRequired = "POS_COLLECTION_REQUIRED";
+    public const string CollectionInvalid = "POS_COLLECTION_INVALID";
     public const string MoneyAccountInvalid = "POS_MONEY_ACCOUNT_INVALID";
     public const string MoneyAccountBranchMismatch = "POS_MONEY_ACCOUNT_BRANCH_MISMATCH";
     public const string Underpayment = "POS_UNDERPAYMENT";
@@ -261,30 +261,12 @@ public static class ErrorCodes
     public const string SettlementHasRefundDependency = "POS_SETTLEMENT_HAS_REFUND_DEPENDENCY";
     public const string RealCustomerRequired = "POS_REAL_CUSTOMER_REQUIRED";
     public const string JournalDirectReversalNotAllowed = "POS_JOURNAL_DIRECT_REVERSAL_NOT_ALLOWED";
-    public const string RegisterNotFound = "POS_REGISTER_NOT_FOUND";
-    public const string RegisterInactive = "POS_REGISTER_INACTIVE";
-    public const string RegisterCodeTaken = "POS_REGISTER_CODE_TAKEN";
-    public const string RegisterCashboxInvalid = "POS_REGISTER_CASHBOX_INVALID";
-    public const string RegisterCashboxDuplicateCurrency = "POS_REGISTER_CASHBOX_DUPLICATE_CURRENCY";
-    public const string CashboxAlreadyAssigned = "POS_CASHBOX_ALREADY_ASSIGNED";
-    public const string CashboxAssignmentLocked = "POS_CASHBOX_ASSIGNMENT_LOCKED";
-    public const string SessionNotFound = "POS_SESSION_NOT_FOUND";
-    public const string SessionAlreadyOpen = "POS_SESSION_ALREADY_OPEN";
-    public const string SessionRequired = "POS_SESSION_REQUIRED";
-    public const string SessionClosed = "POS_SESSION_CLOSED";
-    public const string SessionAccessDenied = "POS_SESSION_ACCESS_DENIED";
-    public const string SessionCloseConflict = "POS_SESSION_CLOSE_CONFLICT";
-    public const string SessionClosingNoteRequired = "POS_SESSION_CLOSING_NOTE_REQUIRED";
-    public const string OpeningCountInvalid = "POS_OPENING_COUNT_INVALID";
-    public const string ClosingCountInvalid = "POS_CLOSING_COUNT_INVALID";
-    public const string ZReportNotFound = "POS_Z_REPORT_NOT_FOUND";
     public const string RefundNotFound = "POS_REFUND_NOT_FOUND";
     public const string RefundNothingAvailable = "POS_REFUND_NOTHING_AVAILABLE";
     public const string RefundQuantityExceeded = "POS_REFUND_QUANTITY_EXCEEDED";
-    public const string RefundTenderMismatch = "POS_REFUND_TENDER_MISMATCH";
+    public const string RefundPayoutMismatch = "POS_REFUND_PAYOUT_MISMATCH";
     public const string RefundMoneyAccountInvalid = "POS_REFUND_MONEY_ACCOUNT_INVALID";
     public const string RefundInsufficientBalance = "POS_REFUND_INSUFFICIENT_BALANCE";
-    public const string RefundSessionRequired = "POS_REFUND_SESSION_REQUIRED";
     public const string RefundConcurrencyConflict = "POS_REFUND_CONCURRENCY_CONFLICT";
     public const string RefundReasonInvalid = "POS_REFUND_REASON_INVALID";
     public const string RefundNotesRequired = "POS_REFUND_NOTES_REQUIRED";
@@ -292,12 +274,6 @@ public static class ErrorCodes
     public const string RefundLinesInvalid = "POS_REFUND_LINES_INVALID";
     public const string IdempotencyKeyReused = "POS_IDEMPOTENCY_KEY_REUSED";
     public const string IdempotencyKeyRequired = "POS_IDEMPOTENCY_KEY_REQUIRED";
-    public const string DrawerMovementNotFound = "POS_DRAWER_MOVEMENT_NOT_FOUND";
-    public const string DrawerMovementInvalid = "POS_DRAWER_MOVEMENT_INVALID";
-    public const string DrawerMovementAccessDenied = "POS_DRAWER_MOVEMENT_ACCESS_DENIED";
-    public const string DrawerMovementConflict = "POS_DRAWER_MOVEMENT_CONFLICT";
-    public const string SessionCurrencyNotAllowed = "POS_SESSION_CURRENCY_NOT_ALLOWED";
-    public const string SessionCashboxNotAllowed = "POS_SESSION_CASHBOX_NOT_ALLOWED";
     public const string BaseCashboxRequired = "POS_BASE_CASHBOX_REQUIRED";
   }
 

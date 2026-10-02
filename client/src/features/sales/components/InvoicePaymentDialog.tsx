@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,6 +42,7 @@ interface InvoicePaymentDialogProps {
 }
 
 export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: InvoicePaymentDialogProps) {
+  const { t } = useTranslation(['sales', 'common'])
   const paymentQuery = usePayment(payment?.paymentId)
   const actions = useInvoicePaymentActions(invoice.id)
   const accounts = useMoneyAccounts({
@@ -83,11 +85,11 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
 
   const submit = form.handleSubmit(async (value) => {
     if (value.amount > maxAmount) {
-      form.setError('amount', { message: `Amount cannot exceed ${maxAmount}` })
+      form.setError('amount', { message: t('sales:paymentDialog.amountExceed', { max: maxAmount }) })
       return
     }
     if (isEdit && !value.reason.trim()) {
-      form.setError('reason', { message: 'A correction reason is required' })
+      form.setError('reason', { message: t('sales:paymentDialog.reasonRequired') })
       return
     }
     const body = {
@@ -112,7 +114,7 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
       }
       onOpenChange(false)
     } catch (error) {
-      form.setError('root', { message: error instanceof Error ? error.message : 'Unable to save Payment' })
+      form.setError('root', { message: error instanceof Error ? error.message : t('sales:paymentDialog.unableToSave') })
     }
   })
 
@@ -120,7 +122,7 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
     if (!loaded) return
     const reason = form.getValues('reason').trim()
     if (!reason) {
-      form.setError('reason', { message: 'A deletion reason is required' })
+      form.setError('reason', { message: t('sales:paymentDialog.deleteReasonRequired') })
       return
     }
     try {
@@ -131,7 +133,7 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
       })
       onOpenChange(false)
     } catch (error) {
-      form.setError('root', { message: error instanceof Error ? error.message : 'Unable to delete Payment' })
+      form.setError('root', { message: error instanceof Error ? error.message : t('sales:paymentDialog.unableToDelete') })
     }
   }
 
@@ -139,41 +141,45 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? `Edit ${payment.paymentDocumentNumber}` : 'Add Payment'}</DialogTitle>
+          <DialogTitle>
+            {isEdit
+              ? t('sales:paymentDialog.editTitle', { docNumber: payment.paymentDocumentNumber })
+              : t('sales:paymentDialog.title')}
+          </DialogTitle>
           <DialogDescription>
-            Payments use a {invoice.currencyCode} Money Account and apply directly to {invoice.documentNumber}.
+            {t('sales:paymentDialog.desc', { currency: invoice.currencyCode, docNumber: invoice.documentNumber })}
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={submit}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Payment date" error={form.formState.errors.paymentDate?.message}>
+            <Field label={t('sales:paymentDialog.paymentDate')} error={form.formState.errors.paymentDate?.message}>
               <Input type="date" {...form.register('paymentDate')} />
             </Field>
-            <Field label="Amount" error={form.formState.errors.amount?.message}>
+            <Field label={t('sales:paymentDialog.amount')} error={form.formState.errors.amount?.message}>
               <Input type="number" min="0.0001" step="0.0001" {...form.register('amount', { valueAsNumber: true })} />
             </Field>
           </div>
-          <Field label={`Money Account (${invoice.currencyCode})`} error={form.formState.errors.moneyAccountId?.message}>
+          <Field label={t('sales:paymentDialog.moneyAccount', { currency: invoice.currencyCode })} error={form.formState.errors.moneyAccountId?.message}>
             <select
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               {...form.register('moneyAccountId')}
             >
-              <option value="">Select account</option>
+              <option value="">{t('sales:paymentDialog.selectAccount')}</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>{account.code} — {account.name}</option>
               ))}
             </select>
           </Field>
           {invoice.currencyId !== invoice.baseCurrencyId && (
-            <Field label="Invoice exchange rate">
+            <Field label={t('sales:paymentDialog.invoiceExchangeRate')}>
               <Input readOnly value={invoice.exchangeRate} />
             </Field>
           )}
-          <Field label="Notes" error={form.formState.errors.notes?.message}>
+          <Field label={t('sales:paymentDialog.notes')} error={form.formState.errors.notes?.message}>
             <Textarea {...form.register('notes')} />
           </Field>
           {isEdit && (
-            <Field label="Correction reason" error={form.formState.errors.reason?.message}>
+            <Field label={t('sales:paymentDialog.correctionReason')} error={form.formState.errors.reason?.message}>
               <Textarea {...form.register('reason')} />
             </Field>
           )}
@@ -183,11 +189,11 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
           <DialogFooter className="gap-2 sm:justify-between">
             {isEdit ? (
               <Button type="button" variant="destructive" onClick={remove} disabled={!loaded || actions.remove.isPending}>
-                Delete Payment
+                {t('sales:paymentDialog.deletePayment')}
               </Button>
             ) : <span />}
             <Button type="submit" disabled={(isEdit && !loaded) || actions.create.isPending || actions.update.isPending}>
-              {isEdit ? 'Save correction' : 'Add Payment'}
+              {isEdit ? t('sales:paymentDialog.saveCorrection') : t('sales:paymentDialog.submit')}
             </Button>
           </DialogFooter>
         </form>
@@ -195,6 +201,7 @@ export function InvoicePaymentDialog({ invoice, payment, open, onOpenChange }: I
     </Dialog>
   )
 }
+
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (

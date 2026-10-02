@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { POS_Z_REPORT_KEY, POS_Z_REPORTS_KEY } from '@/features/pos'
 import { salesApi } from '../api/sales.api'
 import type { DeletedSalesInvoiceFilters, InvoicePaymentInput, PostedSalesInvoiceInput, SalesInvoiceFilters, ServiceCategoryInput, ServiceInput, UpdateInvoicePaymentInput } from '../types/sales.types'
 
@@ -65,9 +64,6 @@ export function useCreateActiveSalesInvoice() {
       client.invalidateQueries({ queryKey: ['finance'] })
       if (invoice.posContext) {
         client.invalidateQueries({ queryKey: ['pos', 'sales'] })
-        client.invalidateQueries({ queryKey: ['pos', 'sessions'] })
-        client.invalidateQueries({ queryKey: POS_Z_REPORTS_KEY })
-        client.invalidateQueries({ queryKey: POS_Z_REPORT_KEY })
       }
       return client.invalidateQueries({ queryKey: SALES_INVOICES_KEY })
     },
@@ -85,9 +81,6 @@ export function useUpdateActiveSalesInvoice(id?: string) {
       client.invalidateQueries({ queryKey: ['finance'] })
       if (invoice.posContext) {
         client.invalidateQueries({ queryKey: ['pos', 'sales'] })
-        client.invalidateQueries({ queryKey: ['pos', 'sessions'] })
-        client.invalidateQueries({ queryKey: POS_Z_REPORTS_KEY })
-        client.invalidateQueries({ queryKey: POS_Z_REPORT_KEY })
       }
       return client.invalidateQueries({ queryKey: SALES_INVOICES_KEY })
     },
@@ -126,9 +119,6 @@ export function useDeleteActiveSalesInvoice(id?: string) {
       client.invalidateQueries({ queryKey: ['accounting'] })
       client.invalidateQueries({ queryKey: ['finance'] })
       client.invalidateQueries({ queryKey: ['pos', 'sales'] })
-      client.invalidateQueries({ queryKey: ['pos', 'sessions'] })
-      client.invalidateQueries({ queryKey: POS_Z_REPORTS_KEY })
-      client.invalidateQueries({ queryKey: POS_Z_REPORT_KEY })
       return client.invalidateQueries({ queryKey: SALES_INVOICES_KEY })
     },
   })

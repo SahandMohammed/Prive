@@ -329,7 +329,7 @@ public sealed class BranchScopeTests
     Assert.Contains("BranchId", db.JournalLines.ToQueryString());
     Assert.Contains("BranchId", db.CustomerReceiptDraftAllocations.ToQueryString());
     Assert.Contains("BranchId", db.PaymentAllocations.ToQueryString());
-    Assert.Contains("BranchId", db.PosTenders.ToQueryString());
+    Assert.Contains("BranchId", db.PaymentMoneyLines.ToQueryString());
     Assert.Contains("CatalogBranchId", db.Products.ToQueryString());
   }
 

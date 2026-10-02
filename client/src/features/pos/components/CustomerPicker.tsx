@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePosCustomers } from '../hooks/usePos'
@@ -12,8 +13,10 @@ export function CustomerPicker({
   customer: PosCustomer | null
   onChange: (customer: PosCustomer | null) => void
 }) {
+  const { t } = useTranslation(['pos', 'common'])
+  const walkInLabel = t('pos:checkout.walkIn', { defaultValue: 'Walk-in customer' })
   const [open, setOpen] = useState(false)
-  const [inputValue, setInputValue] = useState(customer?.name ?? 'Walk-in customer')
+  const [inputValue, setInputValue] = useState(customer?.name ?? walkInLabel)
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -30,7 +33,7 @@ export function CustomerPicker({
     return [customer, ...rows]
   }, [customer, query.data?.data])
   const suggestions = useMemo(() => [null, ...customers] as Array<PosCustomer | null>, [customers])
-  const selectedLabel = customer?.name ?? 'Walk-in customer'
+  const selectedLabel = customer?.name ?? walkInLabel
 
   useEffect(() => {
     if (!open) {
@@ -47,7 +50,7 @@ export function CustomerPicker({
 
   const selectCustomer = (nextCustomer: PosCustomer | null) => {
     onChange(nextCustomer)
-    setInputValue(nextCustomer?.name ?? 'Walk-in customer')
+    setInputValue(nextCustomer?.name ?? walkInLabel)
     setSearch('')
     setOpen(false)
   }
@@ -80,9 +83,9 @@ export function CustomerPicker({
   return (
     <div className="relative">
       <label className="sr-only" htmlFor={listboxId}>
-        Customer
+        {t('pos:checkout.customer', { defaultValue: 'Customer' })}
       </label>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={inputRef}
         id={listboxId}
@@ -105,15 +108,15 @@ export function CustomerPicker({
           if (!value) onChange(null)
         }}
         onKeyDown={handleKeyDown}
-        placeholder="Search customer or phone"
-        className="h-10 bg-background pl-9 pr-10 text-sm"
+        placeholder={t('pos:checkout.searchCustomerPlaceholder', { defaultValue: 'Search customer or phone' })}
+        className="h-10 bg-background ps-9 pe-10 text-sm"
       />
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
-        className="absolute right-1 top-1/2 -translate-y-1/2"
-        aria-label="Show customer suggestions"
+        className="absolute end-1 top-1/2 -translate-y-1/2"
+        aria-label={t('pos:checkout.showCustomerSuggestions', { defaultValue: 'Show customer suggestions' })}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
           if (open) setOpen(false)
@@ -126,12 +129,12 @@ export function CustomerPicker({
         <div
           id={`${listboxId}-options`}
           role="listbox"
-          aria-label="Customer suggestions"
+          aria-label={t('pos:checkout.customerSuggestions', { defaultValue: 'Customer suggestions' })}
           className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
         >
           {suggestions.map((item, index) => {
             const selected = item?.id === customer?.id || (!item && !customer)
-            const label = item?.name ?? 'Walk-in customer'
+            const label = item?.name ?? walkInLabel
 
             return (
               <button
@@ -140,7 +143,7 @@ export function CustomerPicker({
                 type="button"
                 role="option"
                 aria-selected={selected}
-                className={`flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left outline-none ${
+                className={`flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-start outline-none ${
                   index === highlightedIndex
                     ? 'bg-accent text-accent-foreground'
                     : 'hover:bg-accent hover:text-accent-foreground'
@@ -162,7 +165,9 @@ export function CustomerPicker({
             )
           })}
           {query.isPending && (
-            <p className="px-2.5 py-2 text-xs text-muted-foreground">Searching customers…</p>
+            <p className="px-2.5 py-2 text-xs text-muted-foreground">
+              {t('pos:checkout.searchingCustomers', { defaultValue: 'Searching customers…' })}
+            </p>
           )}
           {query.isError && (
             <p className="px-2.5 py-2 text-xs text-destructive">{query.error.message}</p>

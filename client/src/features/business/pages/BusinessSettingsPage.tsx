@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Building2, Loader2, Save } from 'lucide-react'
@@ -15,6 +16,7 @@ const emptyValues: BusinessFormValues = {
 }
 
 export function BusinessSettingsPage() {
+  const { t } = useTranslation(['business', 'common'])
   const businessQuery = useCurrentBusiness()
   const currenciesQuery = useCurrencies()
   const business = businessQuery.data
@@ -33,63 +35,96 @@ export function BusinessSettingsPage() {
   return (
     <div className="w-full space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{business ? 'Business profile' : 'Business setup'}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {business ? t('business:settings.titleProfile') : t('business:settings.titleSetup')}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {business ? 'Manage the Prive Lounge business profile and base currency.' : 'Create the single Prive Lounge business profile.'}
+          {business ? t('business:settings.descProfile') : t('business:settings.descSetup')}
         </p>
       </div>
 
       <form onSubmit={form.handleSubmit((values) => saveBusiness.mutate(values))} className="space-y-6 rounded-lg border bg-card p-6">
         <section className="space-y-4">
-          <h2 className="flex items-center gap-2 font-semibold"><Building2 className="size-4" /> Identity and contact</h2>
+          <h2 className="flex items-center gap-2 font-semibold"><Building2 className="size-4" /> {t('business:settings.sections.identityAndContact')}</h2>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Business name" error={form.formState.errors.name?.message}><Input {...form.register('name')} /></Field>
-            <Field label="Legal name" error={form.formState.errors.legalName?.message}><Input {...form.register('legalName')} /></Field>
-            <Field label="Primary phone" error={form.formState.errors.primaryPhoneNumber?.message}><Input {...form.register('primaryPhoneNumber')} /></Field>
-            <Field label="Secondary phone" error={form.formState.errors.secondaryPhoneNumber?.message}><Input {...form.register('secondaryPhoneNumber')} /></Field>
-            <Field label="Email" error={form.formState.errors.email?.message}><Input type="email" {...form.register('email')} /></Field>
-            <Field label="Website" error={form.formState.errors.website?.message}><Input type="url" {...form.register('website')} placeholder="https://" /></Field>
-            <Field label="Logo reference" error={form.formState.errors.logoReference?.message}><Input {...form.register('logoReference')} /></Field>
+            <Field label={t('business:settings.fields.businessName')} error={form.formState.errors.name?.message}>
+              <Input className="text-start" {...form.register('name')} />
+            </Field>
+            <Field label={t('business:settings.fields.legalName')} error={form.formState.errors.legalName?.message}>
+              <Input className="text-start" {...form.register('legalName')} />
+            </Field>
+            <Field label={t('business:settings.fields.primaryPhone')} error={form.formState.errors.primaryPhoneNumber?.message}>
+              <Input className="text-start" {...form.register('primaryPhoneNumber')} />
+            </Field>
+            <Field label={t('business:settings.fields.secondaryPhone')} error={form.formState.errors.secondaryPhoneNumber?.message}>
+              <Input className="text-start" {...form.register('secondaryPhoneNumber')} />
+            </Field>
+            <Field label={t('business:settings.fields.email')} error={form.formState.errors.email?.message}>
+              <Input type="email" className="text-start" {...form.register('email')} />
+            </Field>
+            <Field label={t('business:settings.fields.website')} error={form.formState.errors.website?.message}>
+              <Input type="url" className="text-start" {...form.register('website')} placeholder="https://" />
+            </Field>
+            <Field label={t('business:settings.fields.logoReference')} error={form.formState.errors.logoReference?.message}>
+              <Input className="text-start" {...form.register('logoReference')} />
+            </Field>
           </div>
         </section>
 
         <section className="space-y-4 border-t pt-6">
-          <h2 className="font-semibold">Address</h2>
+          <h2 className="font-semibold">{t('business:settings.sections.address')}</h2>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Address" error={form.formState.errors.address?.message}><Input {...form.register('address')} /></Field>
-            <Field label="City" error={form.formState.errors.city?.message}><Input {...form.register('city')} /></Field>
-            <Field label="Region / governorate" error={form.formState.errors.region?.message}><Input {...form.register('region')} /></Field>
-            <Field label="Country" error={form.formState.errors.country?.message}><Input {...form.register('country')} /></Field>
+            <Field label={t('business:settings.fields.address')} error={form.formState.errors.address?.message}>
+              <Input className="text-start" {...form.register('address')} />
+            </Field>
+            <Field label={t('business:settings.fields.city')} error={form.formState.errors.city?.message}>
+              <Input className="text-start" {...form.register('city')} />
+            </Field>
+            <Field label={t('business:settings.fields.region')} error={form.formState.errors.region?.message}>
+              <Input className="text-start" {...form.register('region')} />
+            </Field>
+            <Field label={t('business:settings.fields.country')} error={form.formState.errors.country?.message}>
+              <Input className="text-start" {...form.register('country')} />
+            </Field>
           </div>
         </section>
 
         <section className="space-y-3 border-t pt-6">
-          <h2 className="font-semibold">Time zone and receipts</h2>
+          <h2 className="font-semibold">{t('business:settings.sections.timeZoneAndReceipts')}</h2>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="IANA time zone" error={form.formState.errors.timeZoneId?.message}><Input {...form.register('timeZoneId')} placeholder="Asia/Baghdad" /></Field>
-            <Field label="Receipt paper width" error={form.formState.errors.receiptPaperWidth?.message}>
-              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" {...form.register('receiptPaperWidth')}>
-                <option value="Mm80">80 mm</option><option value="Mm58">58 mm</option>
+            <Field label={t('business:settings.fields.timeZone')} error={form.formState.errors.timeZoneId?.message}>
+              <Input className="text-start" {...form.register('timeZoneId')} placeholder="Asia/Baghdad" />
+            </Field>
+            <Field label={t('business:settings.fields.receiptPaperWidth')} error={form.formState.errors.receiptPaperWidth?.message}>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-start" {...form.register('receiptPaperWidth')}>
+                <option value="Mm80">{t('business:settings.paperWidth.mm80')}</option>
+                <option value="Mm58">{t('business:settings.paperWidth.mm58')}</option>
               </select>
             </Field>
           </div>
-          <Field label="Receipt footer" error={form.formState.errors.receiptFooter?.message}><textarea className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...form.register('receiptFooter')} /></Field>
+          <Field label={t('business:settings.fields.receiptFooter')} error={form.formState.errors.receiptFooter?.message}>
+            <textarea className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-start" {...form.register('receiptFooter')} />
+          </Field>
         </section>
 
         <section className="space-y-3 border-t pt-6">
-          <h2 className="font-semibold">Base currency</h2>
-          <select className="h-9 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm" {...form.register('baseCurrencyId')}>
-            <option value="">Select a currency</option>
-            {currencies.filter((currency) => currency.isActive).map((currency) => <option key={currency.id} value={currency.id}>{currency.code} — {currency.name}</option>)}
+          <h2 className="font-semibold">{t('business:settings.sections.baseCurrency')}</h2>
+          <select className="h-9 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm text-start" {...form.register('baseCurrencyId')}>
+            <option value="">{t('business:settings.fields.selectCurrency')}</option>
+            {currencies.filter((currency) => currency.isActive).map((currency) => (
+              <option key={currency.id} value={currency.id}>{currency.code} — {currency.name}</option>
+            ))}
           </select>
           <FormError message={form.formState.errors.baseCurrencyId?.message} />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('isSetupCompleted')} /> Initial setup completed</label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...form.register('isSetupCompleted')} /> {t('business:settings.fields.initialSetupCompleted')}
+          </label>
         </section>
 
-        {saveBusiness.isError && <p className="text-sm text-destructive">Could not save the business profile. Review the fields and try again.</p>}
+        {saveBusiness.isError && <p className="text-sm text-destructive">{t('business:settings.saveError')}</p>}
         <Button type="submit" disabled={saveBusiness.isPending || currenciesQuery.isError}>
           {saveBusiness.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Save business profile
+          {saveBusiness.isPending ? t('business:settings.saving') : t('business:settings.saveButton')}
         </Button>
       </form>
     </div>

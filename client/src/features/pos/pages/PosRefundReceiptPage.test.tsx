@@ -9,12 +9,10 @@ const refund: PosRefund = {
   id: 'refund-1',
   documentNumber: 'REF-000001',
   salesInvoiceId: 'invoice-1',
-  salesInvoiceDocumentNumber: 'POS-000001',
+  salesInvoiceDocumentNumber: 'SI-000001',
   branchId: 'branch',
   branchCode: 'MAIN',
   branchName: 'Main',
-  posSessionId: 'session',
-  posSessionNumber: 'SES-1',
   customerId: 'walk-in-customer',
   customerName: 'Walk-in Customer',
   reason: PosRefundReason.ProductReturned,
@@ -49,9 +47,9 @@ const refund: PosRefund = {
       stockMovementIds: ['movement'],
     },
   ],
-  tenders: [
+  refundPayouts: [
     {
-      id: 'tender',
+      id: 'payout',
       sequence: 1,
       moneyAccountId: 'usd-account',
       moneyAccountCode: 'CASH-USD',
@@ -89,9 +87,9 @@ describe('PosRefundReceiptPage', () => {
       </MemoryRouter>
     )
     expect(screen.getAllByText('REF-000001').length).toBeGreaterThan(0)
-    expect(screen.getByText('Restocked')).toBeInTheDocument()
-    expect(screen.getByText(/Refund-time rate: 1 USD = 1,250 IQD/)).toBeInTheDocument()
-    expect(screen.getByText('Receivable reduction')).toBeInTheDocument()
+    expect(screen.getByText('Restock product')).toBeInTheDocument()
+    expect(screen.getByText(/1 USD = 1,250 IQD/)).toBeInTheDocument()
+    expect(screen.getByText('AR reduction first')).toBeInTheDocument()
     expect(screen.getByText('Physical payout')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Original sale/ })).toHaveAttribute(
       'href',

@@ -1,0 +1,84 @@
+{
+  "title": "جهات الاتصال",
+  "description": "إدارة الأفراد والشركات المستخدمة في المبيعات والمشتريات.",
+  "addContact": "إضافة جهة اتصال",
+  "saveChanges": "حفظ التغييرات",
+  "cancel": "إلغاء",
+  "deleteConfirm": "هل تريد حذف {{name}} نهائياً؟ لا يمكن التراجع عن هذا الإجراء.",
+  "searchPlaceholder": "البحث بالاسم، الهاتف، أو البريد الإلكتروني",
+  "contactsCount_one": "{{count}} جهة اتصال",
+  "contactsCount_other": "{{count}} جهات اتصال",
+  "loadingContacts": "جارٍ تحميل جهات الاتصال…",
+  "loadingContact": "جارٍ تحميل جهة الاتصال…",
+  "failedToLoad": "فشل تحميل جهات الاتصال.",
+  "noContacts": "لم يتم العثور على جهات اتصال.",
+  "roles": {
+    "all": "الكل",
+    "customer": "زبون",
+    "customers": "الزبائن",
+    "supplier": "مورد",
+    "suppliers": "الموردون",
+    "both": "كلاهما",
+    "customerSupplier": "زبون · مورد"
+  },
+  "kinds": {
+    "all": "جميع الأنواع",
+    "individual": "فرد",
+    "business": "شركة"
+  },
+  "statuses": {
+    "all": "جميع الحالات",
+    "active": "نشط",
+    "inactive": "غير نشط"
+  },
+  "filters": {
+    "role": "الدور",
+    "status": "الحالة",
+    "type": "النوع"
+  },
+  "th": {
+    "contact": "جهة الاتصال",
+    "role": "الدور",
+    "phone": "الهاتف",
+    "email": "البريد الإلكتروني",
+    "city": "المدينة",
+    "status": "الحالة",
+    "actions": "الإجراءات"
+  },
+  "actions": {
+    "view": "عرض {{name}}",
+    "edit": "تعديل {{name}}",
+    "activate": "تفعيل {{name}}",
+    "deactivate": "إلغاء تفعيل {{name}}",
+    "delete": "حذف {{name}}"
+  },
+  "form": {
+    "createTitle": "إضافة جهة اتصال",
+    "editTitle": "تعديل {{name}}",
+    "dialogDesc": "اجعل السجل عملياً؛ الاسم ودور واحد على الأقل هما المطلوبان فقط.",
+    "basicInfo": "المعلومات الأساسية",
+    "name": "الاسم",
+    "type": "النوع",
+    "roles": "الأدوار",
+    "customer": "زبون",
+    "supplier": "مورد",
+    "contactInfo": "معلومات الاتصال",
+    "primaryPhone": "الهاتف الأساسي",
+    "secondaryPhone": "الهاتف الثانوي",
+    "email": "البريد الإلكتروني",
+    "address": "العنوان",
+    "city": "المدينة",
+    "region": "المحافظة / المنطقة",
+    "country": "البلد",
+    "additional": "معلومات إضافية",
+    "notes": "الملاحظات",
+    "active": "نشط"
+  },
+  "detail": {
+    "title": "تفاصيل جهة الاتصال",
+    "description": "الهوية التجارية ومعلومات الاتصال.",
+    "contactInfo": "معلومات الاتصال",
+    "address": "العنوان",
+    "notes": "الملاحظات"
+  }
+}

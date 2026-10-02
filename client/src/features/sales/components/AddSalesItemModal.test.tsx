@@ -149,7 +149,7 @@ describe('AddSalesItemModal', () => {
       />
     )
 
-    const categorySelect = screen.getByRole('combobox', { name: /filter by category/i })
+    const categorySelect = screen.getByRole('combobox', { name: 'Category' })
     fireEvent.change(categorySelect, { target: { value: 'Nail Care' } })
 
     expect(screen.getByText('Classic Spa Pedicure')).toBeInTheDocument()

@@ -472,7 +472,7 @@ public sealed class DashboardService
 
     // POS Sales
     var recentPos = await _db.PosContexts.AsNoTracking()
-      .Include(p => p.CashierUser)
+      .Include(p => p.OperatorUser)
       .Where(p => p.SalesInvoice.BranchId == branchId
         && !p.SalesInvoice.IsDeleted
         && !seenDocNumbers.Contains(p.SalesInvoice.DocumentNumber))
@@ -480,7 +480,7 @@ public sealed class DashboardService
       .Take(safeLimit)
       .Select(p => new DashboardRecentActivityResponse(
         p.SalesInvoiceId,
-        p.CashierUser.Username,
+        p.OperatorUser.Username,
         "completed",
         "POS Sale",
         p.SalesInvoice.DocumentNumber,

@@ -8,6 +8,7 @@ import {
   Search,
   X,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { Product } from '@/features/inventory'
+import { formatNumber } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { SalesLineType } from '../types/sales.types'
 import type {
@@ -61,6 +63,7 @@ export function AddSalesItemModal({
   currencyCode = '',
   currencyDecimals = 2,
 }: AddSalesItemModalProps) {
+  const { t } = useTranslation(['sales', 'common'])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<ItemTypeFilter>('all')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
@@ -240,7 +243,7 @@ export function AddSalesItemModal({
 
   const formatPrice = (basePrice: number) => {
     const converted = rate > 0 ? basePrice / rate : basePrice
-    return converted.toLocaleString(undefined, {
+    return formatNumber(converted, {
       minimumFractionDigits: currencyDecimals,
       maximumFractionDigits: currencyDecimals,
     })
@@ -260,10 +263,10 @@ export function AddSalesItemModal({
             </div>
             <div>
               <DialogTitle className="text-base font-semibold tracking-tight text-foreground">
-                Add Items to Invoice
+                {t('sales:addItemsModal.title')}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Select services and products to add as line items to this invoice.
+                {t('sales:addItemsModal.desc')}
               </DialogDescription>
             </div>
           </div>
@@ -273,21 +276,21 @@ export function AddSalesItemModal({
         <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 px-6 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           {/* Search Input */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search service, product, SKU..."
+              placeholder={t('sales:addItemsModal.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-9 pl-8 pr-8 text-xs"
+              className="h-9 ps-8 pe-8 text-xs"
               autoFocus
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                aria-label="Clear search"
+                className="absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                aria-label={t('sales:addItemsModal.clearSearchAria')}
               >
                 <X className="size-3.5" />
               </button>
@@ -307,7 +310,7 @@ export function AddSalesItemModal({
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                All ({allItems.length})
+                {t('sales:addItemsModal.all', { count: allItems.length })}
               </button>
               <button
                 type="button"
@@ -320,7 +323,7 @@ export function AddSalesItemModal({
                 )}
               >
                 <BriefcaseBusiness className="size-3" />
-                Services ({serviceCount})
+                {t('sales:addItemsModal.services', { count: serviceCount })}
               </button>
               <button
                 type="button"
@@ -333,19 +336,19 @@ export function AddSalesItemModal({
                 )}
               >
                 <Package className="size-3" />
-                Products ({productCount})
+                {t('sales:addItemsModal.products', { count: productCount })}
               </button>
             </div>
 
             {/* Category Filter Dropdown */}
             {categories.length > 0 && (
               <select
-                aria-label="Filter by category"
+                aria-label={t('sales:addItemsModal.category')}
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="h-9 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground shadow-2xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/50"
               >
-                <option value="">All categories</option>
+                <option value="">{t('sales:addItemsModal.allCategories')}</option>
                 {categories.map((category) => (
                   <option key={category} value={category}>
                     {category}
@@ -365,7 +368,7 @@ export function AddSalesItemModal({
                 aria-label="Reset all filters"
               >
                 <RotateCcw className="size-3" />
-                Reset
+                {t('sales:addItemsModal.reset')}
               </Button>
             )}
           </div>
@@ -380,17 +383,17 @@ export function AddSalesItemModal({
                   <input
                     ref={selectAllRef}
                     type="checkbox"
-                    aria-label="Select all visible items"
+                    aria-label={t('sales:addItemsModal.selectAllAria')}
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
                     className="size-4 cursor-pointer rounded border-border text-primary accent-primary focus:ring-primary"
                   />
                 </TableHead>
-                <TableHead className="min-w-[200px] px-4 py-2.5 text-left">Item Name</TableHead>
-                <TableHead className="w-28 px-4 py-2.5 text-left">Type</TableHead>
-                <TableHead className="min-w-[140px] px-4 py-2.5 text-left">Category</TableHead>
-                <TableHead className="w-28 px-4 py-2.5 text-left">Unit / Duration</TableHead>
-                <TableHead className="w-32 px-4 py-2.5 text-right">Price</TableHead>
+                <TableHead className="min-w-[200px] px-4 py-2.5 text-start">{t('sales:addItemsModal.itemName')}</TableHead>
+                <TableHead className="w-28 px-4 py-2.5 text-start">{t('sales:addItemsModal.type')}</TableHead>
+                <TableHead className="min-w-[140px] px-4 py-2.5 text-start">{t('sales:addItemsModal.category')}</TableHead>
+                <TableHead className="w-28 px-4 py-2.5 text-start">{t('sales:addItemsModal.unitOrDuration')}</TableHead>
+                <TableHead className="w-32 px-4 py-2.5 text-end">{t('sales:addItemsModal.price')}</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -400,11 +403,11 @@ export function AddSalesItemModal({
                   <TableCell colSpan={6} className="py-12 text-center">
                     <div className="mx-auto flex max-w-sm flex-col items-center justify-center space-y-2">
                       <Search className="size-8 text-muted-foreground/40" />
-                      <p className="text-sm font-medium text-foreground">No items found</p>
+                      <p className="text-sm font-medium text-foreground">{t('sales:addItemsModal.noItemsFound')}</p>
                       <p className="text-xs text-muted-foreground">
                         {hasActiveFilters
-                          ? 'Try adjusting your search or filter options.'
-                          : 'No catalog items available.'}
+                          ? t('sales:addItemsModal.adjustFilters')
+                          : t('sales:addItemsModal.noCatalogItems')}
                       </p>
                       {hasActiveFilters && (
                         <Button
@@ -414,7 +417,7 @@ export function AddSalesItemModal({
                           onClick={handleResetFilters}
                           className="mt-2 text-xs"
                         >
-                          Clear filters
+                          {t('sales:addItemsModal.clearFilters')}
                         </Button>
                       )}
                     </div>
@@ -449,7 +452,7 @@ export function AddSalesItemModal({
                       </TableCell>
 
                       {/* Name & SKU */}
-                      <TableCell className="px-4 py-2.5 text-left">
+                      <TableCell className="px-4 py-2.5 text-start">
                         <div className="flex flex-col">
                           <span
                             className={cn(
@@ -461,34 +464,34 @@ export function AddSalesItemModal({
                           </span>
                           {!isService && item.sku && (
                             <span className="font-mono text-[10px] text-muted-foreground">
-                              SKU: {item.sku}
+                              {t('sales:addItemsModal.skuLabel', { sku: item.sku })}
                             </span>
                           )}
                         </div>
                       </TableCell>
 
                       {/* Type Badge */}
-                      <TableCell className="px-4 py-2.5 text-left">
+                      <TableCell className="px-4 py-2.5 text-start">
                         <Badge
                           variant={isService ? 'champagne' : 'outline'}
                           className="text-[10px] px-1.5 py-0 uppercase tracking-wider font-semibold"
                         >
-                          {isService ? 'Service' : 'Product'}
+                          {isService ? t('sales:addItemsModal.serviceBadge') : t('sales:addItemsModal.productBadge')}
                         </Badge>
                       </TableCell>
 
                       {/* Category */}
-                      <TableCell className="px-4 py-2.5 text-left">
+                      <TableCell className="px-4 py-2.5 text-start">
                         <span className="text-xs text-muted-foreground">
                           {item.categoryName || '—'}
                         </span>
                       </TableCell>
 
                       {/* Unit or Duration */}
-                      <TableCell className="px-4 py-2.5 text-left">
+                      <TableCell className="px-4 py-2.5 text-start">
                         {isService ? (
                           <span className="text-xs font-mono text-muted-foreground">
-                            {item.durationMinutes ? `${item.durationMinutes} min` : '—'}
+                            {item.durationMinutes ? t('sales:addItemsModal.durationMinutes', { count: item.durationMinutes }) : '—'}
                           </span>
                         ) : (
                           <span className="text-xs font-mono text-muted-foreground">
@@ -498,7 +501,7 @@ export function AddSalesItemModal({
                       </TableCell>
 
                       {/* Unit Price */}
-                      <TableCell className="px-4 py-2.5 text-right">
+                      <TableCell className="px-4 py-2.5 text-end">
                         <span className="font-mono text-xs font-semibold text-foreground">
                           {formatPrice(item.basePrice)} {currencyCode}
                         </span>
@@ -518,7 +521,9 @@ export function AddSalesItemModal({
               variant={selectedCount > 0 ? 'default' : 'secondary'}
               className="font-mono text-xs"
             >
-              {selectedCount} {selectedCount === 1 ? 'item' : 'items'} selected
+              {selectedCount === 1
+                ? t('sales:addItemsModal.selectedCount_one', { count: selectedCount })
+                : t('sales:addItemsModal.selectedCount_other', { count: selectedCount })}
             </Badge>
 
             {selectedCount > 0 && (
@@ -529,7 +534,7 @@ export function AddSalesItemModal({
                 onClick={() => setSelectedMap(new Map())}
                 className="h-7 text-xs text-muted-foreground hover:text-foreground"
               >
-                Clear selection
+                {t('sales:addItemsModal.clearSelection')}
               </Button>
             )}
           </div>
@@ -542,7 +547,7 @@ export function AddSalesItemModal({
               onClick={() => onOpenChange(false)}
               className="text-xs"
             >
-              Cancel
+              {t('sales:addItemsModal.cancel')}
             </Button>
             <Button
               type="button"
@@ -552,7 +557,11 @@ export function AddSalesItemModal({
               className="gap-1.5 text-xs font-medium shadow-xs"
             >
               <Check className="size-3.5" />
-              Add {selectedCount > 0 ? `${selectedCount} ${selectedCount === 1 ? 'item' : 'items'}` : 'items'}
+              {selectedCount > 0
+                ? (selectedCount === 1
+                    ? t('sales:addItemsModal.addCount_one', { count: selectedCount })
+                    : t('sales:addItemsModal.addCount_other', { count: selectedCount }))
+                : t('sales:addItemsModal.addItems')}
             </Button>
           </div>
         </DialogFooter>

@@ -115,53 +115,10 @@ export interface SalesInvoicePayment {
   journalEntryId: string
 }
 
-export const PosPaymentMode = { Paid: 0, Partial: 1, Credit: 2 } as const
-export type PosPaymentMode = typeof PosPaymentMode[keyof typeof PosPaymentMode]
-
-export interface SalesInvoicePosCashbox {
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  currencyId: string
-  currencyCode: string
-  currencyDecimalPlaces: number
-  amount: number
-  exchangeRate: number
-  baseAmount: number
-}
-
-export interface SalesInvoicePosTender {
-  id: string
-  sequence: number
-  moneyAccountId: string
-  moneyAccountCode: string
-  moneyAccountName: string
-  currencyId: string
-  currencyCode: string
-  tenderedAmount: number
-  exchangeRate: number
-  baseAmount: number
-  paymentMoneyLineId: string
-  moneyLedgerEntryId: string
-}
-
-export interface SalesInvoicePosChange extends Omit<SalesInvoicePosTender, 'sequence' | 'tenderedAmount'> {
-  amount: number
-}
-
 export interface SalesInvoicePosContext {
-  posSessionId: string
-  posSessionNumber: string
-  sessionStatus: number
-  cashierUserId: string
-  cashierUsername: string
-  paymentId: string | null
-  paymentDocumentNumber: string | null
-  paymentMode: PosPaymentMode
+  operatorUserId: string
+  operatorUsername: string
   completedAtUtc: string
-  sessionCashboxes: SalesInvoicePosCashbox[]
-  tenders: SalesInvoicePosTender[]
-  change: SalesInvoicePosChange | null
 }
 
 export interface SalesInvoice extends SalesInvoiceSummary {

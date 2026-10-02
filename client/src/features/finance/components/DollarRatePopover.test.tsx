@@ -47,17 +47,17 @@ vi.mock('@/features/business', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { currency?: string }) => ({
-      'common.dollarRate': 'Dollar rate',
-      'common.dollarRateSetToday': 'Set today’s rate',
-      'common.dollarRateUnavailable': 'USD unavailable',
-      'common.dollarRateLoading': 'Loading USD rate…',
-      'common.dollarRateCurrent': 'Today’s Dollar Rate',
-      'common.dollarRateDescription': `Enter the amount of ${options?.currency ?? ''} for 1 USD.`,
-      'common.dollarRateInput': 'Rate',
-      'common.dollarRateSave': 'Save rate',
-      'common.dollarRateViewHistory': 'View full history',
-      'common.dollarRateBaseCurrency': 'USD is the business base currency.',
-      'common.dollarRateRetry': 'Retry',
+      dollarRate: 'Dollar rate',
+      dollarRateSetToday: 'Set today’s rate',
+      dollarRateUnavailable: 'USD unavailable',
+      dollarRateLoading: 'Loading USD rate…',
+      dollarRateCurrent: 'Today’s Dollar Rate',
+      dollarRateDescription: `Enter the amount of ${options?.currency ?? ''} for 1 USD.`,
+      dollarRateInput: 'Rate',
+      dollarRateSave: 'Save rate',
+      dollarRateViewHistory: 'View full history',
+      dollarRateBaseCurrency: 'USD is the business base currency.',
+      dollarRateRetry: 'Retry',
     }[key] ?? key),
   }),
 }))

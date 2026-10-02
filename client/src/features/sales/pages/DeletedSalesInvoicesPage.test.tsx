@@ -8,7 +8,7 @@ vi.mock('../hooks/useSales', () => ({
     data: {
       data: [{
         id: 'invoice-1',
-        documentNumber: 'POS-000001',
+        documentNumber: 'SI-000001',
         invoiceDate: '2026-10-01',
         branchId: 'branch-1',
         branchName: 'Main',
@@ -34,7 +34,7 @@ vi.mock('../hooks/useSales', () => ({
       id: 'activity-1',
       source: 'POS Settlement',
       action: 'corrected',
-      reason: 'Correct tender',
+      reason: 'Correct collection',
       changedByUserId: 'user-1',
       changedByUsername: 'owner',
       changedAtUtc: '2026-10-01T09:30:00Z',
@@ -54,6 +54,6 @@ describe('DeletedSalesInvoicesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'History' }))
 
     expect(screen.getByText('POS Settlement')).toBeInTheDocument()
-    expect(screen.getByText(/Correct tender/)).toBeInTheDocument()
+    expect(screen.getByText(/Correct collection/)).toBeInTheDocument()
   })
 })

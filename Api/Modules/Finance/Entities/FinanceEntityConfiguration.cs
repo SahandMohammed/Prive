@@ -86,6 +86,10 @@ public sealed class PaymentEntityConfiguration : IEntityTypeConfiguration<Paymen
     builder.HasIndex(payment => payment.CustomerId);
     builder.HasIndex(payment => payment.SourceSalesInvoiceId)
       .HasFilter("\"SourceSalesInvoiceId\" IS NOT NULL");
+    builder.HasIndex(payment => new { payment.SourceSalesInvoiceId, payment.Origin })
+      .IsUnique()
+      .HasDatabaseName("IX_payments_active_pos_source_invoice")
+      .HasFilter("\"Origin\" = 'Pos' AND \"SourceSalesInvoiceId\" IS NOT NULL AND \"IsDeleted\" = false");
     builder.HasIndex(payment => payment.JournalEntryId).IsUnique().HasFilter("\"JournalEntryId\" IS NOT NULL");
     builder.HasOne(payment => payment.Branch).WithMany().HasForeignKey(payment => payment.BranchId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne(payment => payment.Customer).WithMany().HasForeignKey(payment => payment.CustomerId).OnDelete(DeleteBehavior.Restrict);

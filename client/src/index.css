@@ -1,12 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Vezirmatn:wght@300;400;500;600;700;800;900&display=swap');
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/vazirmatn";
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/inter";
+
+@font-face {
+  font-family: 'Vazmartin';
+  src: local('Vazirmatn Variable'), local('Vazirmatn'), local('Vazmartin');
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 @font-face {
   font-family: 'Vezmartin';
-  src: local('Vezmartin'), local('Vezirmatn'), local('Vezir');
+  src: local('Vazirmatn Variable'), local('Vazirmatn'), local('Vezmartin');
   font-weight: 100 900;
   font-display: swap;
 }
@@ -17,6 +25,8 @@
 @theme inline {
     --font-heading: var(--font-family, 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     --font-sans: var(--font-family, 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    --font-kurdish: 'Vazirmatn Variable', 'Vazirmatn', 'Vazmartin', 'Rabar', 'Unikurd Web', 'Noto Sans Arabic', Tahoma, system-ui, sans-serif;
+
     /* Privé Brand Colors */
     --color-prive-black: #0A0A0A;
     --color-prive-nearblack: #0A0A0F;
@@ -175,10 +185,15 @@
     height: 100%;
     overflow: hidden;
   }
-  html[dir="rtl"], html[lang="ckb"] {
-    font-family: 'Vezmartin', 'Vezirmatn', 'Rabar', 'Unikurd Web', 'Noto Sans Arabic', Tahoma, system-ui, sans-serif;
+  html[dir="rtl"],
+  html[lang^="ckb"],
+  html[lang^="ar"],
+  [data-language="ckb"],
+  [data-language="ar"] {
+    font-family: 'Vazirmatn Variable', 'Vazirmatn', 'Vazmartin', 'Rabar', 'Unikurd Web', 'Noto Sans Arabic', Tahoma, system-ui, sans-serif;
   }
 }
+
 
 /* Refined custom scrollbar for locked container implementation */
 .custom-scrollbar {

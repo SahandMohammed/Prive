@@ -27,11 +27,11 @@ describe('CustomerPicker', () => {
     render(<CustomerPicker customer={null} onChange={vi.fn()} />)
 
     const input = screen.getByRole('combobox', { name: 'Customer' })
-    expect(input).toHaveValue('Walk-in customer')
+    expect(input).toHaveValue('Walk-in')
 
     fireEvent.focus(input)
 
-    expect(screen.getByRole('option', { name: 'Walk-in customer' })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: 'Walk-in' })).toHaveAttribute(
       'aria-selected',
       'true'
     )

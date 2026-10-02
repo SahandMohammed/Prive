@@ -52,9 +52,9 @@ import {
   CurrenciesPage as BaseCurrenciesPage,
 } from '@/features/business'
 import { ContactsPage } from '@/features/contacts'
-import { PosPage, PosReceiptPage, PosRefundReceiptPage, PosSessionClosePage, PosSessionsPage, PosZReportPage } from '@/features/pos'
+import { PosPage, PosReceiptPage, PosRefundReceiptPage } from '@/features/pos'
 import { ExpensesPage, ExpenseDetailPage, ExpenseCategoriesPage } from '@/features/expenses'
-import { ProfessionalsPage } from '@/features/professionals'
+import { ProfessionalPerformancePage, ProfessionalsPage } from '@/features/professionals'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace />, errorElement: <RouteErrorBoundary /> },
@@ -77,11 +77,7 @@ export const router = createBrowserRouter([
           {
             element: <CapabilityRoute capability="pos" />,
             children: [
-              { path: '/pos', element: <PosSessionsPage /> },
-              { path: '/pos/workspace', element: <PosPage /> },
-              { path: '/pos/sessions', element: <Navigate to="/pos" replace /> },
-              { path: '/pos/sessions/:id/close', element: <PosSessionClosePage /> },
-              { path: '/pos/z-reports/:id', element: <PosZReportPage /> },
+              { path: '/pos', element: <PosPage /> },
               { path: '/pos/sales/:id', element: <PosReceiptPage /> },
               { path: '/pos/refunds/:id', element: <PosRefundReceiptPage /> },
             ],
@@ -139,7 +135,10 @@ export const router = createBrowserRouter([
           { path: '/users', element: <UsersPage /> },
           {
             element: <CapabilityRoute capability="manageProfessionals" />,
-            children: [{ path: '/professionals', element: <ProfessionalsPage /> }],
+            children: [
+              { path: '/professionals', element: <ProfessionalsPage /> },
+              { path: '/professionals/performance', element: <ProfessionalPerformancePage /> },
+            ],
           },
           { path: '/settings/branches', element: <BranchesPage /> },
           { path: '/settings/currencies', element: <BaseCurrenciesPage /> },

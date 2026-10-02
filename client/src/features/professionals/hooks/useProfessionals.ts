@@ -1,11 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { professionalsApi } from '../api/professionals.api'
-import type { ProfessionalInput, ProfessionalListParams } from '../types/professionals.types'
+import type { ProfessionalInput, ProfessionalListParams, ProfessionalPerformanceParams } from '../types/professionals.types'
 
 export const PROFESSIONALS_QUERY_KEY = ['professionals'] as const
 
 export function useProfessionals(params: ProfessionalListParams) {
   return useQuery({ queryKey: [...PROFESSIONALS_QUERY_KEY, params], queryFn: () => professionalsApi.list(params) })
+}
+
+export function useProfessionalPerformance(params: ProfessionalPerformanceParams, enabled = true) {
+  return useQuery({
+    queryKey: [...PROFESSIONALS_QUERY_KEY, 'performance', params],
+    queryFn: () => professionalsApi.performance(params),
+    enabled,
+  })
 }
 
 export function useProfessional(id: string | null) {

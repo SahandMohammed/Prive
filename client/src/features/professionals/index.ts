@@ -1,4 +1,6 @@
 export { ProfessionalsPage } from './pages/ProfessionalsPage'
+export { ProfessionalPerformancePage } from './pages/ProfessionalPerformancePage'
 export { professionalsApi } from './api/professionals.api'
-export { useProfessionals } from './hooks/useProfessionals'
-export type { Professional, ProfessionalInput, ProfessionalListParams } from './types/professionals.types'
+export { useProfessionals, useProfessionalPerformance } from './hooks/useProfessionals'
+export * from './types/professionals.types'
+export * from './i18n'

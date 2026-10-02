@@ -1,8 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronsUpDown, Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import type { Product } from '@/features/inventory'
+import { formatNumber } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { SalesLineType } from '../types/sales.types'
 import type { SalesCatalogItem, SalesLineType as SalesLineTypeValue, Service } from '../types/sales.types'
@@ -55,10 +57,13 @@ export function SalesItemCombobox({
   currencyDecimals = 2,
   disabled = false,
   error,
-  placeholder = 'Search service or product...',
-  'aria-label': ariaLabel = 'Select item',
+  placeholder,
+  'aria-label': ariaLabel,
   className,
 }: SalesItemComboboxProps) {
+  const { t } = useTranslation(['sales', 'common'])
+  const resolvedPlaceholder = placeholder ?? t('sales:combobox.placeholder')
+  const resolvedAriaLabel = ariaLabel ?? t('sales:combobox.ariaLabel')
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -258,7 +263,7 @@ export function SalesItemCombobox({
 
   const formatPrice = (basePrice: number) => {
     const converted = rate > 0 ? basePrice / rate : basePrice
-    return converted.toLocaleString(undefined, {
+    return formatNumber(converted, {
       minimumFractionDigits: currencyDecimals,
       maximumFractionDigits: currencyDecimals,
     })
@@ -277,10 +282,10 @@ export function SalesItemCombobox({
           role="combobox"
           aria-expanded={open}
           aria-controls={listboxId}
-          aria-label={ariaLabel}
+          aria-label={resolvedAriaLabel}
           disabled={disabled}
           title={error}
-          placeholder={currentLabel || placeholder}
+          placeholder={currentLabel || resolvedPlaceholder}
           value={open ? search : currentLabel}
           onChange={(e) => {
             setSearch(e.target.value)
@@ -294,18 +299,18 @@ export function SalesItemCombobox({
           }}
           onKeyDown={handleKeyDown}
           className={cn(
-            'h-9 w-full rounded-lg border border-border bg-card px-3 pr-14 text-xs text-foreground shadow-2xs outline-none transition-colors placeholder:text-muted-foreground hover:border-input focus:border-ring focus:ring-1 focus:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+            'h-9 w-full rounded-lg border border-border bg-card px-3 pe-14 text-xs text-foreground shadow-2xs outline-none transition-colors placeholder:text-muted-foreground hover:border-input focus:border-ring focus:ring-1 focus:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
             error && 'border-destructive focus:border-destructive ring-1 ring-destructive/30'
           )}
         />
 
-        <div className="absolute right-2 flex items-center gap-1 text-muted-foreground">
+        <div className="absolute end-2 flex items-center gap-1 text-muted-foreground">
           {Boolean(currentLabel || value) && !disabled && (
             <button
               type="button"
               onClick={handleClear}
               className="rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="Clear selection"
+              aria-label={t('sales:combobox.clearAria')}
             >
               <X className="size-3.5" />
             </button>
@@ -346,7 +351,7 @@ export function SalesItemCombobox({
             {displayedItems.length === 0 ? (
               <div className="py-6 px-3 text-center text-xs text-muted-foreground">
                 <Search className="size-4 mx-auto mb-1.5 opacity-50" />
-                No matching service or product found
+                {t('sales:combobox.noMatch')}
               </div>
             ) : (
               displayedItems.map((item, index) => {
@@ -372,18 +377,18 @@ export function SalesItemCombobox({
                         variant={isService ? 'champagne' : 'outline'}
                         className="text-[9px] px-1 py-0 uppercase tracking-wider font-semibold shrink-0"
                       >
-                        {isService ? 'Service' : 'Product'}
+                        {isService ? t('sales:combobox.serviceBadge') : t('sales:combobox.productBadge')}
                       </Badge>
                       <div className="min-w-0 truncate">
                         <span className="font-medium text-foreground">{item.name}</span>
                         {!isService && item.sku && (
-                          <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                          <span className="ms-1.5 font-mono text-[10px] text-muted-foreground">
                             ({item.sku})
                           </span>
                         )}
                         {isService && item.durationMinutes && (
-                          <span className="ml-1.5 text-[10px] text-muted-foreground">
-                            {item.durationMinutes}m
+                          <span className="ms-1.5 text-[10px] text-muted-foreground">
+                            {t('sales:combobox.durationMinutes', { count: item.durationMinutes })}
                           </span>
                         )}
                       </div>
@@ -402,8 +407,8 @@ export function SalesItemCombobox({
 
             {!search.trim() && allItems.length > displayedItems.length && (
               <div className="border-t border-border/50 mt-1 pt-1.5 px-2.5 pb-0.5 text-[10px] text-muted-foreground flex justify-between">
-                <span>Showing top suggestions</span>
-                <span>Type to search all items...</span>
+                <span>{t('sales:combobox.showingSuggestions')}</span>
+                <span>{t('sales:combobox.typeToSearch')}</span>
               </div>
             )}
           </div>,

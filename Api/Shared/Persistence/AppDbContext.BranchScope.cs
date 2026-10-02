@@ -47,21 +47,10 @@ public sealed partial class AppDbContext
     modelBuilder.Entity<PaymentEntity>().HasQueryFilter(x => !x.IsDeleted && (SelectedBranchId == null || x.BranchId == SelectedBranchId));
     modelBuilder.Entity<PaymentAllocationEntity>().HasQueryFilter(x => !x.Payment.IsDeleted && (SelectedBranchId == null || x.Payment.BranchId == SelectedBranchId));
     modelBuilder.Entity<PaymentMoneyLineEntity>().HasQueryFilter(x => !x.Payment.IsDeleted && (SelectedBranchId == null || x.Payment.BranchId == SelectedBranchId));
-    modelBuilder.Entity<PosRegisterEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosRegisterCashboxEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosSessionEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosSessionOpeningCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosSessionClosingCountEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosZReportEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosZPaymentSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosZDrawerSummaryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosZReport.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosContextEntity>().HasQueryFilter(x => SelectedBranchId == null || x.SalesInvoice.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosContext.SalesInvoice.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosChangeEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosContext.SalesInvoice.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
     modelBuilder.Entity<PosRefundLineEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosRefundTenderEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
-    modelBuilder.Entity<PosDrawerMovementEntity>().HasQueryFilter(x => SelectedBranchId == null || x.BranchId == SelectedBranchId);
+    modelBuilder.Entity<PosRefundPayoutEntity>().HasQueryFilter(x => SelectedBranchId == null || x.PosRefund.BranchId == SelectedBranchId);
     modelBuilder.Entity<ContactEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ProductCategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
     modelBuilder.Entity<ProductSubcategoryEntity>().HasQueryFilter(x => SelectedBranchId == null || x.CatalogBranchId == CatalogBranchId);
@@ -208,7 +197,7 @@ public sealed partial class AppDbContext
         ActivityLogs.Add(new ActivityLogEntity
         {
           BranchId = branchId,
-          UserId = posContext.CashierUserId,
+          UserId = posContext.OperatorUserId,
           Action = "completed",
           EntityType = "POS Sale",
           EntityId = posContext.SalesInvoiceId,

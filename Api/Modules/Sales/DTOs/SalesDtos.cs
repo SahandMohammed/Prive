@@ -194,18 +194,9 @@ public sealed record SalesInvoicePaymentResponse(
   Guid JournalEntryId);
 
 public sealed record SalesInvoicePosContextResponse(
-  Guid PosSessionId,
-  string PosSessionNumber,
-  PosSessionStatus SessionStatus,
-  Guid CashierUserId,
-  string CashierUsername,
-  Guid? PaymentId,
-  string? PaymentDocumentNumber,
-  PosPaymentMode PaymentMode,
-  DateTime CompletedAtUtc,
-  List<PosSessionCountResponse> SessionCashboxes,
-  List<PosTenderResponse> Tenders,
-  PosChangeResponse? Change);
+  Guid OperatorUserId,
+  string OperatorUsername,
+  DateTime CompletedAtUtc);
 
 public sealed record SalesInvoiceResponse(
   Guid Id,

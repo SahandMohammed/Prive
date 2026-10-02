@@ -134,7 +134,7 @@ public sealed class DashboardWorkflowTests
         BranchId = branch.Id,
         CurrencyId = currency.Id,
         BaseCurrencyId = currency.Id,
-        DocumentNumber = "POS-001",
+        DocumentNumber = "SI-000001",
         InvoiceDate = today,
         Status = SalesInvoiceStatus.Posted,
         Total = 25_000m,
@@ -145,8 +145,7 @@ public sealed class DashboardWorkflowTests
       {
         SalesInvoiceId = posInvoice.Id,
         SalesInvoice = posInvoice,
-        PosSessionId = Guid.NewGuid(),
-        CashierUserId = user.Id,
+        OperatorUserId = user.Id,
         CompletedAtUtc = DateTime.UtcNow
       };
 
@@ -668,8 +667,7 @@ public sealed class DashboardWorkflowTests
       {
         SalesInvoiceId = posInvoice.Id,
         SalesInvoice = posInvoice,
-        PosSessionId = Guid.NewGuid(),
-        CashierUserId = user.Id,
+        OperatorUserId = user.Id,
         CompletedAtUtc = now.AddMinutes(-5)
       };
 

@@ -9,11 +9,6 @@ const mocks = vi.hoisted(() => ({
   deleteActiveInvoice: vi.fn(),
 }))
 
-vi.mock('@/features/pos', () => ({
-  POS_Z_REPORTS_KEY: ['pos', 'z-reports'],
-  POS_Z_REPORT_KEY: ['pos', 'z-report'],
-}))
-
 vi.mock('../api/sales.api', () => ({
   salesApi: {
     updateActiveInvoice: mocks.updateActiveInvoice,
@@ -30,15 +25,19 @@ function setup<T>(hook: () => T) {
   return { ...renderHook(hook, { wrapper }), invalidate }
 }
 
-function expectZInvalidation(invalidate: ReturnType<typeof vi.spyOn>) {
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['pos', 'z-reports'] })
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['pos', 'z-report'] })
+function expectCommercialInvalidation(invalidate: ReturnType<typeof vi.spyOn>) {
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['inventory'] })
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['accounting'] })
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['finance'] })
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['pos', 'sales'] })
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['pos', 'sessions'] })
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['pos', 'z-reports'] })
 }
 
 describe('commercial POS invoice mutation invalidation', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('invalidates Z-report lists and details after correction', async () => {
+  it('invalidates commercial and POS sale data without report reconstruction after correction', async () => {
     mocks.updateActiveInvoice.mockResolvedValue({ id: 'invoice-1', posContext: {} })
     const { result, invalidate } = setup(() => useUpdateActiveSalesInvoice('invoice-1'))
 
@@ -46,10 +45,10 @@ describe('commercial POS invoice mutation invalidation', () => {
       await result.current.mutateAsync({} as never)
     })
 
-    expectZInvalidation(invalidate)
+    expectCommercialInvalidation(invalidate)
   })
 
-  it('invalidates Z-report lists and details after deletion', async () => {
+  it('invalidates commercial and POS sale data without report reconstruction after deletion', async () => {
     mocks.deleteActiveInvoice.mockResolvedValue(undefined)
     const { result, invalidate } = setup(() => useDeleteActiveSalesInvoice('invoice-1'))
 
@@ -60,6 +59,6 @@ describe('commercial POS invoice mutation invalidation', () => {
       })
     })
 
-    expectZInvalidation(invalidate)
+    expectCommercialInvalidation(invalidate)
   })
 })

@@ -2,13 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MoneyAccountType } from '@/features/finance'
 import { CheckoutDialog } from './CheckoutDialog'
-import { PosCatalogItemType, PosPaymentMode, PosSessionStatus } from '../types/pos.types'
+import { PosCatalogItemType, PosPaymentMode } from '../types/pos.types'
 import type {
   PosCartLine,
   PosCustomer,
   PosMoneyAccount,
   PosProfessional,
-  PosSession,
   PosSetup,
 } from '../types/pos.types'
 
@@ -28,8 +27,6 @@ const ids = {
   product: '77777777-7777-4777-8777-777777777777',
   professional: '88888888-8888-4888-8888-888888888888',
   customer: '99999999-9999-4999-8999-999999999999',
-  session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  register: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
 }
 
 const professional: PosProfessional = { id: ids.professional, name: 'Daban' }
@@ -71,30 +68,6 @@ const setup: PosSetup = {
   moneyAccounts: [iqdCashbox, usdCashbox],
 }
 
-const session: PosSession = {
-  id: ids.session,
-  sessionNumber: 'PSS-000001',
-  branchId: ids.branch,
-  branchCode: 'MAIN',
-  branchName: 'Main',
-  registerId: ids.register,
-  registerCode: 'RECEPTION',
-  registerName: 'Reception POS',
-  cashierUserId: ids.customer,
-  cashierUsername: 'cashier',
-  status: PosSessionStatus.Open,
-  openedAtUtc: '2026-09-26T08:00:00Z',
-  closedAtUtc: null,
-  closedByUserId: null,
-  closedByUsername: null,
-  openingNotes: null,
-  closingNotes: null,
-  openingCounts: [
-    sessionCount(iqdCashbox, 1),
-    sessionCount(usdCashbox, 1_310),
-  ],
-}
-
 const serviceCart: PosCartLine[] = [{
   item: {
     itemType: PosCatalogItemType.Service,
@@ -132,25 +105,11 @@ const productCart: PosCartLine[] = [{
   unitOfMeasureId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
 }]
 
-function sessionCount(account: PosMoneyAccount, exchangeRate: number) {
-  return {
-    moneyAccountId: account.id,
-    moneyAccountCode: account.code,
-    moneyAccountName: account.name,
-    currencyId: account.currencyId,
-    currencyCode: account.currencyCode,
-    currencyDecimalPlaces: account.currencyDecimalPlaces,
-    amount: 0,
-    exchangeRate,
-    baseAmount: 0,
-  }
-}
-
 function renderCheckout(overrides: Partial<React.ComponentProps<typeof CheckoutDialog>> = {}) {
   const props: React.ComponentProps<typeof CheckoutDialog> = {
     open: true,
     setup,
-    session,
+    branchId: ids.branch,
     warehouseId: '',
     customer: null,
     professional,
@@ -176,7 +135,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('POS dual-currency touch checkout', () => {
-  it('renders exact session Cashboxes as IQD/USD amount fields without ordinary account selectors', () => {
+  it('renders the branch-operable IQD/USD collection accounts', () => {
     renderCheckout()
 
     expect(screen.getByLabelText('IQD amount')).toHaveAttribute('step', '1')
@@ -186,13 +145,13 @@ describe('POS dual-currency touch checkout', () => {
     expect(screen.queryByLabelText('Cashbox')).not.toBeInTheDocument()
   })
 
-  it('omits zero fields and maps IQD-only and USD-only payments to their exact session Cashboxes', async () => {
+  it('omits zero fields and maps IQD-only and USD-only collections', async () => {
     renderCheckout()
     enter('IQD', '30000')
     fireEvent.click(screen.getByRole('button', { name: /Save Paid Sale/ }))
     await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
     expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
-      tenders: [{ moneyAccountId: ids.iqdCashbox, amount: 30_000 }],
+      collections: [{ moneyAccountId: ids.iqdCashbox, amount: 30_000 }],
       change: null,
       paymentMode: PosPaymentMode.Paid,
     })
@@ -204,12 +163,12 @@ describe('POS dual-currency touch checkout', () => {
     fireEvent.click(screen.getByRole('button', { name: /Save Paid Sale/ }))
     await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
     expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
-      tenders: [{ moneyAccountId: ids.usdCashbox, amount: 23 }],
+      collections: [{ moneyAccountId: ids.usdCashbox, amount: 23 }],
       change: { moneyAccountId: ids.iqdCashbox, amount: 130 },
     })
   })
 
-  it('creates two independent tenders when both native amount fields are positive', async () => {
+  it('creates two independent collection lines when both native amount fields are positive', async () => {
     renderCheckout()
     enter('IQD', '10000')
     enter('USD', '15.27')
@@ -217,7 +176,7 @@ describe('POS dual-currency touch checkout', () => {
 
     await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
     expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
-      tenders: [
+      collections: [
         { moneyAccountId: ids.iqdCashbox, amount: 10_000 },
         { moneyAccountId: ids.usdCashbox, amount: 15.27 },
       ],
@@ -271,7 +230,7 @@ describe('POS dual-currency touch checkout', () => {
     view.rerender(<CheckoutDialog
       open
       setup={{ ...setup, moneyAccounts: [iqdCashbox, { ...usdCashbox, currentExchangeRate: 1_320 }] }}
-      session={session}
+      branchId={ids.branch}
       warehouseId=""
       customer={null}
       professional={professional}
@@ -287,23 +246,23 @@ describe('POS dual-currency touch checkout', () => {
     expect(screen.getByText('Recorded change must equal 156.4 IQD.')).toBeInTheDocument()
   })
 
-  it('blocks Paid completion when the exact session base-currency Cashbox is missing', () => {
-    renderCheckout({ session: { ...session, openingCounts: [sessionCount(usdCashbox, 1_310)] } })
+  it('blocks change when the branch has no base-currency Cashbox', () => {
+    renderCheckout({ setup: { ...setup, moneyAccounts: [usdCashbox] } })
     enter('USD', '23')
-    expect(screen.getByText(/no IQD Cashbox/)).toBeInTheDocument()
+    expect(screen.getByText('No operable IQD Cashbox is available to return change.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Save Paid Sale/ })).toBeDisabled()
   })
 
-  it('keeps Unpaid behavior and product-professional mapping unchanged', async () => {
+  it('keeps Credit behavior and product-professional mapping unchanged', async () => {
     renderCheckout({ customer, cart: productCart })
-    fireEvent.click(screen.getByRole('button', { name: /Unpaid/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save Unpaid Sale' }))
+    fireEvent.click(screen.getByRole('button', { name: /Credit/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Credit Sale' }))
 
     await waitFor(() => expect(hooks.complete.mutate).toHaveBeenCalledOnce())
     expect(hooks.complete.mutate.mock.calls[0][0]).toMatchObject({
       customerId: ids.customer,
       paymentMode: PosPaymentMode.Credit,
-      tenders: [],
+      collections: [],
       change: null,
       lines: [{ productId: ids.product, professionalId: null }],
     })

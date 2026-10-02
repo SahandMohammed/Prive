@@ -49,3 +49,34 @@ public sealed record UpdateProfessionalRequest(
   [Required] Guid[] BranchIds,
   Guid? LinkedUserId,
   bool IsActive);
+
+public sealed class ProfessionalPerformanceQuery
+{
+  [Required, EnumDataType(typeof(ProfessionalPerformancePeriod))]
+  public ProfessionalPerformancePeriod Period { get; init; } = ProfessionalPerformancePeriod.Today;
+  public DateOnly? FromDate { get; init; }
+  public DateOnly? ToDate { get; init; }
+  public Guid? ProfessionalId { get; init; }
+  public Guid? ServiceId { get; init; }
+  [EnumDataType(typeof(ProfessionalPerformanceSource))]
+  public ProfessionalPerformanceSource Source { get; init; } = ProfessionalPerformanceSource.All;
+}
+
+public sealed record ProfessionalPerformanceRowResponse(
+  Guid ProfessionalId,
+  string ProfessionalName,
+  decimal ServiceQuantity,
+  int VisitsServed,
+  decimal GrossValueBase,
+  decimal RefundValueBase,
+  decimal NetValueBase);
+
+public sealed record ProfessionalPerformanceResponse(
+  DateOnly FromDate,
+  DateOnly ToDate,
+  Guid BaseCurrencyId,
+  string BaseCurrencyCode,
+  List<ProfessionalPerformanceRowResponse> Rows);
+
+public enum ProfessionalPerformancePeriod { Today, ThisWeek, ThisMonth, Custom }
+public enum ProfessionalPerformanceSource { All, Pos, Manual }

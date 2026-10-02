@@ -219,7 +219,7 @@ describe('SalesInvoiceItemsTable', () => {
       )
 
       // Verified accessibility labels for row 1
-      expect(screen.getByRole('combobox', { name: 'Service for line 1' })).toBeInTheDocument()
+      expect(screen.getByRole('combobox', { name: 'Item for line 1' })).toBeInTheDocument()
       expect(screen.getByRole('spinbutton', { name: 'Quantity for line 1' })).toBeInTheDocument()
       expect(screen.getByRole('spinbutton', { name: 'Unit price for line 1' })).toBeInTheDocument()
 

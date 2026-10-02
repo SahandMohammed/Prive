@@ -42,7 +42,7 @@ describe('ProfessionalSelectionDialog', () => {
       />
     )
 
-    expect(screen.getByText(/No eligible Masters are available/)).toBeInTheDocument()
+    expect(screen.getByText(/No eligible staff are available/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
 })
